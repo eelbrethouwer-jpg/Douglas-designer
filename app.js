@@ -1,4 +1,4 @@
-/* Douglas Designer v0.1 — dependency-free 3D canvas editor. All geometry in mm. */
+/* Douglas Designer v0.2 — dependency-free 3D canvas editor. All geometry in mm. */
 (function(){
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
@@ -9,7 +9,8 @@ const fmt=(n)=>new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(n
 const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n);
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
-const STORAGE='douglas-designer-v1';
+const STORAGE='douglas-designer-v1'; // Stable key: never discard v0.1 projects
+const WELCOME_KEY='douglas-designer-welcome-v2';
 let project; try{project=M.normalizeProject(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=M.demoProject();}
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null;
@@ -21,12 +22,34 @@ function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(project));$('
 function commit(fn){const before=JSON.stringify(project);fn();project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
 function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=M.normalizeProject(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);return null;}
-function setSelected(type,id){selected=id?{type,id}:null;beamMoveMode=false;render();if(window.innerWidth<=800 && type && type!=='frame'){switchMobile('modules');$('#inspector').classList.add('mobile-visible');setTimeout(()=>$('#inspector').scrollIntoView({behavior:'smooth',block:'start'}),50);}}
+function setSelected(type,id){
+  selected=id?{type,id}:null;beamMoveMode=false;render();
+  if(window.innerWidth<=800){
+    if(id)switchMobile('design');
+    $('#inspector').classList.remove('mobile-visible');
+    $('#selectionStrip').classList.toggle('hidden',!id);
+    if(id)$('#selectionText').textContent=getSelected()?.name||'Onderdeel geselecteerd';
+  }else if(window.innerWidth<=1250){
+    $('#inspector').classList.toggle('mobile-visible',!!id);
+  }
+  if($('#interactionTip'))$('#interactionTip').textContent=id?'Onderdeel geselecteerd · sleep direct of tik op Bewerken':'Tik op een onderdeel om direct te bewerken';
+}
 function switchPanel(name){activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
-function switchMobile(name){mobileView=name;$$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));$('#stageArea').classList.toggle('hidden',name!=='design');$('#sidebar').classList.toggle('mobile-visible',name==='modules'||name==='settings');$('#inspector').classList.toggle('mobile-visible',name==='modules'&&!!selected);if(name==='modules')switchPanel('modules');if(name==='settings')switchPanel('settings');if(name==='cutlist'){showCutlist();$('#stageArea').classList.remove('hidden');mobileView='design';$$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile==='design'));}}
+function switchMobile(name){
+  if(name==='cutlist'){showCutlist();return;}
+  mobileView=name;
+  $$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));
+  $('#stageArea').classList.toggle('hidden',name!=='design');
+  $('#sidebar').classList.toggle('mobile-visible',name==='modules'||name==='settings');
+  if(name==='modules')switchPanel('modules');
+  if(name==='settings')switchPanel('settings');
+  $('#inspector').classList.toggle('mobile-visible',name==='design'&&!!selected);
+  $('#selectionStrip').classList.toggle('hidden',name!=='design'||!selected);
+  if(name==='design')draw();
+}
 function addModule(kind){const type=M.TYPES[kind];if(!type||project.modules.length>=12){toast('Maximum 12 modules');return;}
   let newId;commit(()=>{newId=M.uid();project.modules.push({id:newId,kind,width:defaults[kind],name:type.label});});setSelected('module',newId);}
-function addBeam(){let id;commit(()=>{id=M.uid();project.beams.push({id,name:'Extra Douglas balk',axis:'x',length:500,x:100,y:450,z:120});});setSelected('beam',id);}
+function addBeam(){let id;commit(()=>{id=M.uid();project.beams.push({id,name:'Extra Douglas balk',axis:'x',length:500,x:100,y:Math.max(100,project.height-175),z:20});});setSelected('beam',id);}
 function render(){
   $('#displayName').textContent=project.name;$('#projectTitle').firstChild.textContent=project.name+' ';
   const {modules,beams}=project;
@@ -56,8 +79,8 @@ function renderInspector(){
     foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze module</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }else{
     $('#inspectorTitle').textContent=obj.name;
-    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">VRIJE BALK — 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label><label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label><label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><button class="outline-btn full" id="dragBeamBtn" style="margin-top:8px">${beamMoveMode?'✓ Verplaatsen actief':'↔ Verplaats balk op canvas'}</button><div class="notice-small">${beamMoveMode?'Sleep de geselecteerde balk in de 3D-weergave. In vooraanzicht verplaats je X/Y; in bovenaanzicht X/Z.':'De coördinaten beschrijven de linkervoor-onderhoek van de balk. Posities buiten het frame worden als waarschuwing gemeld.'}</div>`;
-    foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
+    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">VRIJE BALK — 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label><label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label><label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><div class="nudge-tools"><span>VERPLAATS 5 MM</span><div><button data-nudge="x:-5" title="5 mm links">←</button><button data-nudge="y:5" title="5 mm omhoog">↑</button><button data-nudge="y:-5" title="5 mm omlaag">↓</button><button data-nudge="x:5" title="5 mm rechts">→</button></div><div><button data-nudge="z:-5">Diepte −</button><button data-nudge="z:5">Diepte ＋</button></div></div><div class="notice-small">Sleep de balk direct op het canvas. In 3D en vooraanzicht beweeg je horizontaal en in hoogte; in bovenaanzicht verplaats je de diepte. Coördinaten zijn in mm vanaf links/onder/voorzijde.</div>`;
+    foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full" id="duplicateBeam">⧉ Balk dupliceren</button><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }
 }
 /* Lightweight 3D geometry projector — not a static mockup and no external CDN required. */
@@ -126,6 +149,22 @@ function drawGrid(){const step=250,margin=600,y=-55;
   for(let z=-margin;z<=project.depth+margin;z+=step){let a=projectPoint([-margin,y,z]),b=projectPoint([project.width+margin,y,z]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}ctx.restore();
 }
 function projectPoint(x){return toScreen(x);}
+// Convert screen pixels into a movement along two world axes at the selected beam.
+// Screen Y points DOWN, while model Y means height UP. An actual projection
+// Jacobian prevents inverted movement when orbiting the 3D view.
+function dragWorldDelta(dx,dy,beam){
+  const center=[beam.x,beam.y,beam.z];
+  const pivot=toScreen(center);
+  const plane=currentView==='top'?['x','z']:currentView==='side'?['z','y']:['x','y'];
+  const basis=plane.map(axis=>{
+    const q=center.slice(),i={x:0,y:1,z:2}[axis];q[i]+=100;
+    const point=toScreen(q);return {x:(point.x-pivot.x)/100,y:(point.y-pivot.y)/100};
+  });
+  const [a,b]=basis,det=a.x*b.y-a.y*b.x;
+  if(Math.abs(det)<1e-5)return {x:0,y:0,z:0};
+  const first=(dx*b.y-dy*b.x)/det,second=(a.x*dy-a.y*dx)/det;
+  return {x:0,y:0,z:0,[plane[0]]:first,[plane[1]]:second};
+}
 function drawDims(){const ww=project.width,hh=project.height,dd=project.depth;
   const pairs=[[[0,hh+85,-55],[ww,hh+85,-55],`${fmt(ww)} mm`],[[ww+90,0,0],[ww+90,hh,0],`${fmt(hh)} mm`],[[ww+65,0,0],[ww+65,0,dd],`${fmt(dd)} mm`]];
   ctx.save();ctx.lineWidth=1;ctx.strokeStyle='rgba(79,105,88,.48)';ctx.fillStyle='#628071';ctx.font='600 11px system-ui';ctx.textAlign='center';
@@ -199,14 +238,24 @@ document.addEventListener('click',e=>{
   if(b.dataset.panel){switchPanel(b.dataset.panel);return;}
   if(b.dataset.mobile){switchMobile(b.dataset.mobile);return;}
   if(b.dataset.view){setView(b.dataset.view);return;}
-  if(b.dataset.add){addModule(b.dataset.add);return;}
+  if(b.dataset.add){$('#quickModuleMenu').classList.add('hidden');$('#quickModuleBtn').setAttribute('aria-expanded','false');addModule(b.dataset.add);return;}
   if(b.dataset.moveModule){e.stopPropagation();move(b.dataset.moveModule,Number(b.dataset.direction));return;}
+  if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if(selected?.type==='beam'&&obj&&['x','y','z'].includes(axis))commit(()=>{obj[axis]+=Number(delta);});return;}
   switch(b.id){
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
+    case 'homeBtn':showWelcome();break;
+    case 'continueProject':hideWelcome();break;
+    case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=M.normalizeProject({name:'Nieuw ontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Nieuw ontwerp gestart');}break;
+    case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=M.demoProject();selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
+    case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
+    case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');addBeam();break;
+    case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
+    case 'closeInspector':if(window.innerWidth<=1250){$('#inspector').classList.remove('mobile-visible');}else{setSelected(null,null);}break;
+    case 'duplicateBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)return;let id;commit(()=>{id=M.uid();project.beams.push({...obj,id,name:obj.name+' kopie',x:obj.x+50});});setSelected('beam',id);toast('Balk gedupliceerd');break;}
     case 'exportBtn':case 'modalSecondary':exportProject();break;
     case 'importBtn':$('#fileInput').click();break;
     case 'addBeamBtn':addBeam();break;
-    case 'dragBeamBtn':beamMoveMode=!beamMoveMode;renderInspector();toast(beamMoveMode?'Sleep de balk in het ontwerp':'Verplaatsen uitgeschakeld');break;
+    case 'dragBeamBtn':beamMoveMode=!beamMoveMode;renderInspector();break;
     case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=M.demoProject();selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
@@ -221,17 +270,31 @@ $('#sidebar').addEventListener('change',updateSettings);
 $('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=M.normalizeProject(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();history(e.shiftKey?'redo':'undo');}if(e.key==='Escape'&&modalOpen)closeModal();});
-canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===1){dragging={x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};const pick=hit(e.offsetX,e.offsetY);if(beamMoveMode&&selected?.type==='beam'&&pick?.id===selected.id){const b=getSelected();dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}}if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}});
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+  if(pointers.size===1){
+    dragging={x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};
+    const pick=hit(e.offsetX,e.offsetY);
+    // Direct touch-and-drag on a loose beam; no extra mode toggle required.
+    if(pick?.type==='beam'){
+      if(selected?.id!==pick.id)setSelected('beam',pick.id);
+      const b=getSelected();
+      if(b){dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}
+    }
+  }
+  if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
+});
 canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
   if(dragging.moved){if(dragging.mode==='move-beam'){
-    const b=getSelected();if(!b)return;const dxTotal=(e.offsetX-dragging.startX)/scale,dyTotal=(e.offsetY-dragging.startY)/scale;
-    let mx=0,my=0,mz=0;
-    if(currentView==='front'){mx=dxTotal;my=-dyTotal;}
-    else if(currentView==='side'){mz=-dxTotal;my=-dyTotal;}
-    else if(currentView==='top'){mx=dxTotal*Math.cos(camera.yaw);mz=dyTotal;}
-    else{const c=Math.cos(camera.yaw),sn=Math.sin(camera.yaw);const depthShift=dyTotal/Math.max(.22,Math.sin(camera.pitch));mx=c*dxTotal-sn*depthShift;mz=sn*dxTotal+c*depthShift;}
-    b.x=Math.round((dragging.startBeam.x+mx)/5)*5;b.y=Math.round((dragging.startBeam.y+my)/5)*5;b.z=Math.round((dragging.startBeam.z+mz)/5)*5;draw();
+    const b=getSelected();if(!b)return;
+    const sx=e.offsetX-dragging.startX,sy=e.offsetY-dragging.startY;
+    const delta=dragWorldDelta(sx,sy,dragging.startBeam);
+    b.x=Math.round((dragging.startBeam.x+delta.x)/5)*5;
+    b.y=Math.round((dragging.startBeam.y+delta.y)/5)*5;
+    b.z=Math.round((dragging.startBeam.z+delta.z)/5)*5;
+    draw();
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-.35,1.53);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
@@ -241,5 +304,8 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camer
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
 persist();render();
+function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
+function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
+if(!localStorage.getItem(WELCOME_KEY))showWelcome();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 })();
