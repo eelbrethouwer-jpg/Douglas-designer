@@ -1,0 +1,245 @@
+/* Douglas Designer v0.1 — dependency-free 3D canvas editor. All geometry in mm. */
+(function(){
+'use strict';
+const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
+const $=(s)=>document.querySelector(s);
+const $$=(s)=>[...document.querySelectorAll(s)];
+const esc=(s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(n)=>new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(n);
+const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n);
+const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
+const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
+const STORAGE='douglas-designer-v1';
+let project; try{project=M.normalizeProject(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=M.demoProject();}
+let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false;
+let undoStack=[],redoStack=[],toastTimer=null;
+const camera={yaw:-0.62,pitch:0.32,zoom:1};
+const canvas=$('#scene'),ctx=canvas.getContext('2d');
+let shapes=[], hitShapes=[], viewport={w:800,h:500}, dragging=null, pointers=new Map(),pinchDistance=0;
+function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
+function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(project));$('#saveStatus').textContent='● Lokaal opgeslagen';}catch(e){$('#saveStatus').textContent='● Opslag niet beschikbaar';}}
+function commit(fn){const before=JSON.stringify(project);fn();project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=M.normalizeProject(JSON.parse(from.pop()));selected=null;persist();render();}
+function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);return null;}
+function setSelected(type,id){selected=id?{type,id}:null;beamMoveMode=false;render();if(window.innerWidth<=800 && type && type!=='frame'){switchMobile('modules');$('#inspector').classList.add('mobile-visible');setTimeout(()=>$('#inspector').scrollIntoView({behavior:'smooth',block:'start'}),50);}}
+function switchPanel(name){activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
+function switchMobile(name){mobileView=name;$$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));$('#stageArea').classList.toggle('hidden',name!=='design');$('#sidebar').classList.toggle('mobile-visible',name==='modules'||name==='settings');$('#inspector').classList.toggle('mobile-visible',name==='modules'&&!!selected);if(name==='modules')switchPanel('modules');if(name==='settings')switchPanel('settings');if(name==='cutlist'){showCutlist();$('#stageArea').classList.remove('hidden');mobileView='design';$$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile==='design'));}}
+function addModule(kind){const type=M.TYPES[kind];if(!type||project.modules.length>=12){toast('Maximum 12 modules');return;}
+  let newId;commit(()=>{newId=M.uid();project.modules.push({id:newId,kind,width:defaults[kind],name:type.label});});setSelected('module',newId);}
+function addBeam(){let id;commit(()=>{id=M.uid();project.beams.push({id,name:'Extra Douglas balk',axis:'x',length:500,x:100,y:450,z:120});});setSelected('beam',id);}
+function render(){
+  $('#displayName').textContent=project.name;$('#projectTitle').firstChild.textContent=project.name+' ';
+  const {modules,beams}=project;
+  $('#statWidth').innerHTML=`${fmt(project.width)} <small>mm</small>`;$('#statDepth').innerHTML=`${fmt(project.depth)} <small>mm</small>`;$('#statHeight').innerHTML=`${fmt(project.height)} <small>mm</small>`;
+  const plan=M.boardPlan(project);$('#statBeams').innerHTML=`${fmt(plan.pieces)} <small>stuks</small>`;
+  $('#moduleCount').textContent=`${modules.length} modules`;$('#manualCount').textContent=`${beams.length} extra`;
+  $('#moduleList').innerHTML=modules.map((m,i)=>`<div class="module-card ${selected?.id===m.id?'active':''}" data-select-module="${esc(m.id)}"><div class="module-symbol">${icons[m.kind]}</div><div class="module-meta"><strong>${esc(m.name)}</strong><small>${fmt(m.width)} mm breed · ${M.TYPES[m.kind].label}</small></div><div class="reorder"><button data-move-module="${esc(m.id)}" data-direction="-1" title="Naar links" ${i===0?'disabled':''}>↑</button><button data-move-module="${esc(m.id)}" data-direction="1" title="Naar rechts" ${i===modules.length-1?'disabled':''}>↓</button></div></div>`).join('');
+  $('#beamList').innerHTML=beams.length?beams.map(b=>`<div class="module-card ${selected?.id===b.id?'active':''}" data-select-beam="${esc(b.id)}"><div class="module-symbol">▥</div><div class="module-meta"><strong>${esc(b.name)}</strong><small>${fmt(b.length)} mm · as ${b.axis.toUpperCase()}</small></div><span style="color:#8e9890">›</span></div>`).join(''):'<p class="hint">Nog geen extra balken geplaatst.</p>';
+  $('#presetGrid').innerHTML=Object.entries(M.TYPES).map(([key,v])=>`<button class="preset" data-add="${key}"><span class="preset-icon">${icons[key]}</span>${v.label} ＋</button>`).join('');
+  $('#projectName').value=project.name;$('#projectWidth').value=project.width;$('#projectDepth').value=project.depth;$('#projectHeight').value=project.height;$('#stockLength').value=project.stockLength;$('#kerf').value=project.kerf;$('#beamPrice').value=project.beamPrice;$('#countertopCheck').checked=project.countertop;
+  $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;
+  renderInspector();draw();
+}
+function renderInspector(){
+  const obj=getSelected();const body=$('#inspectorBody'),foot=$('#inspectorBottom');
+  if(!obj){
+    $('#inspectorTitle').textContent='Projectoverzicht';
+    const plan=M.boardPlan(project),warn=M.warnings(project);
+    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>50 × 100 mm · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${euro(plan.estimatedPrice)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft uitsluitend de Douglas balken; geen werkblad, platen, apparatuur, bevestigingsmiddelen of arbeid. De 3D-modules zijn schematisch.</p>`;
+    foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="openCutlist">▤ Zaaglijst & materiaal bekijken →</button><button class="outline-btn full" id="imageBtn">↓ 3D-aanzicht opslaan (PNG)</button></div>';
+    return;
+  }
+  if(selected.type==='module'){
+    const spec=M.TYPES[obj.kind];const kindOptions=Object.entries(M.TYPES).map(([k,v])=>`<option value="${k}" ${obj.kind===k?'selected':''}>${v.label}</option>`).join('');
+    $('#inspectorTitle').textContent=obj.name;
+    body.innerHTML=`<div class="preview-icon">${icons[obj.kind]}</div><p class="inspector-label">MODULE INSTELLINGEN</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}" maxlength="60"></label><label class="field">Type<select data-edit="kind">${kindOptions}</select></label><div class="field-grid"><label class="field">Opening breedte (mm)<input data-edit="width" type="number" min="200" max="2400" step="5" value="${obj.width}"></label></div><div class="divider"></div><p class="inspector-label">GEOMETRIE</p><div class="detail-label"><span>Modulebreedte</span><strong>${fmt(obj.width)} mm</strong></div><div class="detail-label"><span>Buitenhoogte</span><strong>${fmt(project.height)} mm</strong></div><div class="detail-label"><span>Constructiediepte</span><strong>${fmt(project.depth)} mm</strong></div><div class="divider"></div><div class="warning">Modulebeeld is indicatief, niet op basis van fabrikantmetingen. Controleer inbouwmaten, ventilatie en hittebescherming vóór de bouw.</div>`;
+    foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze module</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
+  }else{
+    $('#inspectorTitle').textContent=obj.name;
+    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">VRIJE BALK — 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label><label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label><label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><button class="outline-btn full" id="dragBeamBtn" style="margin-top:8px">${beamMoveMode?'✓ Verplaatsen actief':'↔ Verplaats balk op canvas'}</button><div class="notice-small">${beamMoveMode?'Sleep de geselecteerde balk in de 3D-weergave. In vooraanzicht verplaats je X/Y; in bovenaanzicht X/Z.':'De coördinaten beschrijven de linkervoor-onderhoek van de balk. Posities buiten het frame worden als waarschuwing gemeld.'}</div>`;
+    foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
+  }
+}
+/* Lightweight 3D geometry projector — not a static mockup and no external CDN required. */
+const RGB={wood:'#b8824f',end:'#a26c42',highlight:'#d4a16b',top:'#dcb889',post:'#bd8653',panel:'#ad7548',fridge:'#38474f',steel:'#78848a',kamado:'#354740',ground:'#edf0e9'};
+function rgb(hex){const h=hex.replace('#','');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}
+function shade(hex,mul){const r=rgb(hex).map(v=>Math.max(0,Math.min(255,Math.round(v*mul))));return `rgb(${r.join(',')})`;}
+let scale=0, sceneCenter;
+function rotate(v){const x=v[0]-sceneCenter[0],y=v[1]-sceneCenter[1],z=v[2]-sceneCenter[2];const c=Math.cos(camera.yaw),s=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);const xx=c*x+s*z,zz=-s*x+c*z;return [xx,cp*y-sp*zz,sp*y+cp*zz];}
+function toScreen(v){const r=rotate(v),f=2000/(2000+r[2]);return {x:viewport.w/2+r[0]*scale*f,y:viewport.h*.55-r[1]*scale*f,d:r[2]};}
+function poly(coords,fill,owner,stroke='rgba(46,37,28,.18)'){const verts=coords.map(toScreen);shapes.push({verts,depth:verts.reduce((s,v)=>s+v.d,0)/verts.length,fill,stroke,owner});}
+function box(x,y,z,w,h,d,color,owner){if(w<=0||h<=0||d<=0)return;
+  const p=[[x,y,z],[x+w,y,z],[x+w,y+h,z],[x,y+h,z],[x,y,z+d],[x+w,y,z+d],[x+w,y+h,z+d],[x,y+h,z+d]];
+  const faces=[[4,5,6,7],[1,5,6,2],[0,4,7,3],[0,1,5,4],[3,2,6,7],[0,1,2,3]];
+  const light=[.65,.78,.97,.64,1.13,.99];faces.forEach((a,i)=>poly(a.map(j=>p[j]),shade(color,light[i]),owner));
+}
+function egg(cx,cy,cz,rx,ry,rz,color,owner){const lat=10,lon=18;for(let i=0;i<lat;i++)for(let j=0;j<lon;j++){
+  function point(theta,phi){const r=Math.sin(theta)*(1+.1*Math.cos(theta)),yy=Math.cos(theta);return [cx+rx*r*Math.cos(phi),cy+ry*yy,cz+rz*r*Math.sin(phi)];}
+  const a=i*Math.PI/lat,b=(i+1)*Math.PI/lat,t=j*2*Math.PI/lon,u=(j+1)*2*Math.PI/lon;
+  const colorStrength=.78+.22*Math.max(0,Math.cos(t+camera.yaw));poly([point(a,t),point(a,u),point(b,u),point(b,t)],shade(color,colorStrength),owner,'rgba(25,25,22,.16)');
+}}
+function objects(){shapes=[];hitShapes=[];
+  const frame=M.framePieces(project);
+  // Cabinet bodies come before beams; physical occlusion is resolved by 3D depth sorting.
+  const {sections}=M.boundaries(project);
+  for(const s of sections){
+    const {module:m,left,right}=s;const w=right-left;
+    const owner={type:'module',id:m.id};
+    const cabY=115,cabH=Math.max(100,project.height-280),front=111,bodyD=Math.max(100,project.depth-250);
+    if(m.kind==='fridge'){
+      box(left+8,cabY,front,w-16,cabH,bodyD,RGB.fridge,owner);
+      box(left+15,cabY+8,front-6,w-30,cabH-16,15,'#495965',owner);
+      box(right-43,cabY+100,front-14,7,Math.min(280,cabH-160),12,'#b3bbb7',owner);
+    }else if(m.kind==='drawers'){
+      box(left+10,cabY,front+25,w-20,cabH,bodyD,RGB.wood,owner);
+      const gap=10,num=3;for(let k=0;k<num;k++){
+        const h=(cabH-gap*(num+1))/num, y=cabY+gap+(k*(h+gap));
+        box(left+15,y,front,w-30,h,22,RGB.panel,owner);
+        box(left+w*.38,y+h*.50,front-9,w*.24,5,11,'#3f4945',owner);
+      }
+    }else if(m.kind==='doors'){
+      box(left+9,cabY,front+22,w-18,cabH,bodyD,RGB.wood,owner);
+      const dw=(w-38)/2;
+      box(left+13,cabY+9,front,dw,cabH-18,20,RGB.panel,owner);
+      box(left+25+dw,cabY+9,front,dw,cabH-18,20,RGB.panel,owner);
+      box(left+dw-13,cabY+cabH/2,front-9,5,50,9,'#373e37',owner);
+      box(left+dw+38,cabY+cabH/2,front-9,5,50,9,'#373e37',owner);
+    }else if(m.kind==='open'){
+      for(const y of [cabY+12,cabY+cabH*.5,cabY+cabH-13])box(left+11,y,front+35,w-22,22,bodyD,RGB.wood,owner);
+    }else if(m.kind==='kamado'){
+      // Illustrative egg grill; exact grill dimensions are NOT used for clearances.
+      const cx=left+w/2,cz=project.depth*.49,ry=Math.min(270,cabH*.43),rx=Math.min(230,(w-50)/2);
+      box(cx-150,cabY,cz-135,300,75,270,'#555b4d',owner);
+      egg(cx,cabY+ry+95,cz,rx,ry,rx*.95,RGB.kamado,owner);
+      box(cx-25,cabY+ry*2+68,cz-25,50,27,50,'#b7b2a3',owner);
+      box(cx-100,cabY+ry+30,cz-rx-24,200,24,20,'#55564a',owner);
+    }
+  }
+  for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
+  for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
+  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null);}
+}
+function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
+function drawGrid(){const step=250,margin=600,y=-55;
+  ctx.save();ctx.lineWidth=1;ctx.strokeStyle='rgba(109,128,112,.10)';
+  for(let x=-margin;x<=project.width+margin;x+=step){let a=projectPoint([x,y,-margin]),b=projectPoint([x,y,project.depth+margin]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+  for(let z=-margin;z<=project.depth+margin;z+=step){let a=projectPoint([-margin,y,z]),b=projectPoint([project.width+margin,y,z]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}ctx.restore();
+}
+function projectPoint(x){return toScreen(x);}
+function drawDims(){const ww=project.width,hh=project.height,dd=project.depth;
+  const pairs=[[[0,hh+85,-55],[ww,hh+85,-55],`${fmt(ww)} mm`],[[ww+90,0,0],[ww+90,hh,0],`${fmt(hh)} mm`],[[ww+65,0,0],[ww+65,0,dd],`${fmt(dd)} mm`]];
+  ctx.save();ctx.lineWidth=1;ctx.strokeStyle='rgba(79,105,88,.48)';ctx.fillStyle='#628071';ctx.font='600 11px system-ui';ctx.textAlign='center';
+  for(const [a,b,text] of pairs){const p1=toScreen(a),p2=toScreen(b);ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+    for(const p of [p1,p2]){ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill();}
+    const x=(p1.x+p2.x)/2,y=(p1.y+p2.y)/2-8;ctx.fillText(text,x,y);
+  }ctx.restore();
+}
+function drawLabels(){const {sections}=M.boundaries(project);ctx.save();ctx.textAlign='center';ctx.font='700 11px system-ui';
+  for(const s of sections){const p=toScreen([(s.left+s.right)/2,105,-60]);if(p.x<-100||p.x>viewport.w+100)continue;
+    const text=s.module.name;const tw=ctx.measureText(text).width;ctx.fillStyle='rgba(255,255,255,.94)';ctx.beginPath();ctx.roundRect(p.x-tw/2-12,p.y-18,tw+24,26,7);ctx.fill();ctx.fillStyle='#4f6658';ctx.fillText(text,p.x,p.y-1);
+  }ctx.restore();
+}
+function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect.height<10)return;const dpr=Math.min(2.5,window.devicePixelRatio||1);viewport={w:rect.width,h:rect.height};
+  if(canvas.width!==Math.round(rect.width*dpr)||canvas.height!==Math.round(rect.height*dpr)){canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);}
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,viewport.w,viewport.h);
+  sceneCenter=[project.width/2,project.height/2,project.depth/2];
+  const fitting=Math.min(viewport.w/(project.width*1.35+project.depth*.40),viewport.h/(project.height*1.5+project.depth*.64));
+  scale=fitting*camera.zoom;
+  drawGrid();objects();shapes.sort((a,b)=>b.depth-a.depth);
+  hitShapes=shapes.filter(s=>s.owner);
+  for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
+  drawDims();if(currentView==='3d')drawLabels();
+}
+function hit(x,y){for(let i=hitShapes.length-1;i>=0;i--){const s=hitShapes[i],pts=s.verts;let inside=false;for(let a=0,b=pts.length-1;a<pts.length;b=a++){
+  if(((pts[a].y>y)!=(pts[b].y>y))&&(x<(pts[b].x-pts[a].x)*(y-pts[a].y)/(pts[b].y-pts[a].y)+pts[a].x))inside=!inside;
+  }if(inside)return s.owner;}return null;}
+function setView(v){currentView=v;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,Math.PI/2-.01]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
+function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
+ let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
+ for(const g of p.groups)h+=`<tr><td>${esc(g.name)}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
+ h+=`</tbody></table><h4 class="cut-section">GEOPTIMALISEERD ZAAGPLAN — HANDELSLENGTE ${fmt(project.stockLength)} MM</h4>`;
+ p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
+ if(p.impossible.length)h+=`<div class="warning">${p.impossible.length} zaagstukken overschrijden de balklengte van ${fmt(project.stockLength)} mm en zijn NIET opgenomen in het zaagplan.</div>`;
+ h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">Materiaalraming is exclusief werkbladen, deuren, lades, schroeven, apparatuur, verbindingsmateriaal en afwerking. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
+ return h;
+}
+function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
+function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
+function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
+function exportProject(){download('douglas-designer-project.json',JSON.stringify(project,null,2));toast('Projectbestand aangemaakt');}
+function screenshot(){draw();canvas.toBlob(b=>{if(!b){toast('Afbeelding maken mislukt');return;}const u=URL.createObjectURL(b),a=document.createElement('a');a.download='douglas-ontwerp.png';a.href=u;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);},'image/png');}
+function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSelected();if(!field||!obj)return;
+  const isNumeric=['width','x','y','z','length'].includes(field),val=isNumeric?Number(el.value):el.value;
+  if(isNumeric&&!Number.isFinite(val)){toast('Ongeldige waarde');render();return;}
+  commit(()=>{
+    if(field==='kind'&&selected.type==='module'&&M.TYPES[val]){obj.kind=val;obj.name=M.TYPES[val].label;obj.width=Math.max(M.TYPES[val].min,obj.width);}
+    else if(field==='width')obj.width=M.clamp(Math.round(val),Math.max(200,M.TYPES[obj.kind].min),2400);
+    else if(field==='length')obj.length=M.clamp(Math.round(val),50,6500);
+    else if(isNumeric)obj[field]=Math.round(val);
+    else if(field==='axis')obj.axis=['x','y','z'].includes(val)?val:obj.axis;
+    else if(field==='name')obj.name=String(val).slice(0,60)||'Onderdeel';
+  });
+}
+function updateSettings(e){const t=e.target,id=t.id;if(!['projectName','projectWidth','projectDepth','projectHeight','stockLength','kerf','beamPrice','countertopCheck'].includes(id))return;
+  const v=id==='countertopCheck'?t.checked:id==='projectName'?t.value:Number(t.value);
+  if(typeof v==='number'&&!Number.isFinite(v)){render();return;}
+  if(id==='projectWidth'){let ok=false;commit(()=>{ok=M.resizeProject(project,v);});if(!ok)toast('Breedte te klein voor gekozen modules');}
+  else commit(()=>{const rule={projectName:'name',projectDepth:'depth',projectHeight:'height',stockLength:'stockLength',kerf:'kerf',beamPrice:'beamPrice',countertopCheck:'countertop'};const ranges={depth:[400,2000],height:[400,2500],stockLength:[1000,6500],kerf:[0,10],beamPrice:[0,1000]};const key=rule[id];project[key]=ranges[key]?M.clamp(v,...ranges[key]):v;});
+  render();
+}
+function move(id,dir){const idx=project.modules.findIndex(m=>m.id===id),target=idx+dir;if(idx<0||target<0||target>=project.modules.length)return;commit(()=>{[project.modules[idx],project.modules[target]]=[project.modules[target],project.modules[idx]];});}
+// Event delegation makes re-rendered lists/inspectors reliable.
+document.addEventListener('click',e=>{
+  const modCard=e.target.closest('[data-select-module]');
+  const beamCard=e.target.closest('[data-select-beam]');
+  const b=e.target.closest('button');
+  if(modCard && !b){setSelected('module',modCard.dataset.selectModule);return;}
+  if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
+  if(!b)return;
+  if(b.dataset.panel){switchPanel(b.dataset.panel);return;}
+  if(b.dataset.mobile){switchMobile(b.dataset.mobile);return;}
+  if(b.dataset.view){setView(b.dataset.view);return;}
+  if(b.dataset.add){addModule(b.dataset.add);return;}
+  if(b.dataset.moveModule){e.stopPropagation();move(b.dataset.moveModule,Number(b.dataset.direction));return;}
+  switch(b.id){
+    case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
+    case 'exportBtn':case 'modalSecondary':exportProject();break;
+    case 'importBtn':$('#fileInput').click();break;
+    case 'addBeamBtn':addBeam();break;
+    case 'dragBeamBtn':beamMoveMode=!beamMoveMode;renderInspector();toast(beamMoveMode?'Sleep de balk in het ontwerp':'Verplaatsen uitgeschakeld');break;
+    case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=M.demoProject();selected=null;});toast('Voorbeeldproject hersteld');}break;
+    case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
+    case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
+    case 'deleteSelected':if(!selected)return;if(selected.type==='module'&&project.modules.length===1){toast('Minstens één module vereist');return;}commit(()=>{if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;});break;
+    case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
+    case 'zoomOut':camera.zoom=M.clamp(camera.zoom/1.16,.35,4);draw();break;
+    case 'resetView':camera.zoom=1;setView('3d');break;
+  }
+});
+$('#inspector').addEventListener('change',handleInput);
+$('#sidebar').addEventListener('change',updateSettings);
+$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=M.normalizeProject(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
+$('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
+window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();history(e.shiftKey?'redo':'undo');}if(e.key==='Escape'&&modalOpen)closeModal();});
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===1){dragging={x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};const pick=hit(e.offsetX,e.offsetY);if(beamMoveMode&&selected?.type==='beam'&&pick?.id===selected.id){const b=getSelected();dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}}if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}});
+canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
+  const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
+  if(dragging.moved){if(dragging.mode==='move-beam'){
+    const b=getSelected();if(!b)return;const dxTotal=(e.offsetX-dragging.startX)/scale,dyTotal=(e.offsetY-dragging.startY)/scale;
+    let mx=0,my=0,mz=0;
+    if(currentView==='front'){mx=dxTotal;my=-dyTotal;}
+    else if(currentView==='side'){mz=-dxTotal;my=-dyTotal;}
+    else if(currentView==='top'){mx=dxTotal*Math.cos(camera.yaw);mz=dyTotal;}
+    else{const c=Math.cos(camera.yaw),sn=Math.sin(camera.yaw);const depthShift=dyTotal/Math.max(.22,Math.sin(camera.pitch));mx=c*dxTotal-sn*depthShift;mz=sn*dxTotal+c*depthShift;}
+    b.x=Math.round((dragging.startBeam.x+mx)/5)*5;b.y=Math.round((dragging.startBeam.y+my)/5)*5;b.z=Math.round((dragging.startBeam.z+mz)/5)*5;draw();
+  }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-.35,1.53);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
+});
+function pointerEnd(e){if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
+  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam')setSelected(id.type,id.id);else if(id?.type==='frame'){toast('Dit is een automatische framebalk. Kies Balken voor extra balken.');}else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
+canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
+canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
+window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
+if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
+persist();render();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+})();
