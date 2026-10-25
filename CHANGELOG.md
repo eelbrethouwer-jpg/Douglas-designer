@@ -20,3 +20,7 @@
 **Risico's:** aannames bij inbouwmaten, profielen, verbindingen, draagkracht en hitteafstanden; zaaglijst nog niet bouwgereed. Browser- en touchscreenvalidatie nog open.
 
 **Tests:** 9/9 geautomatiseerd geslaagd; volledige browserrendering nog niet geverifieerd.
+
+## v0.4.0 (releasekandidaat)
+- Leeg canvas / vrije orthografische tekenmodus, direct trekken van balken en groene lengtehandvatten.
+- Bovenliggers met geometrische oplegging op staanders; 28 automatische tests.

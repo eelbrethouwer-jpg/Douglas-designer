@@ -1,4 +1,4 @@
-/* Douglas Designer v0.3 — dependency-free 3D canvas editor. All geometry in mm. */
+/* Douglas Designer v0.4 — dependency-free 3D canvas editor. All geometry in mm. */
 (function(){
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
@@ -18,6 +18,52 @@ const camera={yaw:-0.62,pitch:0.32,zoom:1};
 const canvas=$('#scene'),ctx=canvas.getContext('2d');
 let shapes=[], hitShapes=[], viewport={w:800,h:500}, dragging=null, pointers=new Map(),pinchDistance=0;
 let armedBeamType=null,previewBeam=null,paletteGesture=null,suppressPresetClick=false;
+let drawMode=false;
+let beamEndHandles=[];
+const viewAxes=()=>currentView==='front'?['x','y']:currentView==='side'?['z','y']:(currentView==='top'||currentView==='bottom')?['x','z']:null;
+const snap5=n=>Math.round(n/5)*5;
+function toggleDrawMode(active){
+  drawMode=active;disarmBeam();
+  if(active&&!viewAxes())setView('front');
+  $('#selectTool').classList.toggle('active',!active);
+  $('#drawTool').classList.toggle('active',active);
+  $('#selectTool').setAttribute('aria-pressed',String(!active));
+  $('#drawTool').setAttribute('aria-pressed',String(active));
+  $('#drawHelp').classList.toggle('hidden',!active);
+  canvas.classList.toggle('draw-active',active);
+  draw();
+}
+function drawPoint(px,py){
+  const w=worldFromPoint(px,py),plane=viewAxes();
+  if(!plane)return null;
+  for(const a of plane)w[a]=snap5(w[a]);
+  // Use a stable workplane: front face / left face / top plan at constant height.
+  if(currentView==='front')w.z=0;
+  if(currentView==='side')w.x=0;
+  if(currentView==='top'||currentView==='bottom')w.y=100;
+  // Floorplanner-like snapping to the ends of EXISTING manual beams.
+  let nearest=null,dist=16;
+  for(const beam of project.beams){
+    for(const endpoint of ['start','end']){
+      const q=beamHandlePoint(beam,endpoint),pixel=toScreen(q);
+      const delta=Math.hypot(pixel.x-px,pixel.y-py);
+      if(delta<dist){dist=delta;nearest=q;}
+    }
+  }
+  if(nearest)for(const axis of plane)w[axis]=snap5(nearest[['x','y','z'].indexOf(axis)]);
+  return w;
+}
+function beamHandlePoint(b,end){
+  const box=M.beamBox(b),p=[box.x+box.w/2,box.y+box.h/2,box.z+box.d/2];
+  const index={x:0,y:1,z:2}[b.axis];
+  p[index]=(end==='start'?b[b.axis]:b[b.axis]+b.length);
+  return p;
+}
+function handleAt(px,py){
+  for(const h of beamEndHandles)if(Math.hypot(px-h.x,py-h.y)<17)return h;
+  return null;
+}
+
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
 function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(project));$('#saveStatus').textContent='● Lokaal opgeslagen';}catch(e){$('#saveStatus').textContent='● Opslag niet beschikbaar';}}
 function commit(fn){const before=JSON.stringify(project);fn();project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
@@ -218,6 +264,19 @@ function objects(){shapes=[];hitShapes=[];
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
 function drawGrid(){const step=250,margin=600,y=-55;
+  // Free drawing uses a large orthographic drafting grid, not a floor-plane illusion.
+  if(!project.modules.length && viewAxes()){
+    const [a,b]=viewAxes();const point=(u,v)=>{
+      const w={x:0,y:0,z:0};w[a]=u;w[b]=v;
+      if(currentView==='top'||currentView==='bottom')w.y=100;
+      return toScreen([w.x,w.y,w.z]);
+    };
+    ctx.save();ctx.strokeStyle='rgba(83,119,101,.16)';ctx.lineWidth=1;
+    const dimension=k=>k==='x'?project.width:k==='y'?project.height:project.depth;
+    for(let u=-500;u<dimension(a)+500;u+=100){const p=point(u,-500),q=point(u,dimension(b)+500);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();}
+    for(let v=-500;v<dimension(b)+500;v+=100){const p=point(-500,v),q=point(dimension(a)+500,v);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();}
+    ctx.restore();return;
+  }
   ctx.save();ctx.lineWidth=1;ctx.strokeStyle='rgba(109,128,112,.10)';
   for(let x=-margin;x<=project.width+margin;x+=step){let a=projectPoint([x,y,-margin]),b=projectPoint([x,y,project.depth+margin]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
   for(let z=-margin;z<=project.depth+margin;z+=step){let a=projectPoint([-margin,y,z]),b=projectPoint([project.width+margin,y,z]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}ctx.restore();
@@ -262,6 +321,24 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   hitShapes=shapes.filter(s=>s.owner);
   for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
   drawDims();if(currentView==='3d')drawLabels();
+  beamEndHandles=[];
+  if(selected?.type==='beam' && !drawMode){
+    const b=getSelected();
+    if(b){const pts=['start','end'].map(endpoint=>({endpoint,...toScreen(beamHandlePoint(b,endpoint))}));
+      if(Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)>22){
+        ctx.save();
+        for(const p of pts){
+          beamEndHandles.push(p);
+          ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fillStyle='#ffffff';ctx.fill();
+          ctx.lineWidth=3;ctx.strokeStyle='#2b8263';ctx.stroke();
+        }
+        const cx=(pts[0].x+pts[1].x)/2,cy=(pts[0].y+pts[1].y)/2;
+        ctx.fillStyle='#1e5b44';ctx.font='700 12px system-ui';ctx.textAlign='center';
+        ctx.fillText(`${fmt(b.length)} mm`,cx,cy-18);
+        ctx.restore();
+      }
+    }
+  }
 }
 function hit(x,y){for(let i=hitShapes.length-1;i>=0;i--){const s=hitShapes[i],pts=s.verts;let inside=false;for(let a=0,b=pts.length-1;a<pts.length;b=a++){
   if(((pts[a].y>y)!=(pts[b].y>y))&&(x<(pts[b].x-pts[a].x)*(y-pts[a].y)/(pts[b].y-pts[a].y)+pts[a].x))inside=!inside;
@@ -320,7 +397,14 @@ document.addEventListener('click',e=>{
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
     case 'homeBtn':showWelcome();break;
     case 'continueProject':hideWelcome();break;
-    case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=M.normalizeProject({name:'Nieuw ontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Nieuw ontwerp gestart');}break;
+    case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=M.normalizeProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);toggleDrawMode(false);hideWelcome();switchMobile('design');toast('Nieuw basisontwerp gestart');}break;
+    case 'newFreeProject':if(window.confirm('Leeg tekenvlak openen? Exporteer je huidige ontwerp eerst als je het wilt bewaren.')){
+      commit(()=>{project=M.freeProject();selected=null;});setSelected(null,null);
+      hideWelcome();switchMobile('design');setView('front');toggleDrawMode(true);
+      toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');
+    }break;
+    case 'drawTool':toggleDrawMode(true);break;
+    case 'selectTool':toggleDrawMode(false);break;
     case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=M.demoProject();selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
@@ -336,7 +420,7 @@ document.addEventListener('click',e=>{
     case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=M.demoProject();selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
-    case 'deleteSelected':if(!selected)return;if(selected.type==='module'&&project.modules.length===1){toast('Minstens één module vereist');return;}commit(()=>{if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;});break;
+    case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
     case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
     case 'zoomOut':camera.zoom=M.clamp(camera.zoom/1.16,.35,4);draw();break;
     case 'resetView':camera.zoom=1;setView('3d');break;
@@ -379,9 +463,24 @@ $('#inspector').addEventListener('change',handleInput);
 $('#sidebar').addEventListener('change',updateSettings);
 $('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=M.normalizeProject(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
-window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();history(e.shiftKey?'redo':'undo');}if(e.key==='Escape'&&armedBeamType)disarmBeam();if(e.key==='Escape'&&modalOpen)closeModal();});
+window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();history(e.shiftKey?'redo':'undo');}if(e.key==='Escape'&&armedBeamType)disarmBeam();if(e.key==='Escape'&&drawMode)toggleDrawMode(false);if(e.key==='Escape'&&modalOpen)closeModal();});
 canvas.addEventListener('pointerdown',e=>{
   canvas.setPointerCapture(e.pointerId);
+  if(drawMode){
+    const start=drawPoint(e.offsetX,e.offsetY);if(!start)return;
+    pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+    dragging={mode:'draw-beam',start,startX:e.offsetX,startY:e.offsetY,moved:false};
+    return;
+  }
+  const resize=selected?.type==='beam' && handleAt(e.offsetX,e.offsetY);
+  if(resize){
+    const b=getSelected();if(b && viewAxes()?.includes(b.axis)){
+      pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+      dragging={mode:'resize-beam',endpoint:resize.endpoint,startBeam:{...b},before:JSON.stringify(project),startX:e.offsetX,startY:e.offsetY,moved:false};
+      return;
+    }
+    toast('Gebruik een aanzicht waarin de lengte van de balk zichtbaar is');
+  }
   if(armedBeamType){pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});dragging={mode:'place-beam',x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};updatePlacement(e.offsetX,e.offsetY);return;}
   pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
   if(pointers.size===1){
@@ -398,6 +497,19 @@ canvas.addEventListener('pointerdown',e=>{
 });
 canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
+  if(dragging.mode==='draw-beam'){
+    const end=drawPoint(e.offsetX,e.offsetY);
+    previewBeam=end?M.drawingBeam(dragging.start,end,viewAxes()):null;
+    if(previewBeam)$('#drawHelp').textContent=`${previewBeam.name} · ${fmt(previewBeam.length)} mm · loslaten om te plaatsen`;
+    else $('#drawHelp').textContent='Sleep minimaal 50 mm in de gewenste richting';
+    draw();return;
+  }
+  if(dragging.mode==='resize-beam'){
+    const b=getSelected();if(!b)return;
+    const w=drawPoint(e.offsetX,e.offsetY);
+    if(w)M.resizeBeamEndpoint(b,dragging.endpoint,w[b.axis]);
+    draw();return;
+  }
   if(dragging.moved){if(dragging.mode==='place-beam')return;if(dragging.mode==='move-beam'){
     const b=getSelected();if(!b)return;
     const sx=e.offsetX-dragging.startX,sy=e.offsetY-dragging.startY;
@@ -408,7 +520,23 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
     draw();
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
 });
-function pointerEnd(e){if(dragging?.mode==='place-beam'&&armedBeamType){placeAt(e.offsetX,e.offsetY);pointers.delete(e.pointerId);dragging=null;pinchDistance=0;return;}if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
+function pointerEnd(e){
+  if(dragging?.mode==='draw-beam'){
+    const end=drawPoint(e.offsetX,e.offsetY);
+    const beam=end?M.drawingBeam(dragging.start,end,viewAxes()):null;
+    previewBeam=null;dragging=null;pointers.delete(e.pointerId);
+    $('#drawHelp').textContent='Sleep van startpunt naar eindpunt · automatische 5 mm maatvoering · Esc om te stoppen';
+    if(beam){const id=beam.id;commit(()=>project.beams.push(beam));toggleDrawMode(false);setSelected('beam',id);toast(`Balk getekend: ${beam.length} mm · versleep de groene uiteinden`);}
+    else{draw();toast('Sleep minimaal 50 mm om een balk te tekenen');}
+    return;
+  }
+  if(dragging?.mode==='resize-beam'){
+    const before=dragging.before;
+    dragging=null;pointers.delete(e.pointerId);
+    if(JSON.stringify(project)!==before){undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+    return;
+  }
+  if(dragging?.mode==='place-beam'&&armedBeamType){placeAt(e.offsetX,e.offsetY);pointers.delete(e.pointerId);dragging=null;pinchDistance=0;return;}if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
   else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam')setSelected(id.type,id.id);else if(id?.type==='frame'){toast('Dit is een automatische framebalk. Kies Balken voor extra balken.');}else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
 canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});

@@ -56,3 +56,16 @@
  body.beam-mobile-drag #stageArea .stats,body.beam-mobile-drag #stageArea .stage-bottom{display:none}
  body.beam-mobile-drag #stageArea .stage-toolbar{margin:0 4px 6px}
 }
+
+/* v0.4 Floorplanner-style free drafting */
+.draw-controls{position:absolute;z-index:6;left:16px;top:65px;display:flex;gap:5px;background:#fff;padding:5px;border:1px solid #dce4dd;border-radius:12px;box-shadow:0 8px 24px #17292218}
+.draw-control{border:0;border-radius:8px;background:transparent;color:#5c6d62;padding:10px 12px;font-weight:750;font-size:12px;min-height:42px}
+.draw-control.active{background:#255d4a;color:white}
+.draw-help{position:absolute;z-index:4;left:16px;bottom:20px;max-width:70%;background:#174b39ed;color:white;font-size:12px;padding:9px 12px;border-radius:9px;pointer-events:none}
+#scene.draw-active{cursor:crosshair}
+.stage-area .stage:has(#scene.draw-active){border-color:#6f9a81}
+@media(max-width:800px){.draw-controls{top:62px;left:10px;padding:4px}.draw-control{font-size:11px;padding:8px 11px;min-height:40px}.draw-help{bottom:12px;left:12px;max-width:calc(100% - 82px);font-size:11px}}
+/* Keep the canvas free of redundant labels while drafting. */
+.stage-caption{display:none!important}
+.welcome-layer{overflow-y:auto}
+.welcome-card{margin:auto}
