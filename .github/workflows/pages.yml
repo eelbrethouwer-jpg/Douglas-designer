@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   test:
-    name: Syntax, model and app tests
+    name: Validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,6 +29,9 @@ jobs:
           node-version: '22'
       - name: Syntax checks
         run: |
+          node --check room-space.js
+          node --check room-studio.js
+          node --check sketch-grid.js
           node --check render3d.js
           node --check drafting.js
           node --check app.js
