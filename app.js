@@ -86,6 +86,7 @@ function setRoomMove(enabled){roomMoveMode=!!enabled&&!!project.room?.enabled;
  return roomMoveMode;
 }
 function switchPanel(name){
+ document.body?.classList?.toggle('room-editing',window.innerWidth<=800&&(name==='room'||name==='finishes'));
  if(window.innerWidth<=800&&(name==='room'||name==='finishes')){
    $('#stageArea').classList.remove('hidden');
    $('#sidebar').classList.add('mobile-visible');
@@ -94,16 +95,17 @@ function switchPanel(name){
  }
  activePanel=name;$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
 function switchMobile(name){
-  if(name==='room'){
-    mobileView='room';
+  if(name==='room'||name==='finishes'){
+    mobileView=name;
     $('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));
     $('#stageArea').classList.remove('hidden'); // Keep the actual model visible while editing room settings.
     $('#sidebar').classList.add('mobile-visible');
     $('#inspector').classList.remove('mobile-visible');
     $('#selectionStrip').classList.add('hidden');
-    switchPanel('room');draw();return;
+    switchPanel(name);draw();return;
   }
   if(name==='cutlist'){showCutlist();return;}
+  document.body?.classList?.remove('room-editing');
   mobileView=name;
   $$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));
   $('#stageArea').classList.toggle('hidden',name!=='design');
