@@ -9,7 +9,7 @@ function start(){
  const window={DouglasModel:M,DouglasRoom:Room,DouglasDrafting:D,innerWidth:1440,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},print(){},confirm(){return true}};
  const context={window,document,localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},navigator:{},location:{protocol:'file:'},Intl,Map,Math,JSON,Date,console,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}},confirm(){return true}};
  const src=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
- const probe=src.replace(/\}\)\(\);\s*$/,String.raw`window.__test={setView,toScreen,get camera(){return camera},get mode(){return drawMode},get grid(){return gridSize},get magnet(){return magnetEnabled}};})();`);
+ const probe=src.replace(/\}\)\(\);\s*$/,String.raw`window.__test={setView,toScreen,getProject:()=>project,setRoomMove,get camera(){return camera},get mode(){return drawMode},get grid(){return gridSize},get magnet(){return magnetEnabled}};})();`);
  assert.notEqual(probe,src);
  vm.runInNewContext(probe,context,{timeout:10000});
  const click=id=>events.get('document:click')({target:{id,dataset:{},closest(sel){return sel==='button'?this:null;}}});
@@ -63,4 +63,18 @@ test('drawn beam obeys current grid and remains in the cut list',()=>{
  assert.equal(saved.beams.length,1);
  assert.equal(saved.beams[0].length%25,0);
  assert.equal(M.boardPlan(saved).pieces,1);
+});
+
+test('top view drag moves entire kitchen in room coordinates without changing the cutlist',()=>{
+ const h=start(),p=h.api.getProject(),before=M.boardPlan(p).totalLength;
+ p.room.enabled=true;
+ const x=p.room.placement.x,z=p.room.placement.z;
+ assert.equal(h.api.setRoomMove(true),true);
+ h.events.get('#scene:pointerdown')(h.pt(300,240));
+ h.events.get('#scene:pointermove')(h.pt(370,295));
+ h.events.get('#scene:pointerup')(h.pt(370,295));
+ assert.ok(p.room.placement.x!==x||p.room.placement.z!==z,'placement changed');
+ assert.equal(M.boardPlan(p).totalLength,before);
+ const stored=JSON.parse(h.storage.get('douglas-designer-v1'));
+ assert.equal(stored.room.placement.x,p.room.placement.x);
 });
