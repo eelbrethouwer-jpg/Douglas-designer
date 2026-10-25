@@ -16,7 +16,7 @@
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v0.5 RC</b></small></div></div>
+    <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v0.5.1 RC</b></small></div></div>
     <div class="top-actions"><button class="outline-btn projects-home" id="homeBtn" title="Startscherm openen">⌂ <span class="hide-mobile">Projecten</span></button><span class="save-state" id="saveStatus">● Lokaal opgeslagen</span><button id="undoBtn" class="icon-btn" title="Ongedaan maken" aria-label="Ongedaan maken">↶</button><button id="redoBtn" class="icon-btn" title="Opnieuw" aria-label="Opnieuw">↷</button><button id="exportBtn" class="outline-btn"><span>↓</span> <span class="hide-mobile">Project exporteren</span></button></div>
   </header>
   <div class="workspace">
@@ -29,7 +29,7 @@
           <button class="beam-preset" data-beam-type="x" type="button"><span class="beam-preset-graphic beam-horizontal" aria-hidden="true"></span><span><strong>Horizontale regel</strong><small>X-as · van links naar rechts</small></span><span class="beam-grip" aria-hidden="true">⠿</span></button>
           <button class="beam-preset" data-beam-type="y" type="button"><span class="beam-preset-graphic beam-vertical" aria-hidden="true"></span><span><strong>Staander</strong><small>Y-as · omhoog en omlaag</small></span><span class="beam-grip" aria-hidden="true">⠿</span></button>
           <button class="beam-preset" data-beam-type="z" type="button"><span class="beam-preset-graphic beam-depth" aria-hidden="true"></span><span><strong>Dieptebalk</strong><small>Z-as · voor naar achter</small></span><span class="beam-grip" aria-hidden="true">⠿</span></button>
-        </div><p class="hint">Sleep een balk naar het 3D-ontwerp, of tik een type aan en kies daarna zijn plek. Waar mogelijk wordt hij automatisch passend tussen twee balken gemaakt.</p><div class="module-list" id="beamList"></div><div class="notice-small">Standaard profiel: 50 × 100 mm. Losse balken tellen mee in de zaaglijst.</div></section>
+        </div><p class="hint">Sleep een balk naar het 3D-ontwerp, of tik een type aan en kies daarna zijn plek. Waar mogelijk wordt hij automatisch passend tussen twee balken gemaakt.</p><div class="module-list" id="beamList"></div><div class="section-title space-top"><span>AUTOMATISCH FRAME · BEWERKBAAR</span><small id="frameCount">—</small></div><p class="hint">Tik een bestaande staander of ligger aan om de lengte en positie aan te passen. Wijzigingen blijven opgeslagen en staan in de zaaglijst.</p><div class="module-list" id="frameList"></div><button type="button" class="outline-btn full" id="restoreAllFrames" style="margin-top:12px">↺ Herstel alle framebalken</button><div class="notice-small">Standaard profiel: 50 × 100 mm. Losse balken tellen mee in de zaaglijst.</div></section>
         <section class="sidebar-panel hidden" id="panel-settings"><div class="section-title"><span>BUITENMATEN</span><small>alle maten in mm</small></div><label class="field">Projectnaam<input id="projectName" type="text" maxlength="80" autocomplete="off"></label><div class="field-grid"><label class="field">Breedte<input id="projectWidth" type="number" min="500" max="7000" step="5"></label><label class="field">Diepte<input id="projectDepth" type="number" min="400" max="2000" step="5"></label><label class="field">Hoogte<input id="projectHeight" type="number" min="400" max="2500" step="5"></label></div><p class="hint">De buitenbreedte omvat de tussenstijlen van 50 mm. Bij wijzigen schalen de moduleopeningen mee.</p><label class="check-row"><input type="checkbox" id="countertopCheck"> Werkblad tonen (indicatief)</label><div class="section-title space-top"><span>ZAAGINSTELLINGEN</span></div><div class="field-grid"><label class="field">Handelslengte<input id="stockLength" type="number" min="1000" max="6500" step="50"></label><label class="field">Zaagsnede<input id="kerf" type="number" min="0" max="10" step="1"></label><label class="field">Balkprijs (€)<input id="beamPrice" type="number" min="0" max="1000" step="0.5"></label></div><div class="notice-small">AANNAME: Douglas balken 50 × 100 mm; voorkant/achterkant en afmetingen zijn nog te controleren. Dit is een ontwerphulp, geen constructieberekening.</div></section>
       </div>
       <div class="sidebar-foot"><button class="outline-btn full" id="importBtn">↥ Project importeren</button><button class="text-btn full" id="resetBtn">↺ Voorbeeldproject herstellen</button></div>
@@ -47,7 +47,7 @@
 </div>
 <div class="welcome-layer hidden" id="welcomeLayer" role="dialog" aria-modal="true" aria-labelledby="welcomeHeading">
   <div class="welcome-card">
-    <div class="welcome-eyebrow"><span class="welcome-logo">D<span>.</span></span> DOUGLAS DESIGNER <span class="welcome-version">v0.5 RC</span></div>
+    <div class="welcome-eyebrow"><span class="welcome-logo">D<span>.</span></span> DOUGLAS DESIGNER <span class="welcome-version">v0.5.1 RC</span></div>
     <h1 id="welcomeHeading">Van idee naar<br><em>buitenkeuken.</em></h1>
     <p>Ontwerp met complete kastmodules én losse Douglas balken. Alles op maat, met een automatische zaaglijst.</p>
     <div class="welcome-options">
@@ -63,6 +63,6 @@
 <input type="file" id="fileInput" accept="application/json,.json" hidden>
 <div id="paletteDragGhost" class="palette-drag-ghost hidden" aria-hidden="true">▥ Douglas balk</div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="model.js?rev=0.4.1"></script><script src="render3d.js?rev=0.5.0"></script><script src="app.js?rev=0.5.0"></script>
+<script src="model.js?rev=0.5.1"></script><script src="render3d.js?rev=0.5.0"></script><script src="app.js?rev=0.5.1"></script>
 </body>
 </html>
