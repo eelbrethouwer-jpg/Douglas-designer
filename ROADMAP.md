@@ -22,8 +22,9 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 | 1 | v0.5.1 | Bestaande automatische frames selecteren, verplaatsen, verlengen, herstellen | P0 | Code samengevoegd; fysieke iPhone-acceptatie open |
 | 2 | v0.6.x | Betrouwbaar gesloten werkblad, dieptebuffer en 3D in alle camerahoeken | P0 | Renderer technisch vernieuwd; visueel nog niet geverifieerd |
 | 3 | v0.6.0 RC | Studio-basis: 2D pannen, raster, magneet, toetsen en nieuwe GPU-geometrie | P1 | Code samengevoegd; volledige visuele acceptatie open |
-| 4 | v0.7.0 RC | Room Capture, ruimteplaatsing, foto-preview en kleurbibliotheek | P1 | Concept-PR #10, acceptatie open |
-| 5 | v0.8.0 | Volledige 3D-materialen, apparaatmodellen en constructieve verbindingen | P1 | Gepland |
+| 4 | v0.7.0 + v0.7.1 | Room Studio, foto-import, materiaalkleuren en mobiele editor | P0/P1 | Code op main; aangemelde live UI-fout gecorrigeerd in v0.7.2 |
+| 4.5 | v0.7.2 RC | **Sketch Studio grid, gekleurde assen, parallelle camera en reparatie projectmutaties** | P0 | PR #13, code gereed; CI groen, browseracceptatie open |
+| 5 | v0.8.0 | Sketch Modeling: directe vlak-/randselectie, asvergrendeling, Push/Pull en daarna constructie/3D-materialen | P1 | Gepland |
 | 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
 | 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gepland |
 | 8 | v1.0.0 | Stabiele eerste productieversie + complete acceptatietest | P1 | Gepland |
@@ -82,6 +83,25 @@ De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in e
 **Release-gates:** volledige regressieset, Chrome desktop, Safari op echte iPhone, alle camera-hoeken, export/import, geen dataverlies. Productversie pas na acceptatie.
 
 **Niet inbegrepen in deze eerste RC:** automatische AI-3D-reconstructie, PBR en echte 3D-merkenbibliotheek. Die blijven vervolgwerk.
+
+### Fase 4A.2 — Sketch Studio basis (v0.7.2, PR #13)
+
+- **Directe regressie:** de app-controller moet de projectreferentie aan ruimte- en materiaalmutaties meegeven; fotokiezen, maten en materialen laten onmiddellijk resultaat zien.
+- Wereldruimte-raster op de grond en de binnenzijde van de muren, dunne rasterlijnen en donkerdere hoofdlijnen.
+- Rood = breedte, groen = diepte, blauw = hoogte (huidige interne assen consequent gedocumenteerd).
+- 50/100/250/500 mm weergaveraster, configureerbare assen en verticale gidsen, vaste camerastanden, parallel/perspectief.
+- Visueel referentiebeeld: SketchUp-achtige neutrale grijze werkruimte en helder model, geen afbeelding als achtergrond.
+- Geen wijzigingen in fysieke balken, frameoverrides of zaaglijst bij camera-/weergave-opties.
+- Foto-opslagquota leidt tot een zichtbare waarschuwing, nooit een vals 'opgeslagen'.
+
+**Acceptatie:** eerst CI, vervolgens handmatige Chrome-/iPhone Safari-test met foto, live kamermaat- en materiaalwissel, alle camera-hoeken en visuele rendering. Zie [SKETCH_STUDIO_SPEC.md](SKETCH_STUDIO_SPEC.md).
+
+### Fase 4A.3 — Volwaardig Sketch Modeling (v0.8.0 concept)
+
+- Direct selecteerbare randen, vlakken en hoekpunten; magnetische eindpunten en hulplijnen.
+- Vlakken tekenen, trekken, vergroten (Push/Pull) en exact op millimeters plaatsen.
+- Materiaalteksturen en merkmodellen uitsluitend met geverifieerde licenties en maatgegevens.
+- Gefaseerde bouwkundige verbindingen na behoud van huidige parametrische constructie.
 
 ### Fase 4B — Houtconstructie en verbindingen (doorgeschoven naar v0.8.0)
 
