@@ -114,3 +114,14 @@
  .room-modal-head button{flex:0 0 42px;min-width:42px;height:42px}
  .room-modal-body{padding-bottom:calc(32px + env(safe-area-inset-bottom, 0px))}
 }
+
+/* v0.7.4 — finger-draggable floor calibration handles and tap-to-reposition. */
+#roomPhotoCanvas{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:crosshair}
+.room-point-help{margin:10px 0 7px;color:#2a5f47;font-size:13px;line-height:1.5;background:#eff7ed;border-radius:10px;padding:10px 12px}
+.room-corner-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:9px 0}
+.room-corner-tools.hidden{display:none}
+.room-corner-tools button{min-height:44px;border:1px solid #bfd3c5;background:#f5f9f4;color:#285640;border-radius:9px;font-size:12px;font-weight:750;cursor:pointer}
+.room-corner-tools button.active{background:#26654c;color:white;border-color:#26654c;box-shadow:0 0 0 2px #97c8aa}
+.room-corner-tools button:disabled{opacity:.4;cursor:default}
+.room-corner-tools button:focus-visible{outline:3px solid #dba24f;outline-offset:2px}
+@media(max-width:360px){.room-corner-tools{gap:4px}.room-corner-tools button{font-size:11px}}
