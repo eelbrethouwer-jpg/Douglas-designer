@@ -170,14 +170,14 @@ test('dedicated point-number buttons can choose a marker and a new tap changes i
  h.listeners.get('#roomCornerTools:click')({target:{closest(q){return q==='[data-corner]'?{dataset:{corner:'1'},disabled:false}:null;}}});
  placeCorner(h,220,120);
  assert.ok(Math.abs(h.project().room.corners[1][0]-220/360)<.001);
- assert.deepEqual(h.project().room.corners[0],current[0]);
- assert.deepEqual(h.project().room.corners[2],current[2]);
- assert.deepEqual(h.project().room.corners[3],current[3]);
+ assert.deepEqual(Array.from(h.project().room.corners[0]),current[0]);
+ assert.deepEqual(Array.from(h.project().room.corners[2]),current[2]);
+ assert.deepEqual(Array.from(h.project().room.corners[3]),current[3]);
 });
 test('drag cancelled by iOS pointercancel discards movement, and off-photo drop clamps coordinates',()=>{
  const h=studio();supplyPhoto(h);
  placeCorner(h,100,80);
- const previous=h.project().room.corners[0].slice();
+ const previous=Array.from(h.project().room.corners[0]);
  photoPointer(h,'pointerdown',100,80);
  photoPointer(h,'pointermove',250,190);
  photoPointer(h,'pointercancel',250,190);
