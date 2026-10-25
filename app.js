@@ -355,7 +355,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
     ctx.beginPath();ctx.arc(snapHint.x,snapHint.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
   }
   beamEndHandles=[];
-  if((selected?.type='beam'||selected?.type==='frame') && !drawMode){
+  if((selected?.type==='beam'||selected?.type==='frame') && !drawMode){
     const b=getSelected();
     if(b){const pts=['start','end'].map(endpoint=>({endpoint,...toScreen(beamHandlePoint(b,endpoint))}));
       if(Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)>22){
