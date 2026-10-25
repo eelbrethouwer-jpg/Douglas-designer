@@ -27,6 +27,38 @@
       ], beams:[]
     };
   }
+  function freeProject() {
+    const p=demoProject();
+    p.name='Vrij ontwerp';p.width=2000;p.depth=1000;p.height=1200;
+    p.modules=[];p.beams=[];p.countertop=false;return p;
+  }
+  function resizeBeamEndpoint(beam, endpoint, newCoordinate, step=5) {
+    if(!beam || !['x','y','z'].includes(beam.axis) || !Number.isFinite(newCoordinate))return false;
+    const axis=beam.axis, grid=Math.max(1,step), snapped=Math.round(newCoordinate/grid)*grid;
+    const start=beam[axis], end=start+beam.length;
+    if(endpoint==='end')beam.length=clamp(snapped-start,50,6500);
+    else if(endpoint==='start'){
+      const newStart=Math.min(end-50,Math.max(end-6500,snapped));
+      beam[axis]=newStart;beam.length=end-newStart;
+    }else return false;
+    return true;
+  }
+  function drawingBeam(start, end, plane, options={}) {
+    if(!start||!end||!Array.isArray(plane)||plane.length!==2)return null;
+    const [a,b]=plane;
+    if(!['x','y','z'].includes(a)||!['x','y','z'].includes(b)||a===b)return null;
+    const axis=Math.abs(end[a]-start[a])>=Math.abs(end[b]-start[b])?a:b;
+    const step=options.step||5;
+    const anchor=Math.round(Math.min(start[axis],end[axis])/step)*step;
+    const tail=Math.round(Math.max(start[axis],end[axis])/step)*step;
+    const length=tail-anchor;
+    if(length<50)return null;
+    const beam={id:uid(),name:axis==='x'?'Horizontale regel':axis==='y'?'Staander':'Dieptebalk',axis,
+       length:Math.min(6500,length),x:0,y:0,z:0};
+    for(const key of ['x','y','z'])beam[key]=Math.round((start[key]||0)/step)*step;
+    beam[axis]=anchor;
+    return beam;
+  }
   function normalizeProject(raw) {
     if(!raw || typeof raw!=='object') return demoProject();
     const p=demoProject();
@@ -41,19 +73,20 @@
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
       name:String(m.name||TYPES[m.kind].label).slice(0,60)
     })) : p.modules;
-    if(!p.modules.length) p.modules=[{id:uid(),kind:'open',width:600,name:'Open vak'}];
+    // An explicit empty module array is a valid FREE drawing document.
     p.beams=Array.isArray(raw.beams) ? raw.beams.slice(0,100).map(b=>({
       id:String(b.id||uid()),name:String(b.name||'Losse balk').slice(0,60),
       x:round(number(b.x)),y:round(number(b.y)),z:round(number(b.z)),
       axis:['x','y','z'].includes(b.axis)?b.axis:'x',
       length:clamp(round(number(b.length,500)),50,6500)
     })) : [];
-    p.width=expectedWidth(p);
+    p.width=p.modules.length?expectedWidth(p):clamp(round(number(raw.width,p.width)),500,7000);
     return p;
   }
-  function expectedWidth(p) {return (p.modules.length+1)*50 + p.modules.reduce((s,m)=>s+m.width,0);}
+  function expectedWidth(p) {return p.modules.length?(p.modules.length+1)*50 + p.modules.reduce((s,m)=>s+m.width,0):p.width;}
   function resizeProject(p,targetWidth){
     targetWidth=round(number(targetWidth,p.width));
+    if(!p.modules.length){if(targetWidth<500||targetWidth>7000)return false;p.width=targetWidth;return true;}
     const available=targetWidth-(p.modules.length+1)*50;
     const minima=p.modules.map(m=>Math.max(200,TYPES[m.kind].min));
     if(available<minima.reduce((a,b)=>a+b,0)) return false;
@@ -80,6 +113,7 @@
   }
   function framePieces(p){
     const cuts=[], {sections,posts}=boundaries(p);
+    if(!sections.length)return cuts;
     const upper=p.height-125, lower=100, postLength=upper;
     function put(name,axis,length,x,y,z,group){
       const b={id:uid(),name,axis,length:round(length),x:round(x),y:round(y),z:round(z),group};
@@ -88,12 +122,21 @@
     for(const x of posts){
       put('Staander','y',postLength,x,0,0,'Frame');
       put('Staander','y',postLength,x,0,p.depth-100,'Frame');
-      for(const y of [lower,upper]) put(y===upper?'Dwarsregel boven':'Dwarsregel onder','z',p.depth-200,x,y,100,'Frame');
+      for(const y of [lower,upper]) {
+        // Upper side rails rest 50 mm on both front/back posts; lower rails remain inset.
+        const seated=y===upper;
+        put(seated?'Dwarsregel boven':'Dwarsregel onder','z',seated?p.depth-100:p.depth-200,x,y,seated?50:100,'Frame');
+      }
     }
     for(const s of sections){
       for(const y of [lower,upper]){
-        put(y===upper?'Ligger boven':'Ligger onder','x',s.module.width,s.left,y,0,'Frame');
-        put(y===upper?'Ligger boven':'Ligger onder','x',s.module.width,s.left,y,p.depth-50,'Frame');
+        // Upper rails bear 25 mm on both posts, and meet above the post's centre.
+        // This is a geometrical joint model, NOT a certified structural detail.
+        const seated=y===upper;
+        const start=seated?s.left-25:s.left;
+        const length=seated?s.module.width+50:s.module.width;
+        put(seated?'Ligger boven':'Ligger onder','x',length,start,y,0,'Frame');
+        put(seated?'Ligger boven':'Ligger onder','x',length,start,y,p.depth-50,'Frame');
       }
     }
     return cuts;
@@ -163,5 +206,5 @@
     if(boardPlan(p).impossible.length)result.push('Minstens één balk is langer dan de gekozen handelslengte.');
     return result;
   }
-  return {TYPES,uid,clamp,demoProject,normalizeProject,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,uid,clamp,demoProject,freeProject,normalizeProject,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });
