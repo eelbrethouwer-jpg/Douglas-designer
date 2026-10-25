@@ -2,7 +2,7 @@
 
 Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-werkwijze, interactieve 3D-controle en een gekoppelde zaaglijst. De interface is geïnspireerd op de eenvoudige ontwerpflow van Floorplanner, maar gespecialiseerd in maatwerk houten constructies.
 
-> **Status op 25 oktober 2026:** v0.7.0 is op `main` samengevoegd en als GitHub-release gepubliceerd. Dit bevestigt de code en CI-uitrol, **niet** de visuele kwaliteit op een echte iPhone. De v0.7.1-fixes staan in een nog niet samengevoegde draft-PR met falende tests.
+> **Status op 25 oktober 2026:** v0.7.1 is inmiddels op `main` samengevoegd, gepubliceerd en de CI-tests zijn groen (78/78). Dit bevestigt de codechecks, **niet** de visuele kwaliteit op een echte iPhone.
 
 
 ## v0.7.0 Room Studio — gepubliceerd, acceptatie nog open
@@ -11,7 +11,7 @@ De wijzigingen voor de eerste foto-ondersteunde ruimteworkflow zijn [samengevoeg
 
 De code bevat ruimtefoto, vier vloerhoeken, handmatige kamerafmetingen, eenvoudige 3D-ruimte, keukenplaatsing en generieke kleur-/frontkeuzes. De fotoprojectie is schematisch en niet maatvast. Betrouwbare touch-, camerahoek- en end-to-end-acceptatie zijn nog niet aangetoond.
 
-**Volgende kandidaat:** [v0.7.1 / PR #11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11) richt zich op een zichtbaar Room-canvas, live plattegrond, foto-upload en materiaalinteractie. Deze PR heeft momenteel rode CI en is **niet** gepubliceerd. De [kwaliteitscriteria](QUALITY_GATES.md) blokkeren samenvoegen totdat het is opgelost.
+**Recent gepubliceerd:** [v0.7.1 / PR #11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11) verbetert het zichtbare Room-canvas, de live plattegrond, foto-upload en materiaalinteractie. De eerdere vier testfouten zijn in de laatste CI-run hersteld (78/78 groen). **Echte iPhone-/desktop-acceptatie staat nog open**. Zie [kwaliteitscriteria](QUALITY_GATES.md).
 
 ## Documentatie
 
