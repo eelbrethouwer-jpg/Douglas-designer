@@ -15,7 +15,7 @@ test('GPU triangle source remains in full world millimeters',()=>{
  assert.ok(data[3]>.8&&data[3]<.95,'color converted to 0..1');
 });
 test('camera projection matches the existing 2D overlay at arbitrary yaw and pitch',()=>{
- const center=[937.5,475,435],point=[250,760,280],camera={yaw:-.62,pitch:.32},viewport={w:1100,h:670},scale:.32;
+ const center=[937.5,475,435],point=[250,760,280],camera={yaw:-.62,pitch:.32},viewport={w:1100,h:670},scale=.32;
  const p=R.projectWorld(point,center,camera,viewport,scale);
  const [x,y,z]=point.map((v,i)=>v-center[i]);
  const xx=Math.cos(camera.yaw)*x+Math.sin(camera.yaw)*z;
