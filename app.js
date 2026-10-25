@@ -210,10 +210,26 @@ let scale=0, sceneCenter;
 function rotate(v){const x=v[0]-sceneCenter[0],y=v[1]-sceneCenter[1],z=v[2]-sceneCenter[2];const c=Math.cos(camera.yaw),s=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);const xx=c*x+s*z,zz=-s*x+c*z;return [xx,cp*y-sp*zz,sp*y+cp*zz];}
 function toScreen(v){const r=rotate(v),f=2000/(2000+r[2]);return {x:viewport.w/2+r[0]*scale*f,y:viewport.h*.55-r[1]*scale*f,d:r[2]};}
 function poly(coords,fill,owner,stroke='rgba(46,37,28,.18)'){const verts=coords.map(toScreen);shapes.push({verts,depth:verts.reduce((s,v)=>s+v.d,0)/verts.length,fill,stroke,owner});}
-function box(x,y,z,w,h,d,color,owner){if(w<=0||h<=0||d<=0)return;
+function box(x,y,z,w,h,d,color,owner,tileSize=Infinity){if(w<=0||h<=0||d<=0)return;
   const p=[[x,y,z],[x+w,y,z],[x+w,y+h,z],[x,y+h,z],[x,y,z+d],[x+w,y,z+d],[x+w,y+h,z+d],[x,y+h,z+d]];
   const faces=[[4,5,6,7],[1,5,6,2],[0,4,7,3],[0,1,5,4],[3,2,6,7],[0,1,2,3]];
-  const light=[.65,.78,.97,.64,1.13,.99];faces.forEach((a,i)=>poly(a.map(j=>p[j]),shade(color,light[i]),owner));
+  const light=[.65,.78,.97,.64,1.13,.99];
+  faces.forEach((a,i)=>{
+    const v=a.map(j=>p[j]),fill=shade(color,light[i]);
+    if(!Number.isFinite(tileSize)){poly(v,fill,owner);return;}
+    // Canvas 2D has no depth buffer. Split large worktop faces into short
+    // painter-sorted polygons so small appliances cannot incorrectly show
+    // through the top when the camera moves around the kitchen.
+    const distance=(u,t)=>Math.hypot(u[0]-t[0],u[1]-t[1],u[2]-t[2]);
+    const nu=Math.max(1,Math.ceil(distance(v[0],v[1])/tileSize));
+    const nv=Math.max(1,Math.ceil(distance(v[0],v[3])/tileSize));
+    const at=(u,t)=>v[0].map((k,j)=>k+(v[1][j]-k)*u+(v[3][j]-k)*t);
+    for(let u=0;u<nu;u++)for(let t=0;t<nv;t++){
+      const part=[at(u/nu,t/nv),at((u+1)/nu,t/nv),at((u+1)/nu,(t+1)/nv),at(u/nu,(t+1)/nv)];
+      // Same-color edges prevent hairline cracks between adjacent tiles.
+      poly(part,fill,owner,fill);
+    }
+  });
 }
 function egg(cx,cy,cz,rx,ry,rz,color,owner){const lat=10,lon=18;for(let i=0;i<lat;i++)for(let j=0;j<lon;j++){
   function point(theta,phi){const r=Math.sin(theta)*(1+.1*Math.cos(theta)),yy=Math.cos(theta);return [cx+rx*r*Math.cos(phi),cy+ry*yy,cz+rz*r*Math.sin(phi)];}
@@ -260,7 +276,7 @@ function objects(){shapes=[];hitShapes=[];
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
-  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null);}
+  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null,110);}
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
 function drawGrid(){const step=250,margin=600,y=-55;
@@ -340,9 +356,10 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
     }
   }
 }
-function hit(x,y){for(let i=hitShapes.length-1;i>=0;i--){const s=hitShapes[i],pts=s.verts;let inside=false;for(let a=0,b=pts.length-1;a<pts.length;b=a++){
+function faceContains(pts,x,y){let inside=false;for(let a=0,b=pts.length-1;a<pts.length;b=a++){
   if(((pts[a].y>y)!=(pts[b].y>y))&&(x<(pts[b].x-pts[a].x)*(y-pts[a].y)/(pts[b].y-pts[a].y)+pts[a].x))inside=!inside;
-  }if(inside)return s.owner;}return null;}
+  }return inside;}
+function hit(x,y){for(let i=hitShapes.length-1;i>=0;i--)if(faceContains(hitShapes[i].verts,x,y))return hitShapes[i].owner;return null;}
 function setView(v){currentView=v;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,-Math.PI/2+.012],bottom:[-.01,Math.PI/2-.012]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
  let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
@@ -485,7 +502,11 @@ canvas.addEventListener('pointerdown',e=>{
   pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
   if(pointers.size===1){
     dragging={x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};
-    const pick=hit(e.offsetX,e.offsetY);
+    // Prioritize the currently selected manual beam if its projected surface
+    // is under the pointer; neighboring frame beams otherwise steal the grab.
+    const picked=hit(e.offsetX,e.offsetY);
+    const selectedFace=selected?.type==='beam' && shapes.some(s=>s.owner?.type==='beam' && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY));
+    const pick=selectedFace ? {type:'beam',id:selected.id} : picked;
     // Direct touch-and-drag on a loose beam; no extra mode toggle required.
     if(pick?.type==='beam'){
       if(selected?.id!==pick.id)setSelected('beam',pick.id);
@@ -536,7 +557,16 @@ function pointerEnd(e){
     if(JSON.stringify(project)!==before){undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
     return;
   }
-  if(dragging?.mode==='place-beam'&&armedBeamType){placeAt(e.offsetX,e.offsetY);pointers.delete(e.pointerId);dragging=null;pinchDistance=0;return;}if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
+  if(dragging?.mode==='place-beam'&&armedBeamType){placeAt(e.offsetX,e.offsetY);pointers.delete(e.pointerId);dragging=null;pinchDistance=0;return;}if(dragging?.mode==='move-beam'&&dragging.moved){
+    const beam=getSelected();
+    // Recalculate the face-to-face span after EVERY placement, not only when
+    // the beam is first dragged out of the palette. Both position and cut length
+    // remain in the same undo step.
+    const fit=beam && M.fitBeamBetween(project,beam);
+    if(fit){beam[beam.axis]=fit.start;beam.length=fit.length;}
+    if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+    if(fit)toast(`Balk opnieuw passend gemaakt: ${fmt(fit.length)} mm`);
+  }
   else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam')setSelected(id.type,id.id);else if(id?.type==='frame'){toast('Dit is een automatische framebalk. Kies Balken voor extra balken.');}else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
 canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
@@ -546,5 +576,5 @@ persist();render();
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.4.1',{updateViaCache:'none'}).catch(()=>{});
 })();
