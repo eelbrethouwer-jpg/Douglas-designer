@@ -13,11 +13,12 @@
   <link rel="stylesheet" href="ux.css?rev=0.5.1">
   <link rel="stylesheet" href="renderer.css?rev=0.5.1">
   <link rel="stylesheet" href="studio.css?rev=0.6.0">
+  <link rel="stylesheet" href="room-studio.css?rev=0.7.0">
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v0.6.0 RC</b></small></div></div>
+    <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v0.7.0 RC</b></small></div></div>
     <div class="top-actions"><button class="outline-btn projects-home" id="homeBtn" title="Startscherm openen">⌂ <span class="hide-mobile">Projecten</span></button><span class="save-state" id="saveStatus">● Lokaal opgeslagen</span><button id="undoBtn" class="icon-btn" title="Ongedaan maken" aria-label="Ongedaan maken">↶</button><button id="redoBtn" class="icon-btn" title="Opnieuw" aria-label="Opnieuw">↷</button><button id="exportBtn" class="outline-btn"><span>↓</span> <span class="hide-mobile">Project exporteren</span></button></div>
   </header>
   <div class="workspace">
@@ -44,11 +45,11 @@
     <aside class="inspector" id="inspector"><div class="inspector-header"><div class="inspector-heading"><span class="eyebrow">DIRECT BEWERKEN</span><h3 id="inspectorTitle">Projectoverzicht</h3></div><button id="closeInspector" class="inspector-close" title="Bewerken sluiten" aria-label="Bewerken sluiten">✕</button></div><div class="inspector-body" id="inspectorBody"></div><div class="inspector-bottom" id="inspectorBottom"></div></aside>
   </div>
   <div class="selection-strip hidden" id="selectionStrip"><span id="selectionText">Onderdeel geselecteerd</span><button id="editSelectionBtn">Bewerken →</button></div>
-  <nav class="mobile-bottom" aria-label="Hoofdnavigatie"><button class="mobile-tab active" data-mobile="design"><span>◈</span>3D ontwerp</button><button class="mobile-tab" data-mobile="modules"><span>▦</span>Onderdelen</button><button class="mobile-tab" data-mobile="settings"><span>⚙</span>Maten</button><button class="mobile-tab" data-mobile="cutlist"><span>▤</span>Zaaglijst</button></nav>
+  <nav class="mobile-bottom" aria-label="Hoofdnavigatie"><button class="mobile-tab active" data-mobile="design"><span>◈</span>3D ontwerp</button><button class="mobile-tab" data-mobile="modules"><span>▦</span>Onderdelen</button><button class="mobile-tab" data-mobile="room"><span>⌂</span>Ruimte</button><button class="mobile-tab" data-mobile="cutlist"><span>▤</span>Zaaglijst</button></nav>
 </div>
 <div class="welcome-layer hidden" id="welcomeLayer" role="dialog" aria-modal="true" aria-labelledby="welcomeHeading">
   <div class="welcome-card">
-    <div class="welcome-eyebrow"><span class="welcome-logo">D<span>.</span></span> DOUGLAS DESIGNER <span class="welcome-version">v0.5.1 RC</span></div>
+    <div class="welcome-eyebrow"><span class="welcome-logo">D<span>.</span></span> DOUGLAS DESIGNER <span class="welcome-version">v0.7.0 RC</span></div>
     <h1 id="welcomeHeading">Van idee naar<br><em>buitenkeuken.</em></h1>
     <p>Ontwerp met complete kastmodules én losse Douglas balken. Alles op maat, met een automatische zaaglijst.</p>
     <div class="welcome-options">
@@ -64,6 +65,6 @@
 <input type="file" id="fileInput" accept="application/json,.json" hidden>
 <div id="paletteDragGhost" class="palette-drag-ghost hidden" aria-hidden="true">▥ Douglas balk</div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="model.js?rev=0.5.1"></script><script src="drafting.js?rev=0.6.0"></script><script src="render3d.js?rev=0.6.0"></script><script src="app.js?rev=0.6.0"></script>
+<script src="room-space.js?rev=0.7.0"></script><script src="model.js?rev=0.5.1"></script><script src="drafting.js?rev=0.6.0"></script><script src="render3d.js?rev=0.6.0"></script><script src="room-studio.js?rev=0.7.0"></script><script src="app.js?rev=0.7.0"></script>
 </body>
 </html>
