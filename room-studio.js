@@ -4,7 +4,7 @@
 const R=root.DouglasRoom;
 const $=(q,el=document)=>el.querySelector(q);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let get,mutate,redraw,view,toast,modal,photoImage,photoSource='',previewMode=false;
+let get,mutate,redraw,view,toast,moveKitchen,modal,photoImage,photoSource='',previewMode=false,moveActive=false;
 const dims=[['width','Breedte ruimte'],['depth','Diepte ruimte'],['height','Hoogte ruimte']];
 function room(){return get().room;}
 function style(){return get().style;}
@@ -29,6 +29,7 @@ function initUI(){
  <div class="section-title space-top"><span>KEUKEN PLAATSEN</span></div>
  <div class="room-fields">${field('x','Vanaf linkerwand (X)')}${field('z','Vanaf voorzijde (Z)')}</div>
  <label class="room-field">Keuken draaien ${select('rotation',[0,90,180,270])}</label>
+ <button type="button" class="room-big-action" id="roomDragKitchen">↔ Keuken slepen in bovenaanzicht</button>
  <div class="room-placement-actions"><button id="roomCenterKitchen" type="button" class="outline-btn">Centreren</button><button id="roomAgainstBack" type="button" class="outline-btn">Tegen achterwand (100 mm)</button></div>
  <div id="roomWarnings" class="room-warnings" aria-live="polite"></div>
  <p class="hint">Positie is in de ruimte, niet in de zaaglijst. Voor kamado en koelkast zelf hitteafstand en ventilatie controleren.</p>
@@ -204,10 +205,11 @@ function addEvents(){
    if(e.target.closest('#panel-room')&&e.target.matches('[data-room-bool]'))patchRoom(r=>{r[e.target.dataset.roomBool]=e.target.checked;});
    if(e.target.closest('#panel-finishes')&&e.target.matches('select[data-room]'))mutate(p=>{p.style=R.normalizeStyle({...p.style,[e.target.dataset.room]:e.target.value});});
  });
+ $('#roomDragKitchen').addEventListener('click',()=>{moveActive=moveKitchen(!moveActive);$('#roomDragKitchen').textContent=moveActive?'✓ Gereed met verplaatsen':'↔ Keuken slepen in bovenaanzicht';});
  $('#roomCenterKitchen').addEventListener('click',()=>patchRoom((r,p)=>{const o=R.orientation(p,r);r.placement.x=Math.round((r.width-o.width)/2);r.placement.z=Math.max(0,Math.round((r.depth-o.depth)/2));}));
  $('#roomAgainstBack').addEventListener('click',()=>patchRoom((r,p)=>{const o=R.orientation(p,r);r.placement.z=r.depth-o.depth-100;}));
  document.addEventListener('click',e=>{const b=e.target.closest('[data-finish]');if(b)setColor(b.dataset.finish,b.dataset.finishId);});
 }
-function mount(api){get=api.getProject;mutate=api.commit;redraw=api.render;view=api.setView;toast=api.toast;initUI();refresh();}
+function mount(api){get=api.getProject;mutate=api.commit;redraw=api.render;view=api.setView;toast=api.toast;moveKitchen=api.setRoomMove;initUI();refresh();}
 root.DouglasRoomStudio={mount,refresh};
 })(typeof globalThis!=='undefined'?globalThis:this);
