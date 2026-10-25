@@ -655,5 +655,5 @@ persist();updateDraftControls();render();
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.4.1',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.6.0',{updateViaCache:'none'}).catch(()=>{});
 })();

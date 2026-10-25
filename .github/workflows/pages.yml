@@ -30,6 +30,7 @@ jobs:
       - name: Syntax checks
         run: |
           node --check render3d.js
+          node --check drafting.js
           node --check app.js
           node --check model.js
           node --check sw.js

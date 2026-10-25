@@ -10,8 +10,8 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 ## Actuele stand (gecontroleerd op 25-10-2026)
 
-- **Op `main`:** v0.5.0 WebGL-renderlaag, vrije tekenmodus, modules, losse balken slepen/passend maken, 2D-aanzichten en 3D, JSON-opslag/export, indicatieve zaaglijst.
-- **In concept, nog niet vrijgegeven:** [PR #6 — v0.5.1, automatische frames bewerken + dieptecorrectie](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6). GitHub CI geslaagd. Werkelijke mobiele bediening en het werkblad bij alle camerahoeken zijn nog niet visueel gevalideerd.
+- **Op `main`:** de wijzigingen uit [PR #6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6) en [PR #7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7) zijn inmiddels samengevoegd. Automatische framebalken zijn bewerkbaar; er is een wereldruimte-WebGL-renderer met rasteropties, magnetische aansluitpunten, 2D pannen en Studio-sneltoetsen.
+- **Extra kwaliteitsborging in concept:** [PR #9](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/9): productspecificatie, extra 3D- en assettests en expliciete PWA-cachecorrecties. Deze wijzigingen zijn nog niet publiek vrijgegeven.
 - **Bekende tekortkoming:** het werkblad vertoont vanuit sommige kijkhoeken gaten of overliggende vormen; 3D-weergave moet betrouwbaarder.
 - **Nog geen bouwgereed CAD-systeem:** draagkracht, verbindingsterkte, hitteafstanden en apparaatventilatie worden niet bewezen door de huidige visualisatie.
 
@@ -19,9 +19,9 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 | Fase | Beoogde versie | Onderwerp | Prioriteit | Status |
 |---|---|---|---|---|
-| 1 | v0.5.1 RC | Bestaande automatische frames selecteren, verplaatsen, verlengen, herstellen | P0 | Gebouwd in PR #6; acceptatie open |
-| 2 | v0.5.x | Betrouwbare, gesloten 3D-objecten en werkblad in alle camerahoeken | P0 | Gedeeltelijk aangepakt; niet geverifieerd |
-| 3 | v0.6.0 | Floorplanner-achtige 2D-teken- en selecteerervaring | P1 | Gepland |
+| 1 | v0.5.1 | Bestaande automatische frames selecteren, verplaatsen, verlengen, herstellen | P0 | Code samengevoegd; fysieke iPhone-acceptatie open |
+| 2 | v0.6.x | Betrouwbaar gesloten werkblad, dieptebuffer en 3D in alle camerahoeken | P0 | Renderer technisch vernieuwd; visueel nog niet geverifieerd |
+| 3 | v0.6.0 RC | Studio-basis: 2D pannen, raster, magneet, toetsen en nieuwe GPU-geometrie | P1 | Code samengevoegd; volledige visuele acceptatie open |
 | 4 | v0.7.0 | Parametrische houtconstructie, opleggingen en verbindingen | P1 | Gepland |
 | 5 | v0.8.0 | Realistische buitenkeukenmodules, apparaten en werkbladen | P1 | Gepland |
 | 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
