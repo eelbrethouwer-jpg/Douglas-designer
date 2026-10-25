@@ -33,7 +33,7 @@ function snapDrawingPoint(world,plane,opts={}){
  for(const axis of plane)next[axis]=snap(next[axis],step);
  const anchor=opts.anchor;
  if(anchor){
-  const a=Array.isArray(anchor.point)?anchor.point:Object.values(anchor.point);
+  const a=Array.isArray(anchor.point)?anchor.point:AXES.map(key=>anchor.point[key]);
   for(const axis of plane)next[axis]=snap(a[AXES.indexOf(axis)],step);
  }
  return next;
