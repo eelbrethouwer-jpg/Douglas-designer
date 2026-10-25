@@ -121,16 +121,50 @@ function drawPhotoNow(){
  $('#roomPhotoInstruction').textContent=previewMode?'Indicatieve fotopreview':corners.length===4?'Vloer gemarkeerd — bevestig de ruimte':'Klik vloerhoek '+(corners.length+1)+': '+cornersNames[corners.length];
 }
 function drawPreview(ctx,w,h,corners){
- const p=get(),r=room(),foot=R.footprint(p,{...r,enabled:true});
- const pts=foot.map(v=>R.floorMap(v[0]/r.width,v[2]/r.depth,corners)).filter(Boolean);
- if(pts.length!==4)return;
- const scale=(p.height/r.height)*Math.max(28,h*.32);const up=pts.map(([x,y],i)=>[x*w,y*h-scale*(i>=2?.72:1.05)]);
- ctx.fillStyle='rgba(30,45,37,.32)';ctx.strokeStyle='#fff';ctx.lineWidth=3;
- ctx.beginPath();pts.forEach((pt,i)=>i?ctx.lineTo(pt[0]*w,pt[1]*h):ctx.moveTo(pt[0]*w,pt[1]*h));ctx.closePath();ctx.fill();ctx.stroke();
- ctx.fillStyle='rgba(178,130,79,.66)';ctx.beginPath();up.forEach((pt,i)=>i?ctx.lineTo(pt[0],pt[1]):ctx.moveTo(pt[0],pt[1]));ctx.closePath();ctx.fill();ctx.stroke();
- pts.forEach((pt,i)=>{ctx.beginPath();ctx.moveTo(pt[0]*w,pt[1]*h);ctx.lineTo(up[i][0],up[i][1]);ctx.stroke();});
- ctx.fillStyle='rgba(18,34,28,.9)';ctx.fillRect(12,12,Math.min(w-24,375),36);
- ctx.font='bold 14px system-ui';ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText('Conceptprojectie — niet maatvast',24,35);
+ const p=get(),r=room(),M=root.DouglasModel;
+ const projected=(x,y,z)=>{
+   const point=R.transformKitchen([x,y,z],p,{...r,enabled:true});
+   const xy=R.floorMap(point[0]/r.width,point[2]/r.depth,corners);
+   if(!xy)return [0,0];
+   // Perspective-assisted sketch: visually plausible but NOT a camera solution or measured height.
+   const depthFactor=1.1-.30*(point[2]/r.depth);
+   return [xy[0]*w,xy[1]*h - y/r.height*h*.40*depthFactor];
+ };
+ const polygon=(vertices,fill,stroke='rgba(255,255,255,.82)')=>{
+   ctx.beginPath();vertices.forEach((v,i)=>{const a=projected(...v);i?ctx.lineTo(...a):ctx.moveTo(...a);});
+   ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=1.8;ctx.stroke();
+ };
+ const frontColor=R.colorOf('front',p.style?.front),wood=R.colorOf('wood',p.style?.wood),worktop=R.colorOf('top',p.style?.top),kamado=R.colorOf('kamado',p.style?.kamado);
+ // Render actual module widths and colours instead of an unrelated box overlay.
+ const {sections}=M.boundaries(p);
+ for(const section of sections){
+   const l=section.left+8,rr=section.right-8,m=section.module;
+   if(m.kind==='open')continue;
+   polygon([[l,105,60],[rr,105,60],[rr,p.height-55,60],[l,p.height-55,60]],m.kind==='fridge'?'rgba(61,71,78,.78)':frontColor);
+   if(m.kind==='drawers'){
+     const count=p.style?.drawerType==='Twee lades'?2:p.style?.drawerType==='Eén diepe lade'||p.style?.drawerType==='Kolenlade'?1:3;
+     for(let i=1;i<count;i++){
+       const y=105+(p.height-160)*i/count,a=projected(l,y,45),b=projected(rr,y,45);
+       ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.strokeStyle='#1f2a27';ctx.lineWidth=2;ctx.stroke();
+     }
+   }
+   if(m.kind==='doors'&&!p.style?.doorType?.startsWith('Enkele')){
+     const x=(l+rr)/2,a=projected(x,105,45),b=projected(x,p.height-55,45);
+     ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.strokeStyle='#25342e';ctx.lineWidth=2;ctx.stroke();
+   }
+ }
+ if(p.countertop)polygon([[-8,p.height,-15],[p.width+8,p.height,-15],[p.width+8,p.height,p.depth+15],[-8,p.height,p.depth+15]],worktop);
+ // Front posts stay visually legible and retain their underlying CAD dimensions.
+ const posts=M.boundaries(p).posts;
+ for(const x of posts)polygon([[x,0,0],[x+35,0,0],[x+35,p.height-28,0],[x,p.height-28,0]],wood);
+ for(const section of sections)if(section.module.kind==='kamado'){
+   const center=projected((section.left+section.right)/2,p.height+80,p.depth*.54);
+   const radius=Math.max(8,Math.abs(projected(section.right-20,p.height,p.depth*.54)[0]-projected(section.left+20,p.height,p.depth*.54)[0])*.33);
+   ctx.beginPath();ctx.ellipse(center[0],center[1],radius,radius*1.14,0,0,Math.PI*2);
+   ctx.fillStyle=kamado;ctx.fill();ctx.strokeStyle='#d8d8d2';ctx.lineWidth=4;ctx.stroke();
+ }
+ ctx.fillStyle='rgba(18,34,28,.88)';ctx.fillRect(12,12,Math.min(w-24,420),36);
+ ctx.font='bold 14px system-ui';ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText('Ontwerppreview — niet maatvast',24,35);
 }
 async function uploadFile(file){
  if(!file||file.size>18000000){toast('Kies een afbeelding van maximaal 18 MB.');return;}
