@@ -22,10 +22,18 @@ test('PWA caches the same versioned files used by the page',()=>{
  const cached=[...service.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
  const names=[...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m=>m[1]).filter(ownUrl);
  for(const name of names)assert.ok(cached.includes(name),'PWA must cache exact versioned asset: '+name);
- assert.match(service,/douglas-designer-v0\.7\.0/);
+ assert.match(service,/douglas-designer-v0\.7\.1/);
 });
 test('user-facing version matches the release candidate and provides editor controls',()=>{
- assert.match(html,/v0\.7\.0 RC/);
+ assert.match(html,/v0\.7\.1 RC/);
  for(const id of ['gridSize','magnetToggle','drawTool','selectTool','shortcutHelp','geometryScene','scene'])
   assert.match(html,new RegExp('id="'+id+'"'));
+});
+
+test('SketchUp-style room workspace keeps mobile stage and makes materials reachable',()=>{
+ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+ assert.match(app,/name==='room'\|\|name==='finishes'/);
+ assert.match(app,/\$\('#stageArea'\)\.classList\.remove\('hidden'\)/);
+ assert.match(html,/data-mobile="finishes"/);
+ assert.match(html,/id="roomWorkspaceMode"/);
 });
