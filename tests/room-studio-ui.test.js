@@ -33,11 +33,11 @@ function studio(){
   constructor(){this.width=780;this.height=600;this.complete=true;}
   set src(value){this._src=value;this.onload?.();}
  }
- const context={window,document,Image:ImageMock,console,Map,Math,Intl,JSON,Number,Date,URL:{createObjectURL(){return 'blob:test-image'},revokeObjectURL(){}},setTimeout,clearTimeout};
+ const context={window,document,DouglasRoom:R,DouglasModel:M,Image:ImageMock,console,Map,Math,Intl,JSON,Number,Date,URL:{createObjectURL(){return 'blob:test-image'},revokeObjectURL(){}},setTimeout,clearTimeout};
  const source=fs.readFileSync(path.join(__dirname,'../room-studio.js'),'utf8');
  vm.runInNewContext(source,context,{timeout:10000});
  let p=M.demoProject();p.room=R.normalizeRoom(null,p);p.style=R.normalizeStyle(null);
- window.DouglasRoomStudio.mount({
+ context.DouglasRoomStudio.mount({
   getProject:()=>p,
   commit(fn){const before=JSON.stringify(p);fn(p);return before!==JSON.stringify(p)},
   render(){},setView(view){calls.views.push(view)},setRoomMove(){return true},
