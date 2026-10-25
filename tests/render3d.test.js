@@ -88,3 +88,14 @@ test('camera matches the overlay at top, bottom, side and free orbit angles',()=
   }
  }
 });
+
+test('large captured rooms use explicit camera distance without perspective inversion',()=>{
+ const center=[6000,1400,4000],point=[12000,2600,8000],camera={yaw:-.4,pitch:.3};
+ const p=R.projectWorld(point,center,camera,{w:900,h:600},.05,16000);
+ assert.ok(Number.isFinite(p.x)&&Number.isFinite(p.y));
+ assert.ok(p.x>0&&p.x<3000);
+});
+test('depth picking allows a room-specific eye distance and preserves nearest surface',()=>{
+ const a=quad(-350,null),b=quad(2500,{type:'beam',id:'behind'});
+ assert.equal(R.pick([a,b],50,50,12000),null);
+});
