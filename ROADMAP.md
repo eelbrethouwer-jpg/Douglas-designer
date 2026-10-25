@@ -8,17 +8,16 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 **Ontwerpprincipe:** het gemak van een 2D-planner combineren met een betrouwbare 3D-controle. Geen visuele trucs die afwijken van de maten of de zaaglijst.
 
-## Actuele nulmeting — 25 oktober 2026
+## Actuele nulmeting — 25 oktober 2026 (na release v0.7.1)
 
-**Bron van waarheid:** `main` op commit `f5dd47bfb7c1ebe9e3cfb65ac9bb962b97cbdf7f`. Publieke release `v0.7.0` is gepubliceerd; de bijbehorende `main`-pushworkflow **slaagt**. Dat zegt niets over fysieke iPhone-bediening.
+**Bron van waarheid:** `main`, commit `ddf7c79aeae5592eb2b0bfe906422cf79412907e`. Releases `v0.7.0` en `v0.7.1` zijn gepubliceerd; de bijbehorende PR- en `main`-CI slagen. Dat bewijst de automatische checks, niet de fysieke iPhone-bediening.
 
-- **In `main`:** Studio-basis, bewerkbare frames, WebGL, Room Studio en 66 generieke kleur-/componentreferenties. De enkele foto is **geen automatische maatvaste 3D-reconstructie**.
-- **Bekend gebruikersprobleem:** na foto-upload of maat-/materiaalwijziging is op mobiel vaak geen zichtbaar resultaat. Werken direct op het canvas zoals SketchUp is een leidende UX-eis.
-- **Draft-PR [#11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11), v0.7.1:** pogingen tot zichtbaar werkvlak, live plattegrond, upload en materiaalverbetering. **Niet samengevoegd, CI rood.**
-- **CI-meting PR #11:** [run 40185888759](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40185888759): **74 van 78 tests geslaagd, 4 mislukt**. Twee framebewerkings-UI-tests geven een `forEach`-fout; een materiaalkeuze-test en een maat/plattegrond-test tonen verouderde UI-output. Oorzaak nog niet definitief vastgesteld.
+- **In `main`:** Studio-basis, bewerkbare frames, WebGL, Room Studio en 66 generieke kleur-/componentreferenties. Eén foto is geen automatische maatvaste 3D-reconstructie.
+- **Recente gebruikersproblemen:** op mobiel was het Room-werkvlak verborgen en gaven foto-, maat- en materiaalacties onvoldoende zichtbare feedback. Dit is gericht aangepakt in [PR #11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11) en gepubliceerd als v0.7.1; **handmatige visuele acceptatie nog open**.
+- **CI-historie:** een vroege PR-run had 4 falende tests op frame-selectie, stijlactivatie en live afmetingen. De finale [PR-run 40185989055](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40185989055) heeft **78/78 geslaagde tests**; [main-push 40186162402](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40186162402) slaagde.
 - **Nog niet aangetoond:** echte iPhone Safari-acceptatie, volledige camerahoekcontrole, end-to-end foto→ruimte→ontwerp→bewaren/importeren en gebruikersacceptatie.
 
-**Onmiddellijke volgende actie (P0):** CI-fouten in PR #11 analyseren/herstellen, vervolgens op desktop en echte iPhone het zichtbare gedrag bewijzen. Pas dan v0.7.1 mergen of publiceren. Daarna de 3D-renderkwaliteit en fundamentele bewerkflow stabiliseren, vóór uitbreiding met fotorealisme.
+**Onmiddellijke volgende actie (P0):** op desktop en echte iPhone de v0.7.1-werkruimte, 3D-rendering, foto-import, materiaalkeuze, live maatwijzigingen en oude projectopslag **handmatig verifiëren**. Bij tekortkomingen eerst gericht corrigeren vóór uitbreiding naar fotorealisme en merkmodellen.
 
 **Vaste werkbasis:** [PROJECT_VISION.md](PROJECT_VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [QUALITY_GATES.md](QUALITY_GATES.md) en [PRODUCT_SPEC.md](PRODUCT_SPEC.md).
 
@@ -30,7 +29,7 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 | 2 | v0.6.x | Betrouwbaar gesloten werkblad, dieptebuffer en 3D in alle camerahoeken | P0 | Renderer technisch vernieuwd; visueel nog niet geverifieerd |
 | 3 | v0.6.0 RC | Studio-basis: 2D pannen, raster, magneet, toetsen en nieuwe GPU-geometrie | P1 | Code samengevoegd; volledige visuele acceptatie open |
 | 4 | v0.7.0 | Room Capture, ruimteplaatsing, foto-preview en kleurbibliotheek | P1 | Gepubliceerd op `main`; fysieke UX-acceptatie nog open |
-| 4B | v0.7.1 | Mobiel zichtbare Room Studio, werkende foto-/materiaalbediening, CI herstellen | P0 | Draft-PR #11, 4 tests rood; acceptatie open |
+| 4B | v0.7.1 | Mobiel zichtbare Room Studio, foto-/materiaalbediening en live afmetingen | P0 | Gepubliceerd; 78/78 tests groen, fysieke UX-acceptatie open |
 | 5 | v0.8.0 | Volledige 3D-materialen, apparaatmodellen en constructieve verbindingen | P1 | Gepland |
 | 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
 | 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gepland |
