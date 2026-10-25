@@ -96,3 +96,21 @@
  .room-first-actions{grid-template-columns:1fr 1fr}
  .room-first-actions .room-big-action{font-size:11px}
 }
+
+/* v0.7.3 — iOS standalone safe-area fix for Room Capture.
+   The status bar/dynamic island must never cover title or close button. */
+.room-capture-version{font-size:11px;font-weight:700;color:#607a69;vertical-align:middle;white-space:nowrap}
+@media(max-width:800px){
+ .room-modal{padding:0;align-items:stretch}
+ .room-modal-card{height:100dvh;max-height:100dvh;border-radius:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+ .room-modal-head{
+   padding:calc(13px + env(safe-area-inset-top, 0px)) 14px 13px;
+   min-height:calc(68px + env(safe-area-inset-top, 0px));
+   align-items:flex-end;
+ }
+ .room-modal-head>div{min-width:0}
+ .room-modal-head strong{font-size:20px;line-height:1.25}
+ .room-modal-head small{font-size:11px;line-height:1.4;margin-top:6px}
+ .room-modal-head button{flex:0 0 42px;min-width:42px;height:42px}
+ .room-modal-body{padding-bottom:calc(32px + env(safe-area-inset-bottom, 0px))}
+}

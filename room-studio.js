@@ -51,7 +51,7 @@ function initUI(){
  if(stage)stage.insertAdjacentHTML('afterend','<button type="button" id="roomToolbarBtn" class="outline-btn room-toolbar" title="Ruimtefoto en 3D ruimte">📷 Ruimtefoto</button>');
  modal=document.createElement('div');modal.id='roomCaptureDialog';modal.className='room-modal hidden';
  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Ruimtefoto kalibreren');
- modal.innerHTML=`<div class="room-modal-card"><header class="room-modal-head"><div><strong>Room Capture</strong><small>Van je eigen foto naar een in te meten 3D-ruimte</small></div><button id="roomClose" aria-label="Sluiten" type="button">✕</button></header>
+ modal.innerHTML=`<div class="room-modal-card"><header class="room-modal-head"><div><strong>Room Capture <span class="room-capture-version">v0.7.3</span></strong><small>Van je eigen foto naar een in te meten 3D-ruimte</small></div><button id="roomClose" aria-label="Sluiten" type="button">✕</button></header>
  <div class="room-modal-body"><div class="room-photo-tools"><button id="roomChoosePhoto" type="button" class="room-file">🖼️ Bestaande foto kiezen</button><button id="roomTakePhoto" type="button" class="room-file room-camera">📷 Camera openen</button><input id="roomImageInput" class="room-hidden-input" type="file" accept="image/*"><input id="roomCameraInput" class="room-hidden-input" type="file" accept="image/*" capture="environment">
  <button id="roomResetCorners" type="button" class="outline-btn">Hoeken opnieuw</button><button id="roomPhotoPreview" class="outline-btn" type="button">Fotopreview</button></div>
  <p class="room-capture-status" id="roomCaptureStatus" role="status" aria-live="polite">Kies een foto, of maak eerst een 3D-ruimte met handmatig ingevoerde maten.</p><div class="room-photo-stage"><canvas id="roomPhotoCanvas" width="960" height="600" aria-label="Ruimtefoto met vloerhoeken"></canvas><div id="roomPhotoEmpty">Voeg een foto toe om te beginnen.</div></div>
@@ -64,8 +64,26 @@ function initUI(){
  document.body.append(modal);
  addEvents();drawPhoto();
 }
+// Read the currently active project directly if an older cached app.js still calls
+// commit callbacks with no argument. Prevents iOS offline/PWA mixed-version failures.
+function currentProject(maybeProject){
+ const p=maybeProject&&typeof maybeProject==='object'?maybeProject:get?.();
+ if(!p||typeof p!=='object')throw Error('Geen actief project gevonden. Open het ontwerp opnieuw.');
+ return p;
+}
 function patchRoom(cb){
- mutate(p=>{p.room=R.normalizeRoom(p.room,p);cb(p.room,p);p.room=R.normalizeRoom(p.room,p);});
+ mutate(projectArg=>{
+  const p=currentProject(projectArg);
+  p.room=R.normalizeRoom(p.room,p);
+  cb(p.room,p);
+  p.room=R.normalizeRoom(p.room,p);
+ });
+}
+function patchStyle(partial){
+ mutate(projectArg=>{
+  const p=currentProject(projectArg);
+  p.style=R.normalizeStyle({...p.style,...partial});
+ });
 }
 function captureStatus(message,warning=false){
  const output=$('#roomCaptureStatus');
@@ -79,7 +97,7 @@ function changeRoom(key,value){
   }else if(key==='rotation')r.placement.rotation=Number(value);
  });
 }
-function setColor(k,id){mutate(p=>{p.style=R.normalizeStyle({...p.style,[k]:id});});}
+function setColor(k,id){patchStyle({[k]:id});}
 function updateCollections(){
  const container=$('#finishCollections');if(!container)return;
  container.innerHTML=Object.entries(R.palettes).map(([kind,variants])=>`<div class="finish-group">
@@ -241,7 +259,9 @@ async function uploadFile(file){
    }else{
     captureStatus('⚠ De foto is geladen maar kon niet worden opgeslagen. Exporteer het project als JSON-back-up.',true);
    }
-  }catch(error){captureStatus('Foto verwerken mislukt: '+error.message,true);}
+  }catch(error){
+   captureStatus('Foto kon niet worden toegevoegd: '+error.message+'. Heropen de ruimte of vernieuw de app.',true);
+ }
   finally{URL.revokeObjectURL(url);}
  };
  img.onerror=()=>{
@@ -279,7 +299,8 @@ function addEvents(){
  document.addEventListener('change',e=>{
    if(e.target.closest('#panel-room,#roomCaptureDialog') && e.target.matches('[data-room]'))changeRoom(e.target.dataset.room,e.target.value);
    if(e.target.closest('#panel-room')&&e.target.matches('[data-room-bool]'))patchRoom(r=>{r[e.target.dataset.roomBool]=e.target.checked;});
-   if(e.target.closest('#panel-finishes')&&e.target.matches('select[data-room]'))mutate(p=>{p.style=R.normalizeStyle({...p.style,[e.target.dataset.room]:e.target.value});});
+   if(e.target.closest('#panel-finishes')&&e.target.matches('select[data-room]'))
+     patchStyle({[e.target.dataset.room]:e.target.value});
  });
  $('#roomDragKitchen').addEventListener('click',()=>{moveActive=moveKitchen(!moveActive);$('#roomDragKitchen').textContent=moveActive?'✓ Gereed met verplaatsen':'↔ Keuken slepen in bovenaanzicht';});
  $('#roomCenterKitchen').addEventListener('click',()=>patchRoom((r,p)=>{const o=R.orientation(p,r);r.placement.x=Math.round((r.width-o.width)/2);r.placement.z=Math.max(0,Math.round((r.depth-o.depth)/2));}));

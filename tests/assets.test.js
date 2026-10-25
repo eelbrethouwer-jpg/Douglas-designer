@@ -22,10 +22,10 @@ test('PWA caches the same versioned files used by the page',()=>{
  const cached=[...service.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
  const names=[...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m=>m[1]).filter(ownUrl);
  for(const name of names)assert.ok(cached.includes(name),'PWA must cache exact versioned asset: '+name);
- assert.match(service,/douglas-designer-v0\.7\.2/);
+ assert.match(service,/douglas-designer-v0\.7\.3/);
 });
 test('user-facing version matches the release candidate and provides editor controls',()=>{
- assert.match(html,/v0\.7\.2 RC/);
+ assert.match(html,/v0\.7\.3 RC/);
  for(const id of ['gridSize','magnetToggle','drawTool','selectTool','shortcutHelp','geometryScene','scene','sketchGridVisible','sketchGridStep','sketchAxes','sketchWallGrid','sketchParallel'])
   assert.match(html,new RegExp('id="'+id+'"'));
 });
@@ -43,4 +43,15 @@ test('Sketch Studio raster, axis and projection controls are wired into the draw
  assert.match(app,/G\.mesh\(project,project\.room,sketchSettings\)/);
  assert.match(app,/parallel:sketchSettings\.parallel/);
  assert.match(app,/fn\(project\)/,'mutation callback receives live project reference');
+});
+
+test('iPhone safe-area layout and Room Capture version agree with deployed PWA',()=>{
+ const css=fs.readFileSync(path.join(root,'room-studio.css'),'utf8');
+ const photo=fs.readFileSync(path.join(root,'room-studio.js'),'utf8');
+ assert.match(html,/apple-mobile-web-app-status-bar-style" content="default"/);
+ assert.match(css,/env\(safe-area-inset-top/);
+ assert.match(css,/env\(safe-area-inset-bottom/);
+ assert.match(photo,/room-capture-version">v0\.7\.3/);
+ assert.match(html,/room-studio\.js\?rev=0\.7\.3/);
+ assert.match(html,/app\.js\?rev=0\.7\.3/);
 });

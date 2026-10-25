@@ -8,12 +8,16 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 **Ontwerpprincipe:** het gemak van een 2D-planner combineren met een betrouwbare 3D-controle. Geen visuele trucs die afwijken van de maten of de zaaglijst.
 
-## Actuele stand (gecontroleerd op 25-10-2026)
+## Actuele stand en geverifieerde nulmetingen — 25 oktober 2026
 
-- **Op `main`:** de wijzigingen uit [PR #6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6) en [PR #7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7) zijn inmiddels samengevoegd. Automatische framebalken zijn bewerkbaar; er is een wereldruimte-WebGL-renderer met rasteropties, magnetische aansluitpunten, 2D pannen en Studio-sneltoetsen.
-- **Extra kwaliteitsborging in concept:** [PR #9](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/9): productspecificatie, extra 3D- en assettests en expliciete PWA-cachecorrecties. Deze wijzigingen zijn nog niet publiek vrijgegeven.
-- **Bekende tekortkoming:** het werkblad vertoont vanuit sommige kijkhoeken gaten of overliggende vormen; 3D-weergave moet betrouwbaarder.
-- **Nog geen bouwgereed CAD-systeem:** draagkracht, verbindingsterkte, hitteafstanden en apparaatventilatie worden niet bewezen door de huidige visualisatie.
+**PR #14 (v0.7.3 Room Capture iPhone-fix) is leidend.** De gepubliceerde `main` bevat v0.7.2. PR #14 repareert de iPhone-foto-/ruimtecallback en safe-areas; vóór het integreren van de documentatie uit PR #12 waren **91/91 automatische tests groen**. Fysieke iPhone Safari/PWA en complete camerahoekcontroles staan nog open.
+
+**Historische nulmeting uit PR #12:** op `main`-commit `ddf7c79` was v0.7.1 gepubliceerd en waren **78/78 automatische checks geslaagd**. Dat is de status *destijds*, niet de huidige release. De eerdere testfouten waren hersteld; het verschil tussen groene tests en zichtbare gebruikersproblemen leidde later tot v0.7.2 en v0.7.3.
+
+- **Huidige codebasis:** Studio-basis, bewerkbare automatische framebalken, vrije balken, WebGL, Room Studio, Sketch-raster en 66 generieke kleur-/componentreferenties.
+- **Nog niet aangetoond:** echte iPhone-Safari-acceptatie, end-to-end foto's → handmatige ruimtematen → keuken → opslaan/importeren, en volledige 360° worktop-/camera-validatie.
+- **P0 voor PR #14:** foto uit bibliotheek én camera werkelijk bruikbaar op iPhone/PWA, geen `p.room`-exception, modal volledig zichtbaar binnen de veilige schermranden, geen oud script uit cache.
+- **Kwaliteitsbron:** [PROJECT_VISION.md](PROJECT_VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [QUALITY_GATES.md](QUALITY_GATES.md), [PRODUCT_SPEC.md](PRODUCT_SPEC.md) en [SKETCH_STUDIO_SPEC.md](SKETCH_STUDIO_SPEC.md).
 
 ## Roadmap in volgorde
 
@@ -23,7 +27,8 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 | 2 | v0.6.x | Betrouwbaar gesloten werkblad, dieptebuffer en 3D in alle camerahoeken | P0 | Renderer technisch vernieuwd; visueel nog niet geverifieerd |
 | 3 | v0.6.0 RC | Studio-basis: 2D pannen, raster, magneet, toetsen en nieuwe GPU-geometrie | P1 | Code samengevoegd; volledige visuele acceptatie open |
 | 4 | v0.7.0 + v0.7.1 | Room Studio, foto-import, materiaalkleuren en mobiele editor | P0/P1 | Code op main; aangemelde live UI-fout gecorrigeerd in v0.7.2 |
-| 4.5 | v0.7.2 RC | **Sketch Studio grid, gekleurde assen, parallelle camera en reparatie projectmutaties** | P0 | PR #13, code gereed; CI groen, browseracceptatie open |
+| 4.5 | v0.7.2 | **Sketch Studio grid, gekleurde assen, parallelle camera en reparatie projectmutaties** | P0 | Op `main`; CI groen, browseracceptatie open |
+| 4.6 | **v0.7.3 / PR #14** | **Room Capture iOS foto-import, callbackcompatibiliteit, safe-areas en PWA-cache** | **P0** | **Leidende concept-PR; 91/91 checks groen, fysieke iPhone-validatie open** |
 | 5 | v0.8.0 | Sketch Modeling: directe vlak-/randselectie, asvergrendeling, Push/Pull en daarna constructie/3D-materialen | P1 | Gepland |
 | 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
 | 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gepland |
@@ -68,7 +73,7 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 **Acceptatie:** tien balken achter elkaar tekenen en bewerken zonder onbedoeld draaien of verspringen; verplaatsen en passend maken blijft na elke bewerking mogelijk.
 
-### Fase 4A — Room Studio (v0.7.0, PR #10)
+### Fase 4A — Room Studio (v0.7.0, PR #10; gepubliceerd)
 
 De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in een herkenbare ruimte gaat vóór uitgebreidere bouwkundige verbindingen.
 
@@ -84,7 +89,7 @@ De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in e
 
 **Niet inbegrepen in deze eerste RC:** automatische AI-3D-reconstructie, PBR en echte 3D-merkenbibliotheek. Die blijven vervolgwerk.
 
-### Fase 4A.2 — Sketch Studio basis (v0.7.2, PR #13)
+### Fase 4A.2 — Sketch Studio basis (v0.7.2, PR #13; op main)
 
 - **Directe regressie:** de app-controller moet de projectreferentie aan ruimte- en materiaalmutaties meegeven; fotokiezen, maten en materialen laten onmiddellijk resultaat zien.
 - Wereldruimte-raster op de grond en de binnenzijde van de muren, dunne rasterlijnen en donkerdere hoofdlijnen.
@@ -95,6 +100,17 @@ De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in e
 - Foto-opslagquota leidt tot een zichtbare waarschuwing, nooit een vals 'opgeslagen'.
 
 **Acceptatie:** eerst CI, vervolgens handmatige Chrome-/iPhone Safari-test met foto, live kamermaat- en materiaalwissel, alle camera-hoeken en visuele rendering. Zie [SKETCH_STUDIO_SPEC.md](SKETCH_STUDIO_SPEC.md).
+
+### Fase 4A.2b — Room Capture iOS stabilisatie (v0.7.3 / PR #14)
+
+- Compatibiliteit met eerdere en huidige `commit(fn)`-callbacks in Room Studio; het actieve project is altijd beschikbaar.
+- Fotoselectie, ruimteafmetingen en materiaalkleuren mogen geen `undefined (p.room)`-fout geven.
+- Room Capture-modal houdt rekening met iPhone-statusbalk/dynamic island en home-indicator.
+- Consistente PWA-assetversies om combinaties van oude en nieuwe scripts te voorkomen.
+- Automatische regressietest simuleert de eerder gemelde fout; **fysieke Safari/PWA-test verplicht**.
+- Projecten, balklengtes, zaaglijst en zichtbare Sketch Studio-ruimte blijven ongewijzigd.
+
+**Beslissing:** PR #14 is de bron van waarheid; documentatie uit PR #12 wordt geïntegreerd zonder v0.7.3-appcode te vervangen of zonder review naar `main` te mergen.
 
 ### Fase 4A.3 — Volwaardig Sketch Modeling (v0.8.0 concept)
 

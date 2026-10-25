@@ -2,29 +2,38 @@
 
 Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-werkwijze, interactieve 3D-controle en een gekoppelde zaaglijst. De interface is geïnspireerd op de eenvoudige ontwerpflow van Floorplanner, maar gespecialiseerd in maatwerk houten constructies.
 
-> **Status:** ontwikkelfase. Op `main` staan v0.7.0 en v0.7.1; v0.7.2 is een aparte Sketch Studio-releasekandidaat. GitHub Actions zijn groen maar een fysieke iPhone-/desktopacceptatie staat nog open. GitHub Pages publiceert alleen samengevoegde wijzigingen op `main`.
+> **Actuele status op 25 oktober 2026:** `main` bevat v0.7.2; **PR #14 (v0.7.3 Room Capture iPhone-fix) is de leidende conceptrelease**. De automatische PR-checks zijn geslaagd (91/91 vóór documentintegratie). Echte iPhone-Safari/PWA- en desktopacceptatie staan nog open. Publicatie volgt pas na review en samenvoegen.
 
 
-## v0.7.2 Sketch Studio Foundation — releasekandidaat
+## v0.7.3 Room Capture iPhone-fix — leidende concept-PR
 
-Op de branch `feature/v0.7.2-sketch-grid-foundation` staat [concept-PR #13](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/13).
+[PR #14](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/14) bevat de compatibiliteitsoplossing voor foto-upload en ruimte-/materiaalacties bij oudere PWA-scripts, verbeterde iPhone-safe-areas en consistente assetcacheversies. De regressietest reproduceert specifiek de fout `undefined is not an object (evaluating 'p.room')`.
+
+**Van PR #12 overgenomen:** de projectvisie, technische nulmeting, kwaliteits- en releasevoorwaarden. Deze documenten wijzigen **geen** v0.7.3-appcode. De historische v0.7.1-nulmeting in PR #12 wordt onderscheiden van de actuele v0.7.3-status. Zie [Projectvisie](PROJECT_VISION.md), [Architectuur](ARCHITECTURE.md) en [Quality Gates](QUALITY_GATES.md).
+
+## v0.7.2 Sketch Studio Foundation — gepubliceerd
+
+De eerdere Sketch Studio-basis is uitgewerkt in [PR #13](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/13) en opgenomen in `main` als v0.7.2. Het blijft noodzakelijk de werking van foto/3D op fysieke apparaten te controleren.
 
 **P0-bugfix:** de centrale app-projectmutatie geeft nu het actieve project aan de foto-, ruimte- en materiaal-UI door. Daardoor slaan die acties wijzigingen op in de werkelijke app-state; voorheen verwachtten ze een argument dat niet geleverd werd.
 
 **Nieuw:** 3D-grondraster en raster op de binnenwanden, opvallende rode breedte-/groene diepte-/blauwe hoogte-as, rastermaat 50/100/250/500 mm, assen/raster/wandraster aan-uit, perspectief/parallelle projectie. Het canvas krijgt een rustige grijze achtergrond. Oude frames/zaaglijsten blijven ongewijzigd.
 
-Gedetailleerde scope, grenzen en acceptatiecriteria: [Sketch Studio specificatie](SKETCH_STUDIO_SPEC.md) en [Release notes v0.7.2](RELEASE_NOTES_v0.7.2.md). Visuele Chrome/Safari-acceptatie is nodig voordat dit een publieke release is.
+Gedetailleerde scope en grenzen: [Sketch Studio-specificatie](SKETCH_STUDIO_SPEC.md) en [release notes v0.7.2](RELEASE_NOTES_v0.7.2.md). De v0.7.2-code is gepubliceerd; de **visuele Chrome/Safari-acceptatie** is daarmee nog niet afgerond.
 
 ## v0.7.0 Room Studio — historie
 
-Op de branch `feature/v0.7.0-room-studio` ([concept-PR #10](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/10)) wordt een eerste **foto-ondersteunde 3D-ruimteworkflow** ontwikkeld. Dit is **niet** de publieke versie op GitHub Pages.
+De foto-ondersteunde basis is via [PR #10](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/10) in `main` opgenomen en als v0.7.0 gepubliceerd. De daadwerkelijke bediening op iPhone bleef een open acceptatiepunt.
 
-Nieuw in deze kandidaat: foto toevoegen en vier vloerhoeken markeren, echte ruimtematen invullen, vloer en wanden in 3D tonen, complete keuken draaien en plaatsen, waarschuwingen bij afmetingen en een ingebouwde catalogus met 66 generieke varianten. Fotopreview is indicatief. Voor hoogwaardige echte PBR-materialen, fabrikantmodellen, automatische fotoherkenning en verdere bouwkundige controles zijn nog afzonderlijke ontwikkelstappen nodig.
+Geïntroduceerd in die release: foto toevoegen en vier vloerhoeken markeren, echte ruimtematen invullen, vloer en wanden in 3D tonen, complete keuken draaien en plaatsen, waarschuwingen bij afmetingen en een ingebouwde catalogus met 66 generieke varianten. Fotopreview is indicatief. Voor hoogwaardige echte PBR-materialen, fabrikantmodellen, automatische fotoherkenning en verdere bouwkundige controles zijn nog afzonderlijke ontwikkelstappen nodig.
 
-Zie [release notes v0.7.0](RELEASE_NOTES_v0.7.0.md) voor de gebouwde functies, beperkingen en acceptatiecriteria. **Pas na groene CI én fysieke Safari-/desktoptest mergen.**
+Zie [release notes v0.7.0](RELEASE_NOTES_v0.7.0.md) voor functies en beperkingen. De huidige bugfix wordt in PR #14 afgerond, niet in de historische PR.
 
 ## Documentatie
 
+- [Projectvisie en ontwerpafspraken](PROJECT_VISION.md)
+- [Technische architectuur en historische nulmeting](ARCHITECTURE.md)
+- [Kwaliteitscontrole, testmatrix en releasevoorwaarden](QUALITY_GATES.md)
 - [Roadmap en releasevolgorde](ROADMAP.md)
 - [Product- en interactiespecificatie](PRODUCT_SPEC.md)
 - [Release notes v0.6.0](RELEASE_NOTES_v0.6.0.md)
@@ -34,11 +43,11 @@ Zie [release notes v0.7.0](RELEASE_NOTES_v0.7.0.md) voor de gebouwde functies, b
 
 Publieke versie: **https://eelbrethouwer-jpg.github.io/Douglas-designer/**
 
-De releasekandidaat staat in [PR #7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7); hij bouwt voort op [PR #6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6). Die branches zijn niet automatisch publieke releases.
+De eerdere Studio-PR's [#6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6) en [#7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7) zijn al verwerkt. De actuele nog niet gepubliceerde bugfix staat in [PR #14](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/14).
 
 Ook lokaal te draaien door de map op een statische webserver te hosten. Je kunt dan \`index.html\` openen; geen serverdatabase of account nodig. Tijdens ontwikkeling zijn \`node\` en een moderne browser voldoende.
 
-## Wat werkt in de Studio-releasekandidaat
+## Bestaande functionaliteit van de ontwerpstudio
 
 - Basis- en voorbeeldkeuken met modules: laden, deuren, koelkast, kamado en open vak.
 - **Vrij beginnen op een leeg tekenvlak** zonder geforceerd startframe.
