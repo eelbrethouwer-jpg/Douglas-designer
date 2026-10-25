@@ -70,7 +70,7 @@ function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('sh
 function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(project));$('#saveStatus').textContent='● Lokaal opgeslagen';}catch(e){$('#saveStatus').textContent='● Opslag niet beschikbaar';}}
 function commit(fn){const before=JSON.stringify(project);fn();project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
 function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=M.normalizeProject(JSON.parse(from.pop()));selected=null;persist();render();}
-function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);return null;}
+function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);return null;}
 function setSelected(type,id){
   selected=id?{type,id}:null;beamMoveMode=false;render();
   if(window.innerWidth<=800){
@@ -176,7 +176,7 @@ function render(){
   const {modules,beams}=project;
   $('#statWidth').innerHTML=`${fmt(project.width)} <small>mm</small>`;$('#statDepth').innerHTML=`${fmt(project.depth)} <small>mm</small>`;$('#statHeight').innerHTML=`${fmt(project.height)} <small>mm</small>`;
   const plan=M.boardPlan(project);$('#statBeams').innerHTML=`${fmt(plan.pieces)} <small>stuks</small>`;
-  $('#moduleCount').textContent=`${modules.length} modules`;$('#manualCount').textContent=`${beams.length} extra`;
+  $('#moduleCount').textContent=`${modules.length} modules`;$('#manualCount').textContent=`${beams.length} extra`;const frame=M.framePieces(project);$('#frameCount').textContent=`${frame.length} framebalken`;$('#frameList').innerHTML=frame.map(b=>`<div class="module-card ${selected?.id===b.id?'active':''}" data-select-frame="${esc(b.id)}"><div class="module-symbol">▥</div><div class="module-meta"><strong>${esc(b.name)}</strong><small>${fmt(b.length)} mm · ${b.axis.toUpperCase()}${project.frameEdits?.[b.id]?' · aangepast':''}</small></div><span>›</span></div>`).join('')||'<p class="hint">Geen automatische framebalken aanwezig.</p>';
   $('#moduleList').innerHTML=modules.map((m,i)=>`<div class="module-card ${selected?.id===m.id?'active':''}" data-select-module="${esc(m.id)}"><div class="module-symbol">${icons[m.kind]}</div><div class="module-meta"><strong>${esc(m.name)}</strong><small>${fmt(m.width)} mm breed · ${M.TYPES[m.kind].label}</small></div><div class="reorder"><button data-move-module="${esc(m.id)}" data-direction="-1" title="Naar links" ${i===0?'disabled':''}>↑</button><button data-move-module="${esc(m.id)}" data-direction="1" title="Naar rechts" ${i===modules.length-1?'disabled':''}>↓</button></div></div>`).join('');
   $('#beamList').innerHTML=beams.length?beams.map(b=>`<div class="module-card ${selected?.id===b.id?'active':''}" data-select-beam="${esc(b.id)}"><div class="module-symbol">▥</div><div class="module-meta"><strong>${esc(b.name)}</strong><small>${fmt(b.length)} mm · as ${b.axis.toUpperCase()}</small></div><span style="color:#8e9890">›</span></div>`).join(''):'<p class="hint">Nog geen extra balken geplaatst.</p>';
   $('#presetGrid').innerHTML=Object.entries(M.TYPES).map(([key,v])=>`<button class="preset" data-add="${key}"><span class="preset-icon">${icons[key]}</span>${v.label} ＋</button>`).join('');
@@ -199,9 +199,15 @@ function renderInspector(){
     body.innerHTML=`<div class="preview-icon">${icons[obj.kind]}</div><p class="inspector-label">MODULE INSTELLINGEN</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}" maxlength="60"></label><label class="field">Type<select data-edit="kind">${kindOptions}</select></label><div class="field-grid"><label class="field">Opening breedte (mm)<input data-edit="width" type="number" min="200" max="2400" step="5" value="${obj.width}"></label></div><div class="divider"></div><p class="inspector-label">GEOMETRIE</p><div class="detail-label"><span>Modulebreedte</span><strong>${fmt(obj.width)} mm</strong></div><div class="detail-label"><span>Buitenhoogte</span><strong>${fmt(project.height)} mm</strong></div><div class="detail-label"><span>Constructiediepte</span><strong>${fmt(project.depth)} mm</strong></div><div class="divider"></div><div class="warning">Modulebeeld is indicatief, niet op basis van fabrikantmetingen. Controleer inbouwmaten, ventilatie en hittebescherming vóór de bouw.</div>`;
     foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze module</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }else{
+    const isFrame=selected.type==='frame';
     $('#inspectorTitle').textContent=obj.name;
-    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">VRIJE BALK — 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label><label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label><label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><div class="nudge-tools"><span>VERPLAATS 5 MM</span><div><button data-nudge="x:-5" title="5 mm links">←</button><button data-nudge="y:5" title="5 mm omhoog">↑</button><button data-nudge="y:-5" title="5 mm omlaag">↓</button><button data-nudge="x:5" title="5 mm rechts">→</button></div><div><button data-nudge="z:-5">Diepte −</button><button data-nudge="z:5">Diepte ＋</button></div></div><div class="notice-small">Sleep de balk direct op het canvas. In 3D en vooraanzicht beweeg je horizontaal en in hoogte; in bovenaanzicht verplaats je de diepte. Coördinaten zijn in mm vanaf links/onder/voorzijde.</div>`;
-    foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="fitSelectedBeam">↔ Passend maken tussen balken</button><button class="outline-btn full" id="duplicateBeam">⧉ Balk dupliceren</button><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
+    const axisField=isFrame?
+      `<div class="detail-label"><span>Richting</span><strong>${obj.axis.toUpperCase()} — automatisch frame</strong></div>`:
+      `<label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label>`;
+    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">${isFrame?'AUTOMATISCHE FRAMEBALK — BEWERKBAAR':'VRIJE BALK'} · 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label>${axisField}<label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><div class="nudge-tools"><span>VERPLAATS 5 MM</span><div><button data-nudge="x:-5" title="5 mm links">←</button><button data-nudge="y:5" title="5 mm omhoog">↑</button><button data-nudge="y:-5" title="5 mm omlaag">↓</button><button data-nudge="x:5" title="5 mm rechts">→</button></div><div><button data-nudge="z:-5">Diepte −</button><button data-nudge="z:5">Diepte ＋</button></div></div><div class="notice-small">${isFrame?'Deze balk hoort bij het automatische frame. Jouw positie en lengte worden bewaard en meegerekend in de zaaglijst. Controleer na aanpassen alle verbindingen en draagkracht.':'Sleep de balk direct op het canvas. In 3D en vooraanzicht beweeg je horizontaal en in hoogte; in bovenaanzicht verplaats je de diepte. Coördinaten zijn in mm vanaf links/onder/voorzijde.'}</div>`;
+    foot.innerHTML=isFrame?
+      '<div class="right-foot-actions"><button class="outline-btn full" id="restoreSelectedFrame">↺ Originele framebalk herstellen</button><button class="outline-btn full" id="duplicateBeam">⧉ Losse kopie maken</button><button class="outline-btn full delete-btn" id="deleteSelected">Deze framebalk uitschakelen</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>':
+      '<div class="right-foot-actions"><button class="primary-btn full" id="fitSelectedBeam">↔ Passend maken tussen balken</button><button class="outline-btn full" id="duplicateBeam">⧉ Balk dupliceren</button><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }
 }
 /* Lightweight 3D geometry projector — not a static mockup and no external CDN required. */
@@ -278,7 +284,7 @@ function objects(){shapes=[];hitShapes=[];
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
-  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
+  if(project.countertop){box(-8,project.height-24,-14,project.width+16,24,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
 function drawGrid(){const step=250,margin=600,y=-55;
@@ -349,7 +355,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   }
   drawDims();if(currentView==='3d')drawLabels();
   beamEndHandles=[];
-  if(selected?.type==='beam' && !drawMode){
+  if((selected?.type==='beam'||selected?.type==='frame') && !drawMode){
     const b=getSelected();
     if(b){const pts=['start','end'].map(endpoint=>({endpoint,...toScreen(beamHandlePoint(b,endpoint))}));
       if(Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)>22){
@@ -399,6 +405,7 @@ function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSel
   const isNumeric=['width','x','y','z','length'].includes(field),val=isNumeric?Number(el.value):el.value;
   if(isNumeric&&!Number.isFinite(val)){toast('Ongeldige waarde');render();return;}
   commit(()=>{
+    if(selected.type==='frame'){if(['name','length','x','y','z'].includes(field))M.editFrameBeam(project,selected.id,{[field]:val});return;}
     if(field==='kind'&&selected.type==='module'&&M.TYPES[val]){obj.kind=val;obj.name=M.TYPES[val].label;obj.width=Math.max(M.TYPES[val].min,obj.width);}
     else if(field==='width')obj.width=M.clamp(Math.round(val),Math.max(200,M.TYPES[obj.kind].min),2400);
     else if(field==='length')obj.length=M.clamp(Math.round(val),50,6500);
@@ -419,9 +426,11 @@ function move(id,dir){const idx=project.modules.findIndex(m=>m.id===id),target=i
 document.addEventListener('click',e=>{
   const modCard=e.target.closest('[data-select-module]');
   const beamCard=e.target.closest('[data-select-beam]');
+  const frameCard=e.target.closest('[data-select-frame]');
   const b=e.target.closest('button');
   if(modCard && !b){setSelected('module',modCard.dataset.selectModule);return;}
   if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
+  if(frameCard && !b){setSelected('frame',frameCard.dataset.selectFrame);switchPanel('beams');return;}
   if(!b)return;
   if(b.dataset.panel){switchPanel(b.dataset.panel);return;}
   if(b.dataset.mobile){switchMobile(b.dataset.mobile);return;}
@@ -429,7 +438,7 @@ document.addEventListener('click',e=>{
   if(b.dataset.beamType){if(suppressPresetClick){suppressPresetClick=false;return;}armBeamType(b.dataset.beamType);return;}
   if(b.dataset.add){$('#quickModuleMenu').classList.add('hidden');$('#quickModuleBtn').setAttribute('aria-expanded','false');addModule(b.dataset.add);return;}
   if(b.dataset.moveModule){e.stopPropagation();move(b.dataset.moveModule,Number(b.dataset.direction));return;}
-  if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if(selected?.type==='beam'&&obj&&['x','y','z'].includes(axis))commit(()=>{obj[axis]+=Number(delta);});return;}
+  if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if((selected?.type==='beam'||selected?.type==='frame')&&obj&&['x','y','z'].includes(axis))commit(()=>{if(selected.type==='frame')M.editFrameBeam(project,selected.id,{[axis]:obj[axis]+Number(delta)});else obj[axis]+=Number(delta);});return;}
   switch(b.id){
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
     case 'homeBtn':showWelcome();break;
@@ -447,17 +456,19 @@ document.addEventListener('click',e=>{
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
     case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
     case 'closeInspector':if(window.innerWidth<=1250){$('#inspector').classList.remove('mobile-visible');}else{setSelected(null,null);}break;
-    case 'duplicateBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)return;let id;commit(()=>{id=M.uid();project.beams.push({...obj,id,name:obj.name+' kopie',x:obj.x+50});});setSelected('beam',id);toast('Balk gedupliceerd');break;}
+    case 'duplicateBeam':{const obj=getSelected();if(!['beam','frame'].includes(selected?.type)||!obj)return;let id;commit(()=>{id=M.uid();project.beams.push({...obj,id,name:obj.name+' kopie',x:obj.x+50});});setSelected('beam',id);toast('Balk gedupliceerd');break;}
     case 'exportBtn':case 'modalSecondary':exportProject();break;
     case 'importBtn':$('#fileInput').click();break;
     case 'addBeamBtn':switchPanel('beams');break;
     case 'cancelPlacement':disarmBeam();break;
     case 'dragBeamBtn':beamMoveMode=!beamMoveMode;renderInspector();break;
+    case 'restoreSelectedFrame':if(selected?.type==='frame'){commit(()=>M.restoreFrameBeam(project,selected.id));toast('Framebalk hersteld naar standaardmaten');}break;
+    case 'restoreAllFrames':commit(()=>{project.frameEdits={};selected=null;});toast('Automatische frameconstructie hersteld');break;
     case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
     case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=M.demoProject();selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
-    case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
+    case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
     case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
     case 'zoomOut':camera.zoom=M.clamp(camera.zoom/1.16,.35,4);draw();break;
     case 'resetView':camera.zoom=1;setView('3d');break;
@@ -509,7 +520,7 @@ canvas.addEventListener('pointerdown',e=>{
     dragging={mode:'draw-beam',start,startX:e.offsetX,startY:e.offsetY,moved:false};
     return;
   }
-  const resize=selected?.type==='beam' && handleAt(e.offsetX,e.offsetY);
+  const resize=(selected?.type==='beam'||selected?.type==='frame') && handleAt(e.offsetX,e.offsetY);
   if(resize){
     const b=getSelected();if(b && viewAxes()?.includes(b.axis)){
       pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
@@ -525,11 +536,11 @@ canvas.addEventListener('pointerdown',e=>{
     // Prioritize the currently selected manual beam if its projected surface
     // is under the pointer; neighboring frame beams otherwise steal the grab.
     const picked=hit(e.offsetX,e.offsetY);
-    const selectedFace=selected?.type==='beam' && (gpu.ready ? (picked?.type==='beam'&&picked.id===selected.id) : shapes.some(s=>s.owner?.type==='beam' && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY)));
-    const pick=selectedFace ? {type:'beam',id:selected.id} : picked;
+    const selectedFace=(selected?.type==='beam'||selected?.type==='frame') && (gpu.ready ? (picked?.type===selected.type&&picked.id===selected.id) : shapes.some(s=>s.owner?.type===selected.type && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY)));
+    const pick=selectedFace ? {type:selected.type,id:selected.id} : picked;
     // Direct touch-and-drag on a loose beam; no extra mode toggle required.
-    if(pick?.type==='beam'){
-      if(selected?.id!==pick.id)setSelected('beam',pick.id);
+    if(pick?.type==='beam'||pick?.type==='frame'){
+      if(selected?.id!==pick.id)setSelected(pick.type,pick.id);
       const b=getSelected();
       if(b){dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}
     }
@@ -548,16 +559,23 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   if(dragging.mode==='resize-beam'){
     const b=getSelected();if(!b)return;
     const w=drawPoint(e.offsetX,e.offsetY);
-    if(w)M.resizeBeamEndpoint(b,dragging.endpoint,w[b.axis]);
+    if(w){
+      if(selected?.type==='frame'){
+        const copy={...b};M.resizeBeamEndpoint(copy,dragging.endpoint,w[b.axis]);
+        M.editFrameBeam(project,selected.id,{[b.axis]:copy[b.axis],length:copy.length});
+      }else M.resizeBeamEndpoint(b,dragging.endpoint,w[b.axis]);
+    }
     draw();return;
   }
   if(dragging.moved){if(dragging.mode==='place-beam')return;if(dragging.mode==='move-beam'){
     const b=getSelected();if(!b)return;
     const sx=e.offsetX-dragging.startX,sy=e.offsetY-dragging.startY;
     const delta=dragWorldDelta(sx,sy,dragging.startBeam);
-    b.x=Math.round((dragging.startBeam.x+delta.x)/5)*5;
-    b.y=Math.round((dragging.startBeam.y+delta.y)/5)*5;
-    b.z=Math.round((dragging.startBeam.z+delta.z)/5)*5;
+    const next={x:Math.round((dragging.startBeam.x+delta.x)/5)*5,
+      y:Math.round((dragging.startBeam.y+delta.y)/5)*5,
+      z:Math.round((dragging.startBeam.z+delta.z)/5)*5};
+    if(selected.type==='frame')M.editFrameBeam(project,selected.id,next);
+    else Object.assign(b,next);
     draw();
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
 });
@@ -582,12 +600,12 @@ function pointerEnd(e){
     // Recalculate the face-to-face span after EVERY placement, not only when
     // the beam is first dragged out of the palette. Both position and cut length
     // remain in the same undo step.
-    const fit=beam && M.fitBeamBetween(project,beam);
+    const fit=selected?.type==='beam'&&beam ? M.fitBeamBetween(project,beam) : null;
     if(fit){beam[beam.axis]=fit.start;beam.length=fit.length;}
     if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
     if(fit)toast(`Balk opnieuw passend gemaakt: ${fmt(fit.length)} mm`);
   }
-  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam')setSelected(id.type,id.id);else if(id?.type==='frame'){toast('Dit is een automatische framebalk. Kies Balken voor extra balken.');}else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
+  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam'||id?.type==='frame')setSelected(id.type,id.id);else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
 canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});

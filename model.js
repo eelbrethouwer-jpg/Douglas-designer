@@ -20,7 +20,7 @@
     return {
       version:1, id:uid(), name:'Mijn buitenkeuken', width:1875, depth:870, height:950,
       section:50, sectionLong:100, stockLength:2800, kerf:3, beamPrice:16.95,
-      countertop:true, modules:[
+      countertop:true, frameEdits:{}, modules:[
         {id:uid(),kind:'drawers',width:520,name:'Ladekast'},
         {id:uid(),kind:'fridge',width:600,name:'Koelkast'},
         {id:uid(),kind:'kamado',width:555,name:'Kamado'}
@@ -80,6 +80,19 @@
       axis:['x','y','z'].includes(b.axis)?b.axis:'x',
       length:clamp(round(number(b.length,500)),50,6500)
     })) : [];
+    // Only intentional frame edits are persisted; keep generated geometry parametric.
+    p.frameEdits={};
+    if(raw.frameEdits&&typeof raw.frameEdits==='object'&&!Array.isArray(raw.frameEdits)){
+      for(const [id,edit] of Object.entries(raw.frameEdits).slice(0,250)){
+        if(!/^frame-(post|cross|rail)-[a-z0-9-]+$/.test(id)||!edit||typeof edit!=='object')continue;
+        const clean={};
+        for(const axis of ['x','y','z'])if(Number.isFinite(edit[axis]))clean[axis]=clamp(round(edit[axis]),-10000,10000);
+        if(Number.isFinite(edit.length))clean.length=clamp(round(edit.length),50,6500);
+        if(typeof edit.name==='string')clean.name=edit.name.slice(0,60);
+        if(edit.disabled===true)clean.disabled=true;
+        if(Object.keys(clean).length)p.frameEdits[id]=clean;
+      }
+    }
     p.width=p.modules.length?expectedWidth(p):clamp(round(number(raw.width,p.width)),500,7000);
     return p;
   }
@@ -115,31 +128,52 @@
     const cuts=[], {sections,posts}=boundaries(p);
     if(!sections.length)return cuts;
     const upper=p.height-125, lower=100, postLength=upper;
-    function put(name,axis,length,x,y,z,group){
-      const b={id:uid(),name,axis,length:round(length),x:round(x),y:round(y),z:round(z),group};
+    function put(name,axis,length,x,y,z,group,id){
+      const patch=p.frameEdits?.[id];
+      if(patch?.disabled)return null;
+      const b={id,name,axis,length:round(length),x:round(x),y:round(y),z:round(z),group};
+      if(patch)for(const key of ['name','length','x','y','z'])if(patch[key]!==undefined)b[key]=patch[key];
       cuts.push(b);return b;
     }
-    for(const x of posts){
-      put('Staander','y',postLength,x,0,0,'Frame');
-      put('Staander','y',postLength,x,0,p.depth-100,'Frame');
+    for(const [i,x] of posts.entries()){
+      put('Staander','y',postLength,x,0,0,'Frame',`frame-post-${i}-front`);
+      put('Staander','y',postLength,x,0,p.depth-100,'Frame',`frame-post-${i}-back`);
       for(const y of [lower,upper]) {
         // Upper side rails rest 50 mm on both front/back posts; lower rails remain inset.
         const seated=y===upper;
-        put(seated?'Dwarsregel boven':'Dwarsregel onder','z',seated?p.depth-100:p.depth-200,x,y,seated?50:100,'Frame');
+        put(seated?'Dwarsregel boven':'Dwarsregel onder','z',seated?p.depth-100:p.depth-200,x,y,seated?50:100,'Frame',`frame-cross-${i}-${seated?'top':'bottom'}`);
       }
     }
-    for(const s of sections){
+    for(const [i,s] of sections.entries()){
       for(const y of [lower,upper]){
         // Upper rails bear 25 mm on both posts, and meet above the post's centre.
         // This is a geometrical joint model, NOT a certified structural detail.
         const seated=y===upper;
         const start=seated?s.left-25:s.left;
         const length=seated?s.module.width+50:s.module.width;
-        put(seated?'Ligger boven':'Ligger onder','x',length,start,y,0,'Frame');
-        put(seated?'Ligger boven':'Ligger onder','x',length,start,y,p.depth-50,'Frame');
+        put(seated?'Ligger boven':'Ligger onder','x',length,start,y,0,'Frame',`frame-rail-${i}-${seated?'top':'bottom'}-front`);
+        put(seated?'Ligger boven':'Ligger onder','x',length,start,y,p.depth-50,'Frame',`frame-rail-${i}-${seated?'top':'bottom'}-back`);
       }
     }
     return cuts;
+  }
+  function editFrameBeam(p,id,changes){
+    if(!id||!changes||typeof changes!=='object')return false;
+    const base=framePieces({...p,frameEdits:{}}).find(b=>b.id===id);
+    if(!base)return false;
+    const patch={...(p.frameEdits?.[id]||{})};
+    for(const k of ['x','y','z'])if(Object.hasOwn(changes,k)&&Number.isFinite(Number(changes[k])))
+      patch[k]=clamp(round(Number(changes[k])),-10000,10000);
+    if(Object.hasOwn(changes,'length')&&Number.isFinite(Number(changes.length)))
+      patch.length=clamp(round(Number(changes.length)),50,6500);
+    if(Object.hasOwn(changes,'name'))patch.name=String(changes.name).slice(0,60)||base.name;
+    if(Object.hasOwn(changes,'disabled'))patch.disabled=changes.disabled===true;
+    p.frameEdits={...(p.frameEdits||{}),[id]:patch};
+    return true;
+  }
+  function restoreFrameBeam(p,id){
+    if(!p.frameEdits||!Object.hasOwn(p.frameEdits,id))return false;
+    const edits={...p.frameEdits};delete edits[id];p.frameEdits=edits;return true;
   }
   // Geometry-only fit: use the actual face-to-face gap between TWO existing
   // supports, never a guessed stock size. The transverse beam cross-section
@@ -199,12 +233,16 @@
     const fridge=p.modules.find(m=>m.kind==='fridge');
     if(fridge)result.push('Koelkast: ventilatie- en montageruimte afhankelijk van het apparaat; nog niet berekend.');
     if(p.modules.some(m=>m.kind==='kamado'))result.push('Kamado: hitteafstand, niet-brandbare afscherming en draagconstructie controleren volgens fabrikant.');
-    for(const b of p.beams){
+    if(Object.keys(p.frameEdits||{}).length){
+      result.push('Automatische framebalken zijn handmatig aangepast; controleer oplegging, verbindingen en draagkracht.');
+      if(Object.values(p.frameEdits).some(b=>b.disabled))result.push('Eén of meer automatische framebalken zijn verwijderd.');
+    }
+    for(const b of allBeams(p)){
       const box=beamBox(b);
       if(box.x<0||box.y<0||box.z<0||box.x+box.w>p.width||box.y+box.h>p.height||box.z+box.d>p.depth)result.push(`${b.name}: valt (deels) buiten de buitenkeuken.`);
     }
     if(boardPlan(p).impossible.length)result.push('Minstens één balk is langer dan de gekozen handelslengte.');
     return result;
   }
-  return {TYPES,uid,clamp,demoProject,freeProject,normalizeProject,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,uid,clamp,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

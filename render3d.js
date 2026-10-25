@@ -15,7 +15,12 @@ function bary(a,b,c,x,y){
 }
 function depthAt(v,x,y){
  if(!v||v.length<3)return null;
- for(let i=1;i<v.length-1;i++){const w=bary(v[0],v[i],v[i+1],x,y);if(w)return w[0]*v[0].d+w[1]*v[i].d+w[2]*v[i+1].d;}
+ for(let i=1;i<v.length-1;i++){const w=bary(v[0],v[i],v[i+1],x,y);if(w){
+    // Camera uses x,y projected by 2000/(2000+depth).
+    // Reconstruct eye depth from interpolated reciprocal W, not linearly from depth.
+    const reciprocal=w.reduce((sum,t,j)=>sum+t/(2000+[v[0],v[i],v[i+1]][j].d),0);
+    return reciprocal>0?1/reciprocal-2000:null;
+   }}
  return null;
 }
 function pick(shapes,x,y){let nearest=null,depth=Infinity;
@@ -25,7 +30,7 @@ function pick(shapes,x,y){let nearest=null,depth=Infinity;
 function triangles(shapes,width,height){const data=[];
  for(const face of shapes){const v=face.verts;if(!v||v.length<3)continue;const c=parseColor(face.fill);
   for(let i=1;i<v.length-1;i++)for(const p of [v[0],v[i],v[i+1]])
-    data.push(p.x/width*2-1,1-p.y/height*2,Math.max(-.99,Math.min(.99,p.d/12000)),...c);
+    data.push(p.x/width*2-1,1-p.y/height*2,p.d,...c);
  }return new Float32Array(data);
 }
 function shader(gl,type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
@@ -36,7 +41,7 @@ function create(canvas){
  let gl;try{gl=canvas.getContext('webgl',{alpha:true,antialias:true,depth:true,preserveDrawingBuffer:true,premultipliedAlpha:false});}catch(e){return {ready:false};}
  if(!gl||typeof gl.createShader!=='function'||typeof gl.drawArrays!=='function')return {ready:false};
  let program,buffer,pos,color;try{
-  const vs=shader(gl,gl.VERTEX_SHADER,'attribute vec3 a_pos;attribute vec3 a_color;varying vec3 v_color;void main(){gl_Position=vec4(a_pos,1.0);v_color=a_color;}');
+  const vs=shader(gl,gl.VERTEX_SHADER,'attribute vec3 a_pos;attribute vec3 a_color;varying vec3 v_color;void main(){float w=max(1.0,2000.0+a_pos.z);gl_Position=vec4(a_pos.xy*w,w-200.0,w);v_color=a_color;}');
   const fs=shader(gl,gl.FRAGMENT_SHADER,'precision mediump float;varying vec3 v_color;void main(){gl_FragColor=vec4(v_color,1.0);}');
   program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
   if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
