@@ -117,3 +117,85 @@ test('photo processing warns clearly when the browser cannot persist a picked ph
  h.listeners.get('#roomImageInput:change')({target:{files:[{type:'image/jpeg',size:100}],value:''}});
  assert.match(h.nodes.get('#roomCaptureStatus').textContent,/kon niet worden opgeslagen/);
 });
+
+function photoPointer(h,type,x,y,pointerId=1){
+ const canvas=h.nodes.get('#roomPhotoCanvas');
+ const event={pointerId,clientX:x,clientY:y,currentTarget:canvas,preventDefault(){this.prevented=true}};
+ h.listeners.get('#roomPhotoCanvas:'+type)(event);
+ return event;
+}
+function supplyPhoto(h){
+ h.listeners.get('#roomCaptureOpen:click')();
+ h.listeners.get('#roomImageInput:change')({target:{files:[{type:'image/jpeg',size:3000}],value:'photo.jpg'}});
+}
+function placeCorner(h,x,y,id=1){
+ photoPointer(h,'pointerdown',x,y,id);
+ photoPointer(h,'pointerup',x,y,id);
+}
+test('after all four room floor points exist, a finger drag repositions a marker and keeps photo',()=>{
+ const h=studio();
+ supplyPhoto(h);
+ const coords=[[40,40],[290,40],[280,180],[55,185]];
+ for(const p of coords)placeCorner(h,...p);
+ const before=h.project().room.corners.map(p=>[...p]),photo=h.project().room.photo;
+ assert.equal(before.length,4);
+ photoPointer(h,'pointerdown',290,40);
+ photoPointer(h,'pointermove',240,92);
+ // Changes are local while dragging: no repeated undo/persistence on every pointermove.
+ assert.equal(h.project().room.corners[1][0],before[1][0]);
+ photoPointer(h,'pointerup',240,92);
+ assert.ok(Math.abs(h.project().room.corners[1][0]-240/360)<.001);
+ assert.ok(Math.abs(h.project().room.corners[1][1]-92/226)<.001);
+ assert.deepEqual(h.project().room.corners[0],before[0]);
+ assert.deepEqual(h.project().room.corners[2],before[2]);
+ assert.equal(h.project().room.photo,photo);
+ assert.match(h.nodes.get('#roomPhotoInstruction').textContent,/sleep een punt/i);
+});
+test('tap a numbered handle and then another spot to reposition that same floor corner',()=>{
+ const h=studio({legacyCommit:true});
+ supplyPhoto(h);
+ for(const p of [[40,40],[290,40],[280,180],[55,185]])placeCorner(h,...p);
+ const otherPoints=h.project().room.corners.map(p=>[...p]);
+ placeCorner(h,55,185); // select existing point 4
+ assert.deepEqual(h.project().room.corners[3],otherPoints[3]);
+ assert.match(h.nodes.get('#roomPhotoInstruction').textContent,/Punt 4 gekozen/);
+ placeCorner(h,140,138); // reposition selected point 4 with no continuous drag
+ assert.ok(Math.abs(h.project().room.corners[3][0]-140/360)<.001);
+ assert.deepEqual(h.project().room.corners[0],otherPoints[0]);
+});
+test('dedicated point-number buttons can choose a marker and a new tap changes its location',()=>{
+ const h=studio();supplyPhoto(h);
+ for(const p of [[40,40],[290,40],[280,180],[55,185]])placeCorner(h,...p);
+ const current=h.project().room.corners.map(p=>[...p]);
+ h.listeners.get('#roomCornerTools:click')({target:{closest(q){return q==='[data-corner]'?{dataset:{corner:'1'},disabled:false}:null;}}});
+ placeCorner(h,220,120);
+ assert.ok(Math.abs(h.project().room.corners[1][0]-220/360)<.001);
+ assert.deepEqual(h.project().room.corners[0],current[0]);
+ assert.deepEqual(h.project().room.corners[2],current[2]);
+ assert.deepEqual(h.project().room.corners[3],current[3]);
+});
+test('drag cancelled by iOS pointercancel discards movement, and off-photo drop clamps coordinates',()=>{
+ const h=studio();supplyPhoto(h);
+ placeCorner(h,100,80);
+ const previous=h.project().room.corners[0].slice();
+ photoPointer(h,'pointerdown',100,80);
+ photoPointer(h,'pointermove',250,190);
+ photoPointer(h,'pointercancel',250,190);
+ assert.deepEqual(h.project().room.corners[0],previous);
+ photoPointer(h,'pointerdown',100,80);
+ photoPointer(h,'pointermove',900,-200);
+ photoPointer(h,'pointerup',900,-200);
+ assert.deepEqual(h.project().room.corners[0],[1,0]);
+});
+test('photo preview remains guarded by four points and corner drag does not affect cutlist',()=>{
+ const h=studio();const cut=M.boardPlan(h.project()).totalLength;
+ supplyPhoto(h);
+ h.listeners.get('#roomPhotoPreview:click')();
+ assert.equal(h.project().room.corners.length,0);
+ for(const p of [[40,40],[290,40],[280,180],[55,185]])placeCorner(h,...p);
+ photoPointer(h,'pointerdown',55,185);
+ photoPointer(h,'pointermove',65,172);
+ photoPointer(h,'pointerup',65,172);
+ assert.equal(M.boardPlan(h.project()).totalLength,cut);
+ assert.match(h.project().room.photo,/^data:image\/jpeg;base64,/);
+});
