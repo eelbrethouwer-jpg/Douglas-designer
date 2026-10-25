@@ -29,6 +29,7 @@ jobs:
           node-version: '22'
       - name: Syntax checks
         run: |
+          node --check render3d.js
           node --check app.js
           node --check model.js
           node --check sw.js

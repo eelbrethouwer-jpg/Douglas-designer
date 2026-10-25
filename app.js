@@ -16,6 +16,8 @@ let selected=null, activePanel='modules', mobileView='design', currentView='3d',
 let undoStack=[],redoStack=[],toastTimer=null;
 const camera={yaw:-0.62,pitch:0.32,zoom:1};
 const canvas=$('#scene'),ctx=canvas.getContext('2d');
+const gpuCanvas=$('#geometryScene');
+const gpu=window.DouglasGpuRenderer?.create(gpuCanvas)||{ready:false};
 let shapes=[], hitShapes=[], viewport={w:800,h:500}, dragging=null, pointers=new Map(),pinchDistance=0;
 let armedBeamType=null,previewBeam=null,paletteGesture=null,suppressPresetClick=false;
 let drawMode=false;
@@ -276,7 +278,7 @@ function objects(){shapes=[];hitShapes=[];
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
-  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null,110);}
+  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
 function drawGrid(){const step=250,margin=600,y=-55;
@@ -333,9 +335,18 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   sceneCenter=[project.width/2,project.height/2,project.depth/2];
   const fitting=Math.min(viewport.w/(project.width*1.35+project.depth*.40),viewport.h/(project.height*1.5+project.depth*.64));
   scale=fitting*camera.zoom;
-  drawGrid();objects();shapes.sort((a,b)=>b.depth-a.depth);
+  objects();shapes.sort((a,b)=>b.depth-a.depth);
   hitShapes=shapes.filter(s=>s.owner);
-  for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
+  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr);
+  if(!gpuRendered){
+    drawGrid();
+    for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
+  }else{
+    // Solid surfaces are painted by WebGL with a real depth buffer.
+    // Keep the editing handles, selected outlines and dimensions in the 2D overlay.
+    if(!project.modules.length){ctx.save();ctx.globalAlpha=.32;drawGrid();ctx.restore();}
+    for(const s of shapes){if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=1.6;path(s.verts);ctx.stroke();}}
+  }
   drawDims();if(currentView==='3d')drawLabels();
   beamEndHandles=[];
   if(selected?.type==='beam' && !drawMode){
@@ -359,7 +370,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
 function faceContains(pts,x,y){let inside=false;for(let a=0,b=pts.length-1;a<pts.length;b=a++){
   if(((pts[a].y>y)!=(pts[b].y>y))&&(x<(pts[b].x-pts[a].x)*(y-pts[a].y)/(pts[b].y-pts[a].y)+pts[a].x))inside=!inside;
   }return inside;}
-function hit(x,y){for(let i=hitShapes.length-1;i>=0;i--)if(faceContains(hitShapes[i].verts,x,y))return hitShapes[i].owner;return null;}
+function hit(x,y){if(gpu.ready)return gpu.pick(shapes,x,y);for(let i=hitShapes.length-1;i>=0;i--)if(faceContains(hitShapes[i].verts,x,y))return hitShapes[i].owner;return null;}
 function setView(v){currentView=v;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,-Math.PI/2+.012],bottom:[-.01,Math.PI/2-.012]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
  let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
@@ -374,7 +385,16 @@ function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidd
 function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 function exportProject(){download('douglas-designer-project.json',JSON.stringify(project,null,2));toast('Projectbestand aangemaakt');}
-function screenshot(){draw();canvas.toBlob(b=>{if(!b){toast('Afbeelding maken mislukt');return;}const u=URL.createObjectURL(b),a=document.createElement('a');a.download='douglas-ontwerp.png';a.href=u;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);},'image/png');}
+function screenshot(){
+  draw();
+  const outCanvas=document.createElement('canvas');outCanvas.width=canvas.width;outCanvas.height=canvas.height;
+  const out=outCanvas.getContext('2d');
+  if(!out){toast('Afbeelding maken mislukt');return;}
+  out.fillStyle='#f3f5f0';out.fillRect(0,0,outCanvas.width,outCanvas.height);
+  if(gpu.ready)out.drawImage(gpuCanvas,0,0,outCanvas.width,outCanvas.height);
+  out.drawImage(canvas,0,0,outCanvas.width,outCanvas.height);
+  outCanvas.toBlob(b=>{if(!b){toast('Afbeelding maken mislukt');return;}const u=URL.createObjectURL(b),a=document.createElement('a');a.download='douglas-ontwerp.png';a.href=u;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);},'image/png');
+}
 function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSelected();if(!field||!obj)return;
   const isNumeric=['width','x','y','z','length'].includes(field),val=isNumeric?Number(el.value):el.value;
   if(isNumeric&&!Number.isFinite(val)){toast('Ongeldige waarde');render();return;}
@@ -505,7 +525,7 @@ canvas.addEventListener('pointerdown',e=>{
     // Prioritize the currently selected manual beam if its projected surface
     // is under the pointer; neighboring frame beams otherwise steal the grab.
     const picked=hit(e.offsetX,e.offsetY);
-    const selectedFace=selected?.type==='beam' && shapes.some(s=>s.owner?.type==='beam' && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY));
+    const selectedFace=selected?.type==='beam' && (gpu.ready ? (picked?.type==='beam'&&picked.id===selected.id) : shapes.some(s=>s.owner?.type==='beam' && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY)));
     const pick=selectedFace ? {type:'beam',id:selected.id} : picked;
     // Direct touch-and-drag on a loose beam; no extra mode toggle required.
     if(pick?.type==='beam'){
