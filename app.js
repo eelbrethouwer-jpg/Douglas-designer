@@ -1,4 +1,4 @@
-/* Douglas Designer v0.2 — dependency-free 3D canvas editor. All geometry in mm. */
+/* Douglas Designer v0.3 — dependency-free 3D canvas editor. All geometry in mm. */
 (function(){
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
@@ -17,6 +17,7 @@ let undoStack=[],redoStack=[],toastTimer=null;
 const camera={yaw:-0.62,pitch:0.32,zoom:1};
 const canvas=$('#scene'),ctx=canvas.getContext('2d');
 let shapes=[], hitShapes=[], viewport={w:800,h:500}, dragging=null, pointers=new Map(),pinchDistance=0;
+let armedBeamType=null,previewBeam=null,paletteGesture=null,suppressPresetClick=false;
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
 function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(project));$('#saveStatus').textContent='● Lokaal opgeslagen';}catch(e){$('#saveStatus').textContent='● Opslag niet beschikbaar';}}
 function commit(fn){const before=JSON.stringify(project);fn();project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
@@ -49,7 +50,79 @@ function switchMobile(name){
 }
 function addModule(kind){const type=M.TYPES[kind];if(!type||project.modules.length>=12){toast('Maximum 12 modules');return;}
   let newId;commit(()=>{newId=M.uid();project.modules.push({id:newId,kind,width:defaults[kind],name:type.label});});setSelected('module',newId);}
-function addBeam(){let id;commit(()=>{id=M.uid();project.beams.push({id,name:'Extra Douglas balk',axis:'x',length:500,x:100,y:Math.max(100,project.height-175),z:20});});setSelected('beam',id);}
+// Parts are never inserted at a surprising default location: first choose a type,
+// then drop it onto the canvas or tap its intended position.
+const BEAM_NAMES={x:'Horizontale regel',y:'Staander',z:'Dieptebalk'};
+function armBeamType(axis){
+  if(!BEAM_NAMES[axis])return;
+  armedBeamType=axis;previewBeam=null;
+  if(window.innerWidth<=800&&!paletteGesture?.moved)switchMobile('design');
+  $('#placementNotice').classList.remove('hidden');
+  $('#placementLabel').textContent=BEAM_NAMES[axis]+' · tik op de gewenste plek';
+  canvas.classList.add('placing');
+  $$('.beam-preset').forEach(b=>b.classList.toggle('armed',b.dataset.beamType===axis));
+  draw();
+}
+function disarmBeam(){
+  armedBeamType=null;previewBeam=null;
+  $('#placementNotice').classList.add('hidden');canvas.classList.remove('placing');
+  $$('.beam-preset').forEach(b=>b.classList.remove('armed'));draw();
+}
+function placementPlane(){
+  if(currentView==='top'||currentView==='bottom'||Math.abs(camera.pitch)>1.28)return ['x','z'];
+  if(currentView==='side'||Math.abs(Math.cos(camera.yaw))<.30)return ['z','y'];
+  return ['x','y'];
+}
+function worldFromPoint(px,py){
+  const plane=placementPlane();
+  const world={x:project.width/2,y:project.height*.45,z:20};
+  if(plane.includes('z')&&!plane.includes('y'))world.y=Math.max(100,project.height-175);
+  if(plane.includes('z')&&plane.includes('y'))world.x=50;
+  const index={x:0,y:1,z:2};
+  // Iterative local inversion of the actual 3D perspective projection.
+  for(let iteration=0;iteration<6;iteration++){
+    const a=[world.x,world.y,world.z],p=toScreen(a);
+    const basis=plane.map(axis=>{const v=a.slice();v[index[axis]]+=50;const q=toScreen(v);return {x:(q.x-p.x)/50,y:(q.y-p.y)/50};});
+    const [u,v]=basis,det=u.x*v.y-u.y*v.x;
+    if(Math.abs(det)<.00002)break;
+    const dx=px-p.x,dy=py-p.y;
+    world[plane[0]]+=(dx*v.y-dy*v.x)/det;
+    world[plane[1]]+=(u.x*dy-u.y*dx)/det;
+    for(const key of plane)world[key]=M.clamp(world[key],-200,6500);
+  }
+  return world;
+}
+function beamAtPoint(axis,px,py){
+  const w=worldFromPoint(px,py),length=axis==='x'?Math.min(500,project.width-100):axis==='y'?Math.min(500,project.height-50):Math.min(500,project.depth-100);
+  const beam={id:'preview',axis,name:BEAM_NAMES[axis],length:Math.max(50,length),x:50,y:Math.max(50,project.height*.45),z:20};
+  const longMax={x:project.width,y:project.height,z:project.depth};
+  for(const key of ['x','y','z'])beam[key]=Math.round(w[key]/5)*5;
+  // The pointer determines the midpoint along the long axis.
+  beam[axis]=Math.round((w[axis]-beam.length/2)/5)*5;
+  for(const key of ['x','y','z']){
+    const span=key===axis?beam.length:key==='y'?100:key==='z'?(axis==='y'?100:50):50;
+    beam[key]=M.clamp(beam[key],0,Math.max(0,longMax[key]-span));
+  }
+  const fit=M.fitBeamBetween(project,beam);
+  if(fit){beam[axis]=fit.start;beam.length=fit.length;}
+  beam.fitInfo=fit;
+  return beam;
+}
+function updatePlacement(px,py){
+  if(!armedBeamType)return;
+  previewBeam=beamAtPoint(armedBeamType,px,py);
+  $('#placementLabel').textContent=previewBeam.fitInfo?`Klik om te plaatsen · past precies ${fmt(previewBeam.length)} mm`:'Tik om balk te plaatsen · lengte aanpasbaar';
+  draw();
+}
+function placeAt(px,py){
+  if(!armedBeamType)return;
+  const next=beamAtPoint(armedBeamType,px,py);
+  let id;
+  commit(()=>{id=M.uid();project.beams.push({id,name:next.name,axis:next.axis,length:next.length,x:next.x,y:next.y,z:next.z});});
+  const fitted=Boolean(next.fitInfo);
+  disarmBeam();setSelected('beam',id);
+  toast(fitted?`Automatisch passend gemaakt: ${next.length} mm`:'Balk geplaatst · controleer maat en aansluiting');
+}
 function render(){
   $('#displayName').textContent=project.name;$('#projectTitle').firstChild.textContent=project.name+' ';
   const {modules,beams}=project;
@@ -80,7 +153,7 @@ function renderInspector(){
   }else{
     $('#inspectorTitle').textContent=obj.name;
     body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">VRIJE BALK — 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label><label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label><label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><div class="nudge-tools"><span>VERPLAATS 5 MM</span><div><button data-nudge="x:-5" title="5 mm links">←</button><button data-nudge="y:5" title="5 mm omhoog">↑</button><button data-nudge="y:-5" title="5 mm omlaag">↓</button><button data-nudge="x:5" title="5 mm rechts">→</button></div><div><button data-nudge="z:-5">Diepte −</button><button data-nudge="z:5">Diepte ＋</button></div></div><div class="notice-small">Sleep de balk direct op het canvas. In 3D en vooraanzicht beweeg je horizontaal en in hoogte; in bovenaanzicht verplaats je de diepte. Coördinaten zijn in mm vanaf links/onder/voorzijde.</div>`;
-    foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full" id="duplicateBeam">⧉ Balk dupliceren</button><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
+    foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="fitSelectedBeam">↔ Passend maken tussen balken</button><button class="outline-btn full" id="duplicateBeam">⧉ Balk dupliceren</button><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }
 }
 /* Lightweight 3D geometry projector — not a static mockup and no external CDN required. */
@@ -140,6 +213,7 @@ function objects(){shapes=[];hitShapes=[];
   }
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
+  if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
   if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null);}
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
@@ -192,7 +266,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
 function hit(x,y){for(let i=hitShapes.length-1;i>=0;i--){const s=hitShapes[i],pts=s.verts;let inside=false;for(let a=0,b=pts.length-1;a<pts.length;b=a++){
   if(((pts[a].y>y)!=(pts[b].y>y))&&(x<(pts[b].x-pts[a].x)*(y-pts[a].y)/(pts[b].y-pts[a].y)+pts[a].x))inside=!inside;
   }if(inside)return s.owner;}return null;}
-function setView(v){currentView=v;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,Math.PI/2-.01]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
+function setView(v){currentView=v;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,Math.PI/2-.012],bottom:[-.01,-Math.PI/2+.012]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
  let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
  for(const g of p.groups)h+=`<tr><td>${esc(g.name)}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
@@ -238,6 +312,7 @@ document.addEventListener('click',e=>{
   if(b.dataset.panel){switchPanel(b.dataset.panel);return;}
   if(b.dataset.mobile){switchMobile(b.dataset.mobile);return;}
   if(b.dataset.view){setView(b.dataset.view);return;}
+  if(b.dataset.beamType){if(suppressPresetClick){suppressPresetClick=false;return;}armBeamType(b.dataset.beamType);return;}
   if(b.dataset.add){$('#quickModuleMenu').classList.add('hidden');$('#quickModuleBtn').setAttribute('aria-expanded','false');addModule(b.dataset.add);return;}
   if(b.dataset.moveModule){e.stopPropagation();move(b.dataset.moveModule,Number(b.dataset.direction));return;}
   if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if(selected?.type==='beam'&&obj&&['x','y','z'].includes(axis))commit(()=>{obj[axis]+=Number(delta);});return;}
@@ -248,14 +323,16 @@ document.addEventListener('click',e=>{
     case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=M.normalizeProject({name:'Nieuw ontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Nieuw ontwerp gestart');}break;
     case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=M.demoProject();selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
-    case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');addBeam();break;
+    case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
     case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
     case 'closeInspector':if(window.innerWidth<=1250){$('#inspector').classList.remove('mobile-visible');}else{setSelected(null,null);}break;
     case 'duplicateBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)return;let id;commit(()=>{id=M.uid();project.beams.push({...obj,id,name:obj.name+' kopie',x:obj.x+50});});setSelected('beam',id);toast('Balk gedupliceerd');break;}
     case 'exportBtn':case 'modalSecondary':exportProject();break;
     case 'importBtn':$('#fileInput').click();break;
-    case 'addBeamBtn':addBeam();break;
+    case 'addBeamBtn':switchPanel('beams');break;
+    case 'cancelPlacement':disarmBeam();break;
     case 'dragBeamBtn':beamMoveMode=!beamMoveMode;renderInspector();break;
+    case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
     case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=M.demoProject();selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
@@ -265,13 +342,47 @@ document.addEventListener('click',e=>{
     case 'resetView':camera.zoom=1;setView('3d');break;
   }
 });
+// Accessible tap-to-place plus pointer drag for mouse, pencil and touch.
+// The document tracks the gesture after the pointer leaves the sidebar.
+document.addEventListener('pointerdown',e=>{
+  const tile=e.target.closest?.('[data-beam-type]');if(!tile)return;
+  paletteGesture={axis:tile.dataset.beamType,startX:e.clientX,startY:e.clientY,moved:false};
+});
+document.addEventListener('pointermove',e=>{
+  if(!paletteGesture)return;
+  const g=paletteGesture;
+  if(!g.moved&&Math.hypot(e.clientX-g.startX,e.clientY-g.startY)>9){
+    g.moved=true;
+    if(window.innerWidth<=800)document.body?.classList.add('beam-mobile-drag');
+    armBeamType(g.axis);
+  }
+  if(g.moved){
+    const ghost=$('#paletteDragGhost');ghost.classList.remove('hidden');ghost.style.left=e.clientX+'px';ghost.style.top=e.clientY+'px';
+    const rect=canvas.getBoundingClientRect();
+    if(e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom)
+      updatePlacement(e.clientX-rect.left,e.clientY-rect.top);
+  }
+});
+document.addEventListener('pointerup',e=>{
+  if(!paletteGesture)return;
+  const g=paletteGesture;paletteGesture=null;$('#paletteDragGhost').classList.add('hidden');
+  if(!g.moved)return;
+  suppressPresetClick=true;setTimeout(()=>{suppressPresetClick=false;},0);
+  const rect=canvas.getBoundingClientRect();
+  if(e.clientX>=rect.left&&e.clientX<=rect.right&&e.clientY>=rect.top&&e.clientY<=rect.bottom)
+    placeAt(e.clientX-rect.left,e.clientY-rect.top);
+  else if(window.innerWidth<=800)switchMobile('design');
+  document.body?.classList.remove('beam-mobile-drag');
+});
+document.addEventListener('pointercancel',()=>{paletteGesture=null;$('#paletteDragGhost').classList.add('hidden');document.body?.classList.remove('beam-mobile-drag');});
 $('#inspector').addEventListener('change',handleInput);
 $('#sidebar').addEventListener('change',updateSettings);
 $('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=M.normalizeProject(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
-window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();history(e.shiftKey?'redo':'undo');}if(e.key==='Escape'&&modalOpen)closeModal();});
+window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();history(e.shiftKey?'redo':'undo');}if(e.key==='Escape'&&armedBeamType)disarmBeam();if(e.key==='Escape'&&modalOpen)closeModal();});
 canvas.addEventListener('pointerdown',e=>{
   canvas.setPointerCapture(e.pointerId);
+  if(armedBeamType){pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});dragging={mode:'place-beam',x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};updatePlacement(e.offsetX,e.offsetY);return;}
   pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
   if(pointers.size===1){
     dragging={x:e.offsetX,y:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false};
@@ -285,9 +396,9 @@ canvas.addEventListener('pointerdown',e=>{
   }
   if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
 });
-canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
+canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
-  if(dragging.moved){if(dragging.mode==='move-beam'){
+  if(dragging.moved){if(dragging.mode==='place-beam')return;if(dragging.mode==='move-beam'){
     const b=getSelected();if(!b)return;
     const sx=e.offsetX-dragging.startX,sy=e.offsetY-dragging.startY;
     const delta=dragWorldDelta(sx,sy,dragging.startBeam);
@@ -295,9 +406,9 @@ canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;c
     b.y=Math.round((dragging.startBeam.y+delta.y)/5)*5;
     b.z=Math.round((dragging.startBeam.z+delta.z)/5)*5;
     draw();
-  }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-.35,1.53);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
+  }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
 });
-function pointerEnd(e){if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
+function pointerEnd(e){if(dragging?.mode==='place-beam'&&armedBeamType){placeAt(e.offsetX,e.offsetY);pointers.delete(e.pointerId);dragging=null;pinchDistance=0;return;}if(dragging?.mode==='move-beam'&&dragging.moved){if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}}
   else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam')setSelected(id.type,id.id);else if(id?.type==='frame'){toast('Dit is een automatische framebalk. Kies Balken voor extra balken.');}else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
 canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
