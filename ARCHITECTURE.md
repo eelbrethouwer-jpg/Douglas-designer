@@ -1,6 +1,6 @@
 # Douglas Designer — actuele technische architectuur
 
-**Codebasis:** `main` op 25 oktober 2026, commit `f5dd47bfb7c1ebe9e3cfb65ac9bb962b97cbdf7f`. Dit document beschrijft aangetroffen code, niet de ideale toekomstige architectuur.
+**Codebasis:** `main` op 25 oktober 2026, commit `ddf7c79aeae5592eb2b0bfe906422cf79412907e` (v0.7.1). Dit document beschrijft aangetroffen code, niet de ideale toekomstige architectuur.
 
 ## Uitvoering en deployment
 - **Statische browserapp:** HTML/CSS/vanilla JavaScript zonder backend, database of npm-installatie in de repositoryroot.
@@ -52,8 +52,8 @@ Gebruikersactie (pointer / knop / invoer)
 
 ## Technische schuld / aandachtspunten
 1. `app.js` combineert veel state, UI, tekenen, opslag en exports: verdere wijzigingen bij voorkeur isoleren en pure functies naar losse, geteste modules verplaatsen.
-2. Branch `fix/v0.7.1-sketchup-room-usability` (PR #11) bevat oplossingen voor zichtbare Room-weergave, foto-invoer en mobiele materiaalnavigatie, maar was bij nulmeting **niet gemerged** en heeft **rode tests**. Dit zijn geen bewezen werkende productfuncties.
-3. Oude README-/roadmapteksten liepen achter op de samengevoegde v0.7.0; release en daadwerkelijke acceptatie blijven apart gerapporteerd.
+2. De wijzigingen van PR #11 (v0.7.1) voor zichtbare Room-weergave, foto-invoer en mobiele materiaalnavigatie zijn **gemerged**. De CI-regressies zijn hersteld (78/78), maar de werking op een echte iPhone en de visuele resultaten zijn **nog niet geverifieerd**.
+3. Oudere README-/roadmapteksten liepen achter op de gepubliceerde versies; release, geautomatiseerde tests en daadwerkelijke acceptatie moeten steeds apart gerapporteerd blijven.
 4. Geen geautomatiseerde screenshot-/echte Safari-test aangetroffen; CI-succes verifieert geen fotorealisme, WebGL-weergave of touchergonomie.
 5. Geen uitvoerbare constructieberekening; materiaalmaten of hitte-/ventilatiewaarschuwingen niet promoten tot veiligheidsbewijs.
 
