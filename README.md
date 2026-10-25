@@ -1,110 +1,85 @@
-# Douglas Designer — Bouwbare buitenkeukens ontwerpen
+# Douglas Designer
 
-> **Ontwikkeling & prioriteiten:** bekijk de actuele [ROADMAP.md](ROADMAP.md). Dit document is leidend voor de volgorde van toekomstige releases; de historische tekst hieronder beschrijft eerdere prototypestadia.
+Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-werkwijze, interactieve 3D-controle en een gekoppelde zaaglijst. De interface is geïnspireerd op de eenvoudige ontwerpflow van Floorplanner, maar gespecialiseerd in maatwerk houten constructies.
 
-**v0.4.0 releasekandidaat** · Floorplanner-geïnspireerde vrije tekenmodus, naast de bestaande module-editor.
+> **Status:** ontwikkelfase, v0.6.0 Studio **releasekandidaat**. Niet alle roadmapfuncties zijn gebouwd of getest op een fysieke iPhone. Op GitHub Pages staat uitsluitend wat in de \`main\`-branch is samengevoegd en succesvol gedeployed.
 
-## Vrij tekenen (nieuw in v0.4)
+## Documentatie
 
-1. Open **Projecten → Vrij tekenen — leeg canvas**; je begint met een leeg orthografisch vooraanzicht zonder frame of werkblad.
-2. Met **✎ Teken balk** sleep je tussen een beginpunt en een eindpunt. De richting wordt automatisch X (breedte) of Y (hoogte) in het vooraanzicht.
-3. Druk op **Boven** om een dieptebalk (Z-richting) te tekenen. In **Zij** kun je hoogte/diepte tekenen.
-4. Selecteer de balk: aan beide uiteinden verschijnt een **groen rond handvat**; versleep een handvat om de lengte aan te passen. Het andere uiteinde blijft staan.
-5. **Undo/redo** en de **zaaglijst** blijven gekoppeld aan de geometrische wijzigingen.
+- [Roadmap en releasevolgorde](ROADMAP.md)
+- [Product- en interactiespecificatie](PRODUCT_SPEC.md)
+- [Release notes v0.6.0](RELEASE_NOTES_v0.6.0.md)
+- [Historische wijzigingen](CHANGELOG.md)
 
-Bestaande projecten met modules blijven laden zonder conversie. Kies je een leeg project, dan wordt `modules: []` als geldige situatie opgeslagen. Je kunt modules later nog toevoegen.
+## Openen
 
-### Geometrische bovenregels
-De standaard moduleconstructie tekent nu de bovenste X-liggers met 25 mm oplegging op elke staander; bovenste Z-regels met 50 mm geometrische overlap. Dit is uitsluitend een visuele/maatkundige oplossing, **geen constructieve sterkteberekening, garantie voor veilige oplegging of goedgekeurde verbinding**. De benodigde sterkte, houtverbindingen, bevestigers, kamado-hitteafstanden en ventilatie blijven te controleren vóór bouw.
+Publieke versie: **https://eelbrethouwer-jpg.github.io/Douglas-designer/**
 
-### Wat nog ontbreekt
-- Echt vrij tekenen van schuine balken, kantelen van profielen en per balk kiezen uit meerdere doorsneden.
-- Volledig geavanceerde 3D-bewerktools zoals in professionele CAD-apps.
-- Validatie op een fysieke iPhone in Safari; browsernavigatie tijdens de ontwikkeling was in deze omgeving niet toegankelijk.
+De releasekandidaat staat in [PR #7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7); hij bouwt voort op [PR #6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6). Die branches zijn niet automatisch publieke releases.
 
-## Publicatie
-GitHub Pages met de bestaande workflow op `main`. Deze versie wordt via een feature branch en pull request aangeleverd en blijft een **releasekandidaat** totdat CI én gebruiker de bediening hebben bevestigd.
+Ook lokaal te draaien door de map op een statische webserver te hosten. Je kunt dan \`index.html\` openen; geen serverdatabase of account nodig. Tijdens ontwikkeling zijn \`node\` en een moderne browser voldoende.
 
-# Douglas Designer — Buitenkeuken Studio
+## Wat werkt in de Studio-releasekandidaat
 
-**Versie:** v0.1.0 · prototype / releasekandidaat · 24 oktober 2026
+- Basis- en voorbeeldkeuken met modules: laden, deuren, koelkast, kamado en open vak.
+- **Vrij beginnen op een leeg tekenvlak** zonder geforceerd startframe.
+- Balk van startpunt naar eindpunt tekenen in voor-/zij-/bovenaanzicht.
+- Balk of automatische framebalk selecteren; lengte/positie bewerken via handvat, slepen, 5-mm nudge en exact invullen.
+- Rasterstappen **5 / 10 / 25 / 50 mm**; optionele magneet op bestaande balkuiteinden.
+- **In 2D pannen**, in 3D om het ontwerp draaien; extra camerastanden van boven en onder.
+- WebGL-renderer met wereldcoördinaten, een echte dieptebuffer en Canvas2D-fallback.
+- Projecten lokaal bewaren, JSON import/export, undo/redo en een indicatief zaagplan voor het Douglas balkhout.
+- Modulebreedtes en automatische framegeneratie; handmatige frameoverrides zijn afzonderlijk herstelbaar.
 
-Een mobiele en desktopvriendelijke ontwerper voor Douglas buitenkeukens. Geen externe JavaScript-bibliotheken of account nodig.
+De screenshot-, iPhone- en WebGL-weergave zijn **nog niet volledig end-to-end gevalideerd**. Met name het werkblad moet vanuit alle hoeken nog gecontroleerd worden voordat de versie stabiel genoemd kan worden.
 
-## Direct starten
+## Sneltoetsen
 
-- **Snel proberen:** open `Douglas-Designer.html` (losse versie, in de bovenliggende downloadmap) in een moderne browser. Je kunt het bestand ook rechtstreeks uit het ZIP-archief halen.
-- **Alle projectbestanden:** open `index.html` uit deze map. Met een statische webserver, HTTPS en `manifest.webmanifest` is dit ook als startscherm-webapp te gebruiken.
-- **iPhone:** publiceer deze map op een HTTPS-website, bijvoorbeeld GitHub Pages. Open daarna de URL in Safari, tik op Delen → Zet op beginscherm. Lokaal HTML openen via de Bestanden-preview kan JavaScript of opslag beperken.
-- **Opslaan:** het ontwerp wordt (waar beschikbaar) automatisch bewaard in de browser via localStorage. Gebruik `Project exporteren` voor een overdraagbare back-up (`.json`); importeer die later terug.
+| Toets | Functie |
+|---|---|
+| \`V\` | Selecteren |
+| \`B\` | Balk tekenen |
+| \`1–5\` | 3D / Voor / Zij / Boven / Onder |
+| \`S\` vasthouden | Magneet tijdelijk uit |
+| \`Esc\` | Stoppen / deselecteren |
+| \`Ctrl/Cmd+Z\` | Ongedaan maken |
 
-## Wat werkt
+Sneltoetsen werken niet als je in een invoerveld typt. Alle belangrijkste acties blijven zichtbaar op het scherm.
 
-- Draaibare 3D-visualisatie met zoom, weergaven voor / zij / boven / 3D.
-- Voorbeeldontwerp met ladekast, koelkast en kamado.
-- Complete modules toevoegen, verwijderen, ordenen en in breedte/type aanpassen. Buitenbreedte wordt exact herberekend, rekening houdend met stijlen van 50 mm.
-- Vrije 50 × 100 mm balken toevoegen, lengte/as/XYZ in millimeters aanpassen en via `Verplaats balk op canvas` verslepen.
-- Automatisch opgebouwd frame, indicatief werkblad en schematische apparatuur.
-- Zaaglijst, zaagoptimalisatie volgens first-fit decreasing, indicatie aantal handelsbalken, zaagverlies en materiaalprijs voor **uitsluitend balkhout**.
-- Uitvoer naar JSON, PNG en afdruk / PDF via browserprint.
-- Ongedaan maken / opnieuw, offline cache na eerste HTTPS-bezoek en lokale opslag.
+## Architectuur
 
-## Voorbeeld — aannames, niet als bestelling gebruiken
+| Bestand | Verantwoordelijkheid |
+|---|---|
+| \`model.js\` | Constructiegeometrie, modules, balk-ID's, zaaglengtes en waarschuwingen |
+| \`drafting.js\` | Raster, magneten en onafhankelijke snappingberekeningen |
+| \`render3d.js\` | World-space WebGL-tekening met depth-buffering |
+| \`app.js\` | Editorstatus, canvasinteractie, opslag, export en handvatten |
+| \`index.html\` / \`studio.css\` / \`ux.css\` / \`styles.css\` | Werkruimte en responsive presentatie |
+| \`sw.js\` / \`manifest.webmanifest\` | PWA en offline bestanden |
+| \`tests/\` | Node-unit-, smoke-, regressie- en assets-tests |
+| \`.github/workflows/pages.yml\` | Controles op pull requests en publicatie via \`main\` |
 
-De voorbeeldkeuken staat op **1875 × 870 × 950 mm** (buitenmaten), met openingen van **520, 600 en 555 mm**. Dit zijn eerder besproken gegevens en modelaannames die **nog niet opnieuw zijn gecontroleerd**. Voorbeeldbalkprofiel **50 × 100 mm**, handelslengte **2800 mm**, zaagsnede **3 mm**, fictieve prijs **€ 16,95/balk**. Balkprijs is geen live winkelprijs.
+## Ontwikkelchecks
 
-Het voorbeeld genereert 28 frame-onderdelen en bij de ingestelde zaagheuristiek 8 handelsbalken. Dit is een **voorlopige materiaalschatting, niet een constructief goedgekeurd bouwplan**.
-
-## Niet inbegrepen / veiligheidsbeperkingen
-
-- Geen constructeurberekening van doorbuiging, draagkracht, verbindingen, windbelasting of fundering.
-- Kamado-getoonde afmetingen zijn schematisch. Hitteafstanden en brandbescherming niet doorgerekend: volg fabrikantvoorschriften.
-- Inbouwmaten, ventilatie en onderhoudstoegang van de koelkast ontbreken.
-- Paneelmaten, werkbladen, schroeven, beslag, laden, poten, apparaten en afwerking komen nog **niet** in de materialenlijst.
-- Zaagplan is een heuristiek, niet gegarandeerd optimaal; zaagkerf wordt gemodelleerd tussen stukken op één balk, niet altijd voor de laatste afkorting.
-- Balkverbindingen zijn illustratief; bevestigings-/verbindingsdetails nog uit te werken.
-- Geen synchronisatie tussen apparaten, cloudaccounts, samenwerking of multi-projectbeheer.
-- Geen permanente GitHub-publicatie gemaakt; alle bestanden worden hier als download aangeleverd.
-
-## Ontwerparchitectuur
-
-- `model.js`: rekenmodel, afmetingen, frameonderdelen, zaagplan en waarschuwingen.
-- `app.js`: browserinterface, eigen interactieve Canvas 3D-projectie, lokale opslag, bestands- en aanrakingsevents.
-- `styles.css`: responsive desktop / tablet / mobiel.
-- `index.html`: interface.
-- `manifest.webmanifest`, `sw.js`, `app-icon-*.png`: installeerbare webapp vanaf HTTPS.
-- `tests/`: Node-berekenings- en smoke-tests.
-
-## Testen
-
-```bash
+\`\`\`bash
+node --check render3d.js
+node --check drafting.js
+node --check app.js
+node --check model.js
+node --check sw.js
 node --test tests/*.test.js
-```
+\`\`\`
 
-**Teststatus:** 9 geautomatiseerde tests geslaagd (model en gesimuleerde DOM-interactie). JS-syntax gecontroleerd met `node --check`. Een volledige rendering- en multitouch-test in Safari/Chrome kon in deze omgeving niet afgerond worden: de beschikbare headless browser bleef ook op een lege HTML-pagina hangen. De app is daarom een **releasekandidaat**, niet een bewezen stabiele productieversie.
+GitHub Actions draait de testset bij pull requests gericht op \`main\`. **Groene tests bewijzen niet dat een 3D-beeld op elk apparaat visueel juist is.** Visuele regressietests en fysieke Safari-bediening zijn aparte acceptatiecriteria.
 
+## Opslag, afmetingen en veiligheid
 
-## GitHub Pages lanceren
+- Projecten worden lokaal opgeslagen onder dezelfde opslag-sleutel als eerdere versies. Exporteren als JSON wordt sterk aangeraden vóór experimenten.
+- Het standaardvoorbeeld is een **concept** met buitenmaten rond 1875 × 870 × 950 mm; controleer iedere maat voor gebruik.
+- Standaard Douglas profiel is 50 × 100 mm, handelslengte 2800 mm, prijs een **handmatig ingestelde indicatie**.
+- Zaagoptimalisatie gebruikt een benadering; een echte bouw- en zaagcontrole blijft nodig.
+- De software berekent **geen** aantoonbare draagkracht, veilige houtverbindingen, brandveiligheid of koelkastventilatie. Fabrikantgegevens en zo nodig een constructeur blijven leidend.
 
-Een gecontroleerde CI/deploy-workflow is toegevoegd in `.github/workflows/pages.yml`.
-De workflow controleert JavaScript-syntax en voert de tests uit vóór publicatie.
-Zie [`GITHUB_LANCERING.md`](GITHUB_LANCERING.md) voor de eenmalige stappen,
-waaronder het activeren van **GitHub Actions** als Pages-bron.
+## Roadmap
 
-## Acceptatiecriteria voor v0.2
-
-1. Werkelijke maatvoering van koelkast en kamado verwerken en visueel controleren.
-2. Constructieverbindingen, hittebescherming en ventilatie beoordelen.
-3. Paneel-/werkblad-/beslagmateriaallijst toevoegen.
-4. iPhone Safari en desktop Chrome handmatig doorlopen en bugs verhelpen.
-5. GitHub-repo aanmaken en release/webapp publiceren zodra dat gewenst is.
-
-
-## v0.3.0 — vrije camera en balkenpalet
-
-- Draai in 3D het ontwerp ook naar een hoog/laag camerastandpunt, of kies het aparte **Onder**-aanzicht.
-- Open links **Balken** voor horizontale regels, staanders en dieptebalken. Sleep ze naar het ontwerp; op mobiel kun je ook een type aantikken en vervolgens op de bestemming tikken.
-- Bij een passende plek tussen twee rechthoekige steunvlakken stelt het programma de lengte automatisch in. Via het eigenschappenpaneel kun je een al geplaatste balk opnieuw **Passend maken**.
-- Alleen **geometrisch** passend: verbindingen, sterkte, en installatieruimte moet je zelf controleren.
-
-De projectdata zijn backwards compatible met v0.2.0; exporteer je project voordat je grote ontwerpwijzigingen maakt.
+Zie [ROADMAP.md](ROADMAP.md) voor werkblad-/renderkwaliteit, naadloze tekenervaring, houtverbindingen, apparaten, plaatzaagplan, volledige boodschappenlijst, technische tekeningen, multi-projectbeheer en een eerste stabiele productieversie.
