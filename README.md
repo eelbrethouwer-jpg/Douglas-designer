@@ -1,3 +1,28 @@
+# Douglas Designer — Bouwbare buitenkeukens ontwerpen
+
+**v0.4.0 releasekandidaat** · Floorplanner-geïnspireerde vrije tekenmodus, naast de bestaande module-editor.
+
+## Vrij tekenen (nieuw in v0.4)
+
+1. Open **Projecten → Vrij tekenen — leeg canvas**; je begint met een leeg orthografisch vooraanzicht zonder frame of werkblad.
+2. Met **✎ Teken balk** sleep je tussen een beginpunt en een eindpunt. De richting wordt automatisch X (breedte) of Y (hoogte) in het vooraanzicht.
+3. Druk op **Boven** om een dieptebalk (Z-richting) te tekenen. In **Zij** kun je hoogte/diepte tekenen.
+4. Selecteer de balk: aan beide uiteinden verschijnt een **groen rond handvat**; versleep een handvat om de lengte aan te passen. Het andere uiteinde blijft staan.
+5. **Undo/redo** en de **zaaglijst** blijven gekoppeld aan de geometrische wijzigingen.
+
+Bestaande projecten met modules blijven laden zonder conversie. Kies je een leeg project, dan wordt `modules: []` als geldige situatie opgeslagen. Je kunt modules later nog toevoegen.
+
+### Geometrische bovenregels
+De standaard moduleconstructie tekent nu de bovenste X-liggers met 25 mm oplegging op elke staander; bovenste Z-regels met 50 mm geometrische overlap. Dit is uitsluitend een visuele/maatkundige oplossing, **geen constructieve sterkteberekening, garantie voor veilige oplegging of goedgekeurde verbinding**. De benodigde sterkte, houtverbindingen, bevestigers, kamado-hitteafstanden en ventilatie blijven te controleren vóór bouw.
+
+### Wat nog ontbreekt
+- Echt vrij tekenen van schuine balken, kantelen van profielen en per balk kiezen uit meerdere doorsneden.
+- Volledig geavanceerde 3D-bewerktools zoals in professionele CAD-apps.
+- Validatie op een fysieke iPhone in Safari; browsernavigatie tijdens de ontwikkeling was in deze omgeving niet toegankelijk.
+
+## Publicatie
+GitHub Pages met de bestaande workflow op `main`. Deze versie wordt via een feature branch en pull request aangeleverd en blijft een **releasekandidaat** totdat CI én gebruiker de bediening hebben bevestigd.
+
 # Douglas Designer — Buitenkeuken Studio
 
 **Versie:** v0.1.0 · prototype / releasekandidaat · 24 oktober 2026
