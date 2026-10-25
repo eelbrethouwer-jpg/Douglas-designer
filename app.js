@@ -618,7 +618,7 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   }else if(viewAxes()){
     // 2D: drag empty canvas to pan instead of unexpectedly orbiting away from the plan.
     camera.panX+=dx;camera.panY+=dy;draw();
-  }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
+  }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';Array.from(document.querySelectorAll('.view-btn')).forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){
   if(dragging?.mode==='draw-beam'){
