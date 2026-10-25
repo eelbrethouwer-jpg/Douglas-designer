@@ -19,8 +19,9 @@ function initUI(){
  body.insertAdjacentHTML('beforeend',`
  <section class="sidebar-panel hidden" id="panel-room">
  <div class="section-title"><span>ONTWERP IN JE EIGEN RUIMTE</span></div>
- <p class="hint">Meet de ruimte na. Een enkele foto levert geen betrouwbare dieptematen op.</p>
- <button id="roomCaptureOpen" class="room-big-action" type="button">📷 Foto toevoegen of bekijken</button>
+ <p class="hint">Wijzig een maat en bekijk direct het resultaat op het 3D-werkvlak. Dit is de ruimte rondom je buitenkeuken.</p>
+ <div class="room-mini-wrap"><div class="room-mini-top"><strong>Bovenaanzicht ruimte</strong><small id="roomMiniSize">—</small></div><canvas id="roomMiniPlan" width="360" height="226" aria-label="Bovenaanzicht van ruimte en buitenkeuken"></canvas><div class="room-mini-bottom"><span><i class="mini-legend-wall"></i> Ruimte</span><span><i class="mini-legend-kitchen"></i> Buitenkeuken</span></div></div>
+ <div class="room-first-actions"><button id="roomCaptureOpen" class="room-big-action" type="button">📷 Foto toevoegen / openen</button><button id="roomShow3d" class="room-big-action secondary" type="button">◈ Bekijk 3D</button></div>
  <label class="check-row"><input id="roomEnabled" type="checkbox"> 3D-ruimte tonen</label>
  <div class="section-title space-top"><span>RUIMTEAFMETINGEN (MM)</span></div>
  <div class="room-fields">${dims.map(([k,v])=>field(k,v)).join('')}</div>
@@ -35,8 +36,9 @@ function initUI(){
  <p class="hint">Positie is in de ruimte, niet in de zaaglijst. Voor kamado en koelkast zelf hitteafstand en ventilatie controleren.</p>
  </section>
  <section class="sidebar-panel hidden" id="panel-finishes">
- <div class="section-title"><span>REALISTISCHE KLEURSTUDIO</span></div>
- <p class="hint">Kies materiaal- en kleurreferenties. De huidige 3D-engine toont ingekleurde vlakken; PBR-texturen en merkmodellen zijn nog niet ingebouwd.</p>
+ <div class="section-title"><span>AFWERKINGEN & MATERIAALKLEUREN</span></div>
+ <div class="room-first-actions"><button id="finishShow3d" class="room-big-action" type="button">◈ Bekijk mijn wijzigingen in 3D</button></div>
+ <p class="hint">Selecteer hieronder een kleur. Het 3D-model verandert direct. Fotorealistische texturen en merkmodellen volgen in een latere release.</p>
  <div id="finishCollections"></div>
  <div class="section-title space-top"><span>FRONTEN & BESLAG</span></div>
  <label class="room-field">Deuren ${select('doorType',R.components.doors)}</label>
@@ -50,9 +52,9 @@ function initUI(){
  modal=document.createElement('div');modal.id='roomCaptureDialog';modal.className='room-modal hidden';
  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Ruimtefoto kalibreren');
  modal.innerHTML=`<div class="room-modal-card"><header class="room-modal-head"><div><strong>Room Capture</strong><small>Van je eigen foto naar een in te meten 3D-ruimte</small></div><button id="roomClose" aria-label="Sluiten" type="button">✕</button></header>
- <div class="room-modal-body"><div class="room-photo-tools"><label class="room-file">📷 Kies foto<input id="roomImageInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" capture="environment"></label>
+ <div class="room-modal-body"><div class="room-photo-tools"><button id="roomChoosePhoto" type="button" class="room-file">🖼️ Bestaande foto kiezen</button><button id="roomTakePhoto" type="button" class="room-file room-camera">📷 Camera openen</button><input id="roomImageInput" class="room-hidden-input" type="file" accept="image/*"><input id="roomCameraInput" class="room-hidden-input" type="file" accept="image/*" capture="environment">
  <button id="roomResetCorners" type="button" class="outline-btn">Hoeken opnieuw</button><button id="roomPhotoPreview" class="outline-btn" type="button">Fotopreview</button></div>
- <div class="room-photo-stage"><canvas id="roomPhotoCanvas" width="960" height="600" aria-label="Ruimtefoto met vloerhoeken"></canvas><div id="roomPhotoEmpty">Voeg een foto toe om te beginnen.</div></div>
+ <p class="room-capture-status" id="roomCaptureStatus" role="status" aria-live="polite">Kies een foto, of maak eerst een 3D-ruimte met handmatig ingevoerde maten.</p><div class="room-photo-stage"><canvas id="roomPhotoCanvas" width="960" height="600" aria-label="Ruimtefoto met vloerhoeken"></canvas><div id="roomPhotoEmpty">Voeg een foto toe om te beginnen.</div></div>
  <div class="room-photo-help"><strong id="roomPhotoInstruction">Markeer vier vloerhoeken</strong><span id="roomPhotoProgress">0 / 4</span></div>
  <p class="hint">Klik achtereenvolgens op de vloer: voor-links, voor-rechts, achter-rechts, achter-links. Dit is een visuele perspectiefhulp; je bevestigt de echte maten hieronder.</p>
  <div class="room-photo-dims">${dims.map(([k,v])=>field(k,v)).join('')}</div>
@@ -62,7 +64,13 @@ function initUI(){
  document.body.append(modal);
  addEvents();drawPhoto();
 }
-function patchRoom(cb){mutate(p=>{p.room=R.normalizeRoom(p.room,p);cb(p.room,p);p.room=R.normalizeRoom(p.room,p);});}
+function patchRoom(cb){
+ mutate(p=>{p.room=R.normalizeRoom(p.room,p);cb(p.room,p);p.room=R.normalizeRoom(p.room,p);});
+}
+function captureStatus(message,warning=false){
+ const output=$('#roomCaptureStatus');
+ if(output){output.textContent=message;output.classList.toggle('warning',warning);}
+}
 function changeRoom(key,value){
  patchRoom((r,p)=>{
   if(['width','depth','height','x','z'].includes(key)){
@@ -78,6 +86,32 @@ function updateCollections(){
  <div class="section-title"><span>${{wood:'DOUGLAS / HOUT',top:'WERKBLAD',front:'KASTFRONTEN',kamado:'KAMADO'}[kind]}</span><small>${variants.length}</small></div>
  <div class="finish-palette">${variants.map(x=>`<button type="button" data-finish="${kind}" data-finish-id="${x.id}" class="finish-choice ${style()[kind]===x.id?'active':''}" title="${escape(x.label)}" aria-label="${escape(x.label)}" aria-pressed="${style()[kind]===x.id}"><span class="finish-chip" style="background:${x.color}"></span><span>${escape(x.label)}</span></button>`).join('')}</div></div>`).join('');
 }
+function drawMiniPlan(){
+ const canvas=$('#roomMiniPlan');if(!canvas||!get)return;
+ const ctx=canvas.getContext('2d');if(!ctx)return;
+ const p=get(),r=room(),w=360,h=226,pad=23;
+ ctx.clearRect(0,0,w,h);ctx.fillStyle='#edf2ed';ctx.fillRect(0,0,w,h);
+ const scale=Math.min((w-pad*2)/r.width,(h-pad*2)/r.depth);
+ const realWidth=r.width*scale,realDepth=r.depth*scale;
+ const ox=(w-realWidth)/2,oy=(h-realDepth)/2;
+ ctx.fillStyle=r.floorColor;ctx.fillRect(ox,oy,realWidth,realDepth);
+ ctx.strokeStyle='#4c6b5b';ctx.lineWidth=3;ctx.strokeRect(ox,oy,realWidth,realDepth);
+ if(r.leftWall){ctx.strokeStyle='#6e7f73';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox,oy+realDepth);ctx.stroke();}
+ if(r.backWall){ctx.strokeStyle='#6e7f73';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(ox,oy+realDepth);ctx.lineTo(ox+realWidth,oy+realDepth);ctx.stroke();}
+ const corners=R.footprint(p,{...r,enabled:true});
+ ctx.beginPath();
+ corners.forEach((c,i)=>{const x=ox+c[0]*scale,y=oy+c[2]*scale;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+ ctx.closePath();ctx.fillStyle='rgba(166,112,66,.90)';ctx.fill();
+ ctx.strokeStyle='#754e30';ctx.lineWidth=2;ctx.stroke();
+ const centroid=corners.reduce((acc,v)=>[acc[0]+v[0]*scale/4,acc[1]+v[2]*scale/4],[ox,oy]);
+ ctx.fillStyle='#fff';ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillText('KEUKEN',centroid[0],centroid[1]+4);
+ ctx.fillStyle='#2c5040';ctx.font='bold 11px system-ui';
+ ctx.fillText(f(r.width)+' mm',w/2,Math.max(13,oy-9));
+ ctx.save();ctx.translate(Math.max(10,ox-9),h/2);ctx.rotate(-Math.PI/2);ctx.fillText(f(r.depth)+' mm',0,0);ctx.restore();
+ if(!r.enabled){ctx.fillStyle='rgba(241,246,241,.72)';ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#3d5949';ctx.font='bold 13px system-ui';ctx.fillText('3D-ruimte staat uit',w/2,h/2);}
+ const caption=$('#roomMiniSize');if(caption)caption.textContent=f(r.width)+' × '+f(r.depth)+' mm';
+}
 function refresh(){
  if(!get||!$('#panel-room'))return;
  const r=room(),st=style();
@@ -92,9 +126,19 @@ function refresh(){
  const warnings=$('#roomWarnings');warnings.textContent=issues.length?'⚠ '+issues.join(' · '):r.enabled?'✓ Keuken past binnen de opgegeven ruimte (geometrische controle).':'De ruimte staat uit.';
  warnings.classList.toggle('room-has-warning',issues.length>0);
  updateCollections();
+ drawMiniPlan();
  drawPhoto();
+ const info=$('#roomWorkspaceMode');
+ if(info)info.textContent=r.enabled?'3D-ruimte: '+f(r.width)+' × '+f(r.depth)+' × '+f(r.height)+' mm':'3D-ruimte uitgeschakeld';
 }
-function openCapture(){if(!modal)return;modal.classList.remove('hidden');previewMode=false;photoSource='';photoImage=null;refresh();$('#roomClose').focus();}
+function openCapture(){
+ if(!modal)return;
+ modal.classList.remove('hidden');
+ previewMode=false;photoSource='';photoImage=null;
+ refresh();
+ captureStatus(room().photo?'Foto geladen. Markeer de vier vloerhoeken of bekijk je fotopreview.':'Kies een foto of gebruik de handmatige 3D-ruimte.');
+ $('#roomClose').focus();
+}
 function closeCapture(){modal.classList.add('hidden');$('#roomCaptureOpen').focus();}
 function loadImage(source,then){if(!source){photoImage=null;photoSource='';then?.();return;}
  if(source===photoSource&&photoImage?.complete){then?.();return;}
@@ -168,24 +212,52 @@ function drawPreview(ctx,w,h,corners){
  ctx.font='bold 14px system-ui';ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText('Ontwerppreview — niet maatvast',24,35);
 }
 async function uploadFile(file){
- if(!file||file.size>18000000){toast('Kies een afbeelding van maximaal 18 MB.');return;}
- if(!file.type.startsWith('image/')){toast('Dit bestand is geen foto.');return;}
- const u=URL.createObjectURL(file),image=new Image();
- image.onload=()=>{try{const max=1100,ratio=Math.min(1,max/Math.max(image.width,image.height));
- const c=document.createElement('canvas');c.width=Math.round(image.width*ratio);c.height=Math.round(image.height*ratio);
- c.getContext('2d').drawImage(image,0,0,c.width,c.height);
- const data=c.toDataURL('image/jpeg',.68);if(data.length>1300000)throw Error('Foto is te groot om in project op te slaan');
- patchRoom(r=>{r.photo=data;r.corners=[];});previewMode=false;photoImage=null;photoSource='';drawPhoto();toast('Foto toegevoegd. Markeer nu de vier vloerhoeken.');
- }catch(error){toast('Foto verwerken mislukt: '+error.message);}finally{URL.revokeObjectURL(u);}};
- image.onerror=()=>{URL.revokeObjectURL(u);toast('Foto kon niet worden geopend. Probeer JPEG of PNG.');};
- image.src=u;
+ if(!file){captureStatus('Geen foto geselecteerd.');return;}
+ if(file.size>18000000){captureStatus('Deze foto is groter dan 18 MB. Kies een kleinere afbeelding.',true);return;}
+ if(file.type&&!file.type.startsWith('image/')){captureStatus('Het gekozen bestand is geen afbeelding.',true);return;}
+ captureStatus('Foto wordt verwerkt…');
+ const url=URL.createObjectURL(file);
+ const img=new Image();
+ img.onload=()=>{
+  try{
+   const max=1100,ratio=Math.min(1,max/Math.max(img.width,img.height));
+   const c=document.createElement('canvas');
+   c.width=Math.max(1,Math.round(img.width*ratio));c.height=Math.max(1,Math.round(img.height*ratio));
+   const context=c.getContext('2d');
+   if(!context)throw Error('Canvas wordt niet ondersteund door deze browser');
+   context.drawImage(img,0,0,c.width,c.height);
+   let data='';
+   for(const quality of [.7,.55,.4,.3]){
+    data=c.toDataURL('image/jpeg',quality);
+    if(data.length<=1300000)break;
+   }
+   if(data.length>1300000)throw Error('Afbeelding is na verkleinen nog te groot');
+   patchRoom(r=>{r.photo=data;r.corners=[];});
+   previewMode=false;photoImage=null;photoSource='';
+   drawPhoto();
+   captureStatus('✓ Foto toegevoegd. Tik nu vier punten op de vloer, of vul alleen de ruimtematen in.');
+   toast('Foto is toegevoegd');
+  }catch(error){captureStatus('Foto verwerken mislukt: '+error.message,true);}
+  finally{URL.revokeObjectURL(url);}
+ };
+ img.onerror=()=>{
+  URL.revokeObjectURL(url);
+  captureStatus('Foto niet ondersteund. Probeer een JPEG of PNG (sommige HEIC-bestanden kunnen niet worden geopend).',true);
+ };
+ img.src=url;
 }
 function addEvents(){
  $('#roomToolbarBtn')?.addEventListener('click',openCapture);$('#roomCaptureOpen').addEventListener('click',openCapture);
  $('#roomClose').addEventListener('click',closeCapture);
  modal.addEventListener('click',e=>{if(e.target===modal)closeCapture();});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.classList.contains('hidden')){e.stopPropagation();closeCapture();}});
- $('#roomImageInput').addEventListener('change',e=>{uploadFile(e.target.files?.[0]);e.target.value='';});
+ $('#roomChoosePhoto').addEventListener('click',()=>$('#roomImageInput').click());
+ $('#roomTakePhoto').addEventListener('click',()=>$('#roomCameraInput').click());
+ for(const selector of ['#roomImageInput','#roomCameraInput']){
+  $(selector).addEventListener('change',e=>{const file=e.target.files?.[0];e.target.value='';uploadFile(file);});
+ }
+ $('#roomShow3d').addEventListener('click',()=>view('3d'));
+ $('#finishShow3d').addEventListener('click',()=>view('3d'));
  $('#roomResetCorners').addEventListener('click',()=>{patchRoom(r=>r.corners=[]);previewMode=false;drawPhoto();});
  $('#roomPhotoPreview').addEventListener('click',()=>{if(room().corners.length!==4){toast('Markeer eerst vier vloerhoeken.');return;}previewMode=!previewMode;drawPhoto();});
  $('#roomPhotoCanvas').addEventListener('pointerdown',e=>{

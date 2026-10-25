@@ -46,3 +46,53 @@
  .room-photo-dims{grid-template-columns:1fr 1fr}
  .finish-choice{min-height:56px}
 }
+
+/* v0.7.1 SketchUp-like room workspace: a persistent visual surface and live plan. */
+.room-workspace-mode{display:inline-block;margin:8px 4px;color:#46715b;font-size:11px;font-weight:750}
+.room-first-actions{display:grid;grid-template-columns:1.25fr 1fr;gap:8px;margin:11px 0}
+.room-first-actions .room-big-action{min-height:47px;margin:0;padding:10px 8px;font-size:12px}
+.room-big-action.secondary{background:#f7f9f6;color:#325a43}
+.room-mini-wrap{margin:10px 0 14px;padding:10px;background:#f7faf6;border:1px solid #dce8dc;border-radius:14px}
+.room-mini-top,.room-mini-bottom{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.room-mini-top{color:#305f44;font-size:12px;margin-bottom:7px}
+.room-mini-top small{color:#799086;font-size:10px}
+#roomMiniPlan{width:100%;height:auto;display:block;border-radius:9px;background:#f0f4ef}
+.room-mini-bottom{justify-content:flex-start;margin-top:9px;font-size:10px;color:#6c8173}
+.room-mini-bottom span{display:flex;align-items:center;gap:5px}
+.room-mini-bottom i{width:12px;height:12px;display:inline-block;border-radius:3px}
+.mini-legend-wall{background:#677c6e}.mini-legend-kitchen{background:#a67042}
+.room-photo-tools .room-file{display:inline-flex;justify-content:center;align-items:center;flex:1 1 150px}
+.room-camera{background:#edf6ee!important;color:#25543c!important;border-color:#a2c8af!important}
+.room-hidden-input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;left:-9999px!important}
+.room-capture-status{font-size:12px;font-weight:650;color:#345f48;background:#eff6ed;border:1px solid #d9e8d8;padding:10px 12px;border-radius:9px;line-height:1.4}
+.room-capture-status.warning{color:#8c522b;background:#fff2e4;border-color:#f1d3b4}
+@media(max-width:800px){
+ .mobile-bottom{grid-template-columns:repeat(5,minmax(0,1fr))}
+ .mobile-tab{font-size:9px;padding-left:0;padding-right:0}
+ body.room-editing .stage-area{
+    display:flex!important;
+    flex-direction:column;
+    position:sticky;
+    top:0;
+    z-index:12;
+    background:#f1f4ee;
+    padding:6px 9px 5px;
+    box-shadow:0 6px 18px #193d2720
+ }
+ body.room-editing .stage-area .stage{height:clamp(195px,32dvh,300px);min-height:195px;flex:none}
+ body.room-editing .stage-area .stats,body.room-editing .stage-area .stage-bottom{display:none}
+ body.room-editing .stage-toolbar{margin:0 2px 5px;gap:3px;flex-direction:row;flex-wrap:wrap;align-items:center}
+ body.room-editing .stage-toolbar h2{font-size:12px;margin:0}
+ body.room-editing .stage-toolbar .eyebrow{display:none}
+ body.room-editing .view-controls{width:auto;flex:1;max-width:100%;gap:1px}
+ body.room-editing .view-btn{font-size:10px;min-height:31px;padding:4px 5px}
+ body.room-editing .room-toolbar{min-height:31px!important;padding:4px 7px!important}
+ body.room-editing .room-workspace-mode{display:none}
+ body.room-editing .stage-area .draw-controls,body.room-editing .stage-area .draft-settings{display:none}
+ body.room-editing .stage-area .quick-tools{top:6px}
+ body.room-editing .stage-area .quick-button{min-height:33px;height:33px;padding:0 8px}
+ body.room-editing .stage-area .stage-tools{top:51px}
+ body.room-editing .sidebar{order:2}
+ .room-first-actions{grid-template-columns:1fr 1fr}
+ .room-first-actions .room-big-action{font-size:11px}
+}
