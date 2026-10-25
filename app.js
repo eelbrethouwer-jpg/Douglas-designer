@@ -14,7 +14,7 @@ const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
 const STORAGE='douglas-designer-v1'; // Stable key: never discard v0.1 projects
 const WELCOME_KEY='douglas-designer-welcome-v2';
-let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=M.demoProject();}
+let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=normalize(M.demoProject());}
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
@@ -83,6 +83,7 @@ function setSelected(type,id){
 }
 function switchPanel(name){activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
 function switchMobile(name){
+  if(name==='room'){mobileView='room';$$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));$('#stageArea').classList.add('hidden');$('#sidebar').classList.add('mobile-visible');$('#inspector').classList.remove('mobile-visible');$('#selectionStrip').classList.add('hidden');switchPanel('room');return;}
   if(name==='cutlist'){showCutlist();return;}
   mobileView=name;
   $$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));
@@ -478,13 +479,13 @@ document.addEventListener('click',e=>{
     case 'continueProject':hideWelcome();break;
     case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=normalize({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);toggleDrawMode(false);hideWelcome();switchMobile('design');toast('Nieuw basisontwerp gestart');}break;
     case 'newFreeProject':if(window.confirm('Leeg tekenvlak openen? Exporteer je huidige ontwerp eerst als je het wilt bewaren.')){
-      commit(()=>{project=M.freeProject();selected=null;});setSelected(null,null);
+      commit(()=>{project=normalize(M.freeProject());selected=null;});setSelected(null,null);
       hideWelcome();switchMobile('design');setView('front');toggleDrawMode(true);
       toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');
     }break;
     case 'drawTool':toggleDrawMode(true);break;
     case 'selectTool':toggleDrawMode(false);break;
-    case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=M.demoProject();selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
+    case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=normalize(M.demoProject());selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
     case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
@@ -498,7 +499,7 @@ document.addEventListener('click',e=>{
     case 'restoreSelectedFrame':if(selected?.type==='frame'){commit(()=>M.restoreFrameBeam(project,selected.id));toast('Framebalk hersteld naar standaardmaten');}break;
     case 'restoreAllFrames':commit(()=>{project.frameEdits={};selected=null;});toast('Automatische frameconstructie hersteld');break;
     case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
-    case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=M.demoProject();selected=null;});toast('Voorbeeldproject hersteld');}break;
+    case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=normalize(M.demoProject());selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
     case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
