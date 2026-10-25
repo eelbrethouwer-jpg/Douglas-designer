@@ -1,5 +1,7 @@
 # Douglas Designer — Bouwbare buitenkeukens ontwerpen
 
+> **Ontwikkeling & prioriteiten:** bekijk de actuele [ROADMAP.md](ROADMAP.md). Dit document is leidend voor de volgorde van toekomstige releases; de historische tekst hieronder beschrijft eerdere prototypestadia.
+
 **v0.4.0 releasekandidaat** · Floorplanner-geïnspireerde vrije tekenmodus, naast de bestaande module-editor.
 
 ## Vrij tekenen (nieuw in v0.4)
