@@ -85,9 +85,24 @@ function setRoomMove(enabled){roomMoveMode=!!enabled&&!!project.room?.enabled;
  if(roomMoveMode){toggleDrawMode(false);setView('top');if(window.innerWidth<=800)switchMobile('design');toast('Sleep de keuken in het bovenaanzicht. Tik op Gereed om te stoppen.');}
  return roomMoveMode;
 }
-function switchPanel(name){activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
+function switchPanel(name){
+ if(window.innerWidth<=800&&(name==='room'||name==='finishes')){
+   $('#stageArea').classList.remove('hidden');
+   $('#sidebar').classList.add('mobile-visible');
+   $('#inspector').classList.remove('mobile-visible');
+   $('#selectionStrip').classList.add('hidden');
+ }
+ activePanel=name;$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
 function switchMobile(name){
-  if(name==='room'){mobileView='room';$$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));$('#stageArea').classList.add('hidden');$('#sidebar').classList.add('mobile-visible');$('#inspector').classList.remove('mobile-visible');$('#selectionStrip').classList.add('hidden');switchPanel('room');return;}
+  if(name==='room'){
+    mobileView='room';
+    $('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));
+    $('#stageArea').classList.remove('hidden'); // Keep the actual model visible while editing room settings.
+    $('#sidebar').classList.add('mobile-visible');
+    $('#inspector').classList.remove('mobile-visible');
+    $('#selectionStrip').classList.add('hidden');
+    switchPanel('room');draw();return;
+  }
   if(name==='cutlist'){showCutlist();return;}
   mobileView=name;
   $$('.mobile-tab').forEach(b=>b.classList.toggle('active',b.dataset.mobile===name));
@@ -97,7 +112,7 @@ function switchMobile(name){
   if(name==='settings')switchPanel('settings');
   $('#inspector').classList.toggle('mobile-visible',name==='design'&&!!selected);
   $('#selectionStrip').classList.toggle('hidden',name!=='design'||!selected);
-  if(name==='design')draw();
+  if(name==='design'||name==='room')draw();
 }
 function addModule(kind){const type=M.TYPES[kind];if(!type||project.modules.length>=12){toast('Maximum 12 modules');return;}
   let newId;commit(()=>{newId=M.uid();project.modules.push({id:newId,kind,width:defaults[kind],name:type.label});});setSelected('module',newId);}
@@ -716,5 +731,5 @@ window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.6.0',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.7.1',{updateViaCache:'none'}).catch(()=>{});
 })();
