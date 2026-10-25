@@ -41,7 +41,8 @@ function initUI(){
  <label class="room-field">Deuren ${select('doorType',R.components.doors)}</label>
  <label class="room-field">Lades ${select('drawerType',R.components.drawers)}</label>
  <label class="room-field">Handgreep ${select('handle',R.components.handles)}</label>
- <p class="hint">66 catalogusvarianten: kleuren en generieke constructiekeuzes. Geen ongeverifieerde fabrikantmaten.</p>
+ <label class="room-field">Accessoire (catalogusreferentie) ${select('accessory',R.components.accessories)}</label>
+ <p class="hint">66 catalogusvarianten: kleuren en generieke constructiekeuzes. Geen ongeverifieerde fabrikantmaten. Accessoires zijn nog catalogusreferenties, geen plaatsbare 3D-objecten.</p>
  </section>`);
  const stage=$('.stage-toolbar .view-controls');
  if(stage)stage.insertAdjacentHTML('afterend','<button type="button" id="roomToolbarBtn" class="outline-btn room-toolbar" title="Ruimtefoto en 3D ruimte">📷 Ruimtefoto</button>');
@@ -85,7 +86,7 @@ function refresh(){
   if(document.activeElement!==el)el.value=value;
  });
  document.querySelectorAll('#panel-room [data-room-bool]').forEach(el=>el.checked=r[el.dataset.roomBool]);
- for(const k of ['doorType','drawerType','handle']){const el=$('#panel-finishes select[data-room="'+k+'"]');if(el)el.value=st[k];}
+ for(const k of ['doorType','drawerType','handle','accessory']){const el=$('#panel-finishes select[data-room="'+k+'"]');if(el)el.value=st[k];}
  const issues=R.warnings(get(),r);
  const warnings=$('#roomWarnings');warnings.textContent=issues.length?'⚠ '+issues.join(' · '):r.enabled?'✓ Keuken past binnen de opgegeven ruimte (geometrische controle).':'De ruimte staat uit.';
  warnings.classList.toggle('room-has-warning',issues.length>0);
