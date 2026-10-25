@@ -217,7 +217,7 @@ function shade(hex,mul){const r=rgb(hex).map(v=>Math.max(0,Math.min(255,Math.rou
 let scale=0, sceneCenter;
 function rotate(v){const x=v[0]-sceneCenter[0],y=v[1]-sceneCenter[1],z=v[2]-sceneCenter[2];const c=Math.cos(camera.yaw),s=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);const xx=c*x+s*z,zz=-s*x+c*z;return [xx,cp*y-sp*zz,sp*y+cp*zz];}
 function toScreen(v){const r=rotate(v),f=2000/(2000+r[2]);return {x:viewport.w/2+r[0]*scale*f,y:viewport.h*.55-r[1]*scale*f,d:r[2]};}
-function poly(coords,fill,owner,stroke='rgba(46,37,28,.18)'){const verts=coords.map(toScreen);shapes.push({verts,depth:verts.reduce((s,v)=>s+v.d,0)/verts.length,fill,stroke,owner});}
+function poly(coords,fill,owner,stroke='rgba(46,37,28,.18)'){const verts=coords.map(toScreen);shapes.push({verts,worldVerts:coords,depth:verts.reduce((s,v)=>s+v.d,0)/verts.length,fill,stroke,owner});}
 function box(x,y,z,w,h,d,color,owner,tileSize=Infinity){if(w<=0||h<=0||d<=0)return;
   const p=[[x,y,z],[x+w,y,z],[x+w,y+h,z],[x,y+h,z],[x,y,z+d],[x+w,y,z+d],[x+w,y+h,z+d],[x,y+h,z+d]];
   const faces=[[4,5,6,7],[1,5,6,2],[0,4,7,3],[0,1,5,4],[3,2,6,7],[0,1,2,3]];
@@ -343,7 +343,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   scale=fitting*camera.zoom;
   objects();shapes.sort((a,b)=>b.depth-a.depth);
   hitShapes=shapes.filter(s=>s.owner);
-  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr);
+  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale});
   if(!gpuRendered){
     drawGrid();
     for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
