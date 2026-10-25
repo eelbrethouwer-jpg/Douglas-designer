@@ -210,7 +210,8 @@ function startPhotoGesture(e){
  const point=photoPoint(e);if(!point)return;
  const existing=cornerDraft||room().corners;
  // An explicitly selected number has priority, even if the new location is near another marker.
- const nearest=selectedCorner>=0?selectedCorner:closestPhotoCorner(point,e.currentTarget,existing);
+ const explicitSelection=selectedCorner>=0;
+ const nearest=explicitSelection?selectedCorner:closestPhotoCorner(point,e.currentTarget,existing);
  const index=nearest>=0?nearest:existing.length;
  if(index>=4)return;
  selectedCorner=index;
@@ -218,7 +219,7 @@ function startPhotoGesture(e){
  if(index===cornerDraft.length)cornerDraft.push(point);
  else if(nearest<0)cornerDraft[index]=point;
  cornerGesture={pointerId:e.pointerId,index,initial:existing[index]?.slice()||null,
-   added:index===existing.length,point,changed:false};
+   added:index===existing.length,explicitSelection,point,changed:false};
  e.currentTarget.setPointerCapture?.(e.pointerId);
  e.preventDefault?.();
  drawPhotoNow();
@@ -236,7 +237,7 @@ function finishPhotoGesture(e,cancel=false){
  const gesture=cornerGesture;
  // Tap on a pre-existing handle selects it; the next tap elsewhere repositions it.
  const shouldSave=!cancel&&(gesture.added||gesture.changed||
-   (gesture.initial&&Math.hypot(gesture.point[0]-gesture.initial[0],gesture.point[1]-gesture.initial[1])>0.001));
+   (gesture.explicitSelection&&gesture.initial&&Math.hypot(gesture.point[0]-gesture.initial[0],gesture.point[1]-gesture.initial[1])>0.001));
  if(!cancel&&shouldSave){
   const point=photoPoint(e);
   if(point)cornerDraft[gesture.index]=point;
@@ -350,7 +351,7 @@ async function uploadFile(file){
    }
    if(data.length>1300000)throw Error('Afbeelding is na verkleinen nog te groot');
    patchRoom(r=>{r.photo=data;r.corners=[];});
-   previewMode=false;photoImage=null;photoSource='';
+   previewMode=false;photoImage=null;photoSource='';selectedCorner=-1;cornerDraft=null;cornerGesture=null;
    drawPhoto();
    if(isSaved()){
     captureStatus('✓ Foto toegevoegd en lokaal opgeslagen. Tik vier vloerpunten aan, of gebruik alleen de ruimtematen.');
