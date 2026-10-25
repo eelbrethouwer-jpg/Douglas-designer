@@ -146,8 +146,8 @@ test('after all four room floor points exist, a finger drag repositions a marker
  photoPointer(h,'pointerup',240,92);
  assert.ok(Math.abs(h.project().room.corners[1][0]-240/360)<.001);
  assert.ok(Math.abs(h.project().room.corners[1][1]-92/226)<.001);
- assert.deepEqual(h.project().room.corners[0],before[0]);
- assert.deepEqual(h.project().room.corners[2],before[2]);
+ assert.deepEqual(Array.from(h.project().room.corners[0]),before[0]);
+ assert.deepEqual(Array.from(h.project().room.corners[2]),before[2]);
  assert.equal(h.project().room.photo,photo);
  assert.match(h.nodes.get('#roomPhotoInstruction').textContent,/sleep een punt/i);
 });
@@ -157,11 +157,11 @@ test('tap a numbered handle and then another spot to reposition that same floor 
  for(const p of [[40,40],[290,40],[280,180],[55,185]])placeCorner(h,...p);
  const otherPoints=h.project().room.corners.map(p=>[...p]);
  placeCorner(h,55,185); // select existing point 4
- assert.deepEqual(h.project().room.corners[3],otherPoints[3]);
+ assert.deepEqual(Array.from(h.project().room.corners[3]),otherPoints[3]);
  assert.match(h.nodes.get('#roomPhotoInstruction').textContent,/Punt 4 gekozen/);
  placeCorner(h,140,138); // reposition selected point 4 with no continuous drag
  assert.ok(Math.abs(h.project().room.corners[3][0]-140/360)<.001);
- assert.deepEqual(h.project().room.corners[0],otherPoints[0]);
+ assert.deepEqual(Array.from(h.project().room.corners[0]),otherPoints[0]);
 });
 test('dedicated point-number buttons can choose a marker and a new tap changes its location',()=>{
  const h=studio();supplyPhoto(h);
@@ -181,11 +181,11 @@ test('drag cancelled by iOS pointercancel discards movement, and off-photo drop 
  photoPointer(h,'pointerdown',100,80);
  photoPointer(h,'pointermove',250,190);
  photoPointer(h,'pointercancel',250,190);
- assert.deepEqual(h.project().room.corners[0],previous);
+ assert.deepEqual(Array.from(h.project().room.corners[0]),previous);
  photoPointer(h,'pointerdown',100,80);
  photoPointer(h,'pointermove',900,-200);
  photoPointer(h,'pointerup',900,-200);
- assert.deepEqual(h.project().room.corners[0],[1,0]);
+ assert.deepEqual(Array.from(h.project().room.corners[0]),[1,0]);
 });
 test('photo preview remains guarded by four points and corner drag does not affect cutlist',()=>{
  const h=studio();const cut=M.boardPlan(h.project()).totalLength;
