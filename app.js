@@ -33,7 +33,7 @@ function syncSketchControls(){
 }
 let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=normalize(M.demoProject());}
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
-let undoStack=[],redoStack=[],toastTimer=null;
+let undoStack=[],redoStack=[],toastTimer=null,lastSaveOk=true;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
 const canvas=$('#scene'),ctx=canvas.getContext('2d');
 const gpuCanvas=$('#geometryScene');
@@ -82,7 +82,16 @@ function handleAt(px,py){
 }
 
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
-function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(project));$('#saveStatus').textContent='● Lokaal opgeslagen';}catch(e){$('#saveStatus').textContent='● Opslag niet beschikbaar';}}
+function persist(){
+ try{
+  localStorage.setItem(STORAGE,JSON.stringify(project));lastSaveOk=true;
+  $('#saveStatus').textContent='● Lokaal opgeslagen';
+ }catch(e){
+  lastSaveOk=false;
+  $('#saveStatus').textContent='● Opslag niet beschikbaar';
+  toast('Opslag is vol of geblokkeerd. Exporteer het project als JSON-back-up.');
+ }
+}
 function commit(fn){const before=JSON.stringify(project);fn(project);project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
 function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);return null;}
@@ -415,7 +424,8 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,viewport.w,viewport.h);
   const roomView=project.room?.enabled;
   const bounds=roomView?project.room:project;
-  cameraDistance=roomView?Math.max(2000,Math.hypot(bounds.width,bounds.height,bounds.depth)*1.45):2000;
+  cameraDistance=roomView?Math.max(2000,Math.hypot(bounds.width,bounds.height,bounds.depth)*1.45):
+    sketchSettings.visible?Math.max(4000,Math.hypot(project.width+1600,project.height+800,project.depth+1600)*1.4):2000;
   sceneCenter=[bounds.width/2,bounds.height/2,bounds.depth/2];
   const fitting=Math.min(viewport.w/(bounds.width*1.35+bounds.depth*.40),viewport.h/(bounds.height*1.5+bounds.depth*.64));
   scale=fitting*camera.zoom;
@@ -767,7 +777,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camer
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
 persist();updateDraftControls();syncSketchControls();render();
-window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove});
+window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove,isSaved:()=>lastSaveOk});
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
