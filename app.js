@@ -214,10 +214,10 @@ function renderInspector(){
 let RGB={wood:'#b8824f',end:'#a26c42',highlight:'#d4a16b',top:'#dcb889',post:'#bd8653',panel:'#ad7548',fridge:'#38474f',steel:'#78848a',kamado:'#354740',ground:'#edf0e9'};
 function rgb(hex){const h=hex.replace('#','');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}
 function shade(hex,mul){const r=rgb(hex).map(v=>Math.max(0,Math.min(255,Math.round(v*mul))));return `rgb(${r.join(',')})`;}
-let scale=0, sceneCenter;
+let scale=0, sceneCenter, cameraDistance=2000;
 function rotate(v){const x=v[0]-sceneCenter[0],y=v[1]-sceneCenter[1],z=v[2]-sceneCenter[2];const c=Math.cos(camera.yaw),s=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);const xx=c*x+s*z,zz=-s*x+c*z;return [xx,cp*y-sp*zz,sp*y+cp*zz];}
 let roomGeometryMode=false;
-function toScreenRaw(v){const r=rotate(v),f=2000/(2000+r[2]);return {x:viewport.w/2+r[0]*scale*f+camera.panX,y:viewport.h*.55-r[1]*scale*f+camera.panY,d:r[2]};}
+function toScreenRaw(v){const r=rotate(v),f=cameraDistance/(cameraDistance+r[2]);return {x:viewport.w/2+r[0]*scale*f+camera.panX,y:viewport.h*.55-r[1]*scale*f+camera.panY,d:r[2]};}
 function worldKitchen(v){return R.transformKitchen(v,project,project.room);}
 function toScreen(v){return toScreenRaw(worldKitchen(v));}
 function poly(coords,fill,owner,stroke='rgba(46,37,28,.18)'){
@@ -368,12 +368,13 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,viewport.w,viewport.h);
   const roomView=project.room?.enabled;
   const bounds=roomView?project.room:project;
+  cameraDistance=roomView?Math.max(2000,Math.hypot(bounds.width,bounds.height,bounds.depth)*1.45):2000;
   sceneCenter=[bounds.width/2,bounds.height/2,bounds.depth/2];
   const fitting=Math.min(viewport.w/(bounds.width*1.35+bounds.depth*.40),viewport.h/(bounds.height*1.5+bounds.depth*.64));
   scale=fitting*camera.zoom;
   objects();shapes.sort((a,b)=>b.depth-a.depth);
   hitShapes=shapes.filter(s=>s.owner);
-  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY});
+  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY,eye:cameraDistance});
   if(!gpuRendered){
     drawGrid();
     for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
