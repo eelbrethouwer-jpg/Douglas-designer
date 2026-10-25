@@ -98,6 +98,35 @@
     }
     return cuts;
   }
+  // Geometry-only fit: use the actual face-to-face gap between TWO existing
+  // supports, never a guessed stock size. The transverse beam cross-section
+  // must overlap both supports. This does not validate joint strength.
+  function fitBeamBetween(p, beam) {
+    if (!beam || !['x','y','z'].includes(beam.axis)) return null;
+    const axis=beam.axis, long={x:['x','w'],y:['y','h'],z:['z','d']}[axis];
+    const transverse={x:[['y','h'],['z','d']],y:[['x','w'],['z','d']],z:[['x','w'],['y','h']]}[axis];
+    const target=beamBox(beam);
+    const overlapping=(a,b,key,len)=>Math.min(a[key]+a[len],b[key]+b[len])-Math.max(a[key],b[key])>5;
+    const supports=allBeams(p).filter(b=>b.id!==beam.id).map(beamBox)
+      .filter(b=>transverse.every(([key,len])=>overlapping(target,b,key,len)))
+      .map(b=>({start:b[long[0]],end:b[long[0]]+b[long[1]]}))
+      .sort((a,b)=>a.start-b.start||a.end-b.end);
+    if(supports.length<2)return null;
+    const occupied=[];
+    for(const box of supports){const last=occupied[occupied.length-1];
+      if(last&&box.start<=last.end)last.end=Math.max(last.end,box.end);
+      else occupied.push({...box});
+    }
+    const center=beam[axis]+beam.length/2;
+    const gaps=[];
+    for(let i=0;i<occupied.length-1;i++){
+      const start=occupied[i].end,end=occupied[i+1].start,length=Math.round(end-start);
+      if(length>=50&&length<=6500&&center>=start-35&&center<=end+35)
+        gaps.push({axis,start:Math.round(start),end:Math.round(end),length,distance:Math.abs(center-(start+end)/2)});
+    }
+    gaps.sort((a,b)=>a.distance-b.distance);
+    return gaps[0]||null;
+  }
   function allBeams(p){return [...framePieces(p),...p.beams.map(b=>({...b,group:'Losse balken'}))];}
   function boardPlan(p){
     const cuts=allBeams(p).map(b=>({name:b.name,length:b.length,group:b.group}));
@@ -134,5 +163,5 @@
     if(boardPlan(p).impossible.length)result.push('Minstens één balk is langer dan de gekozen handelslengte.');
     return result;
   }
-  return {TYPES,uid,clamp,demoProject,normalizeProject,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,boardPlan,warnings};
+  return {TYPES,uid,clamp,demoProject,normalizeProject,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

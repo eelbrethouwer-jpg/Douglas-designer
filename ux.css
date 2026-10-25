@@ -37,3 +37,22 @@
 
 .selection-strip{display:none}
 @media(max-width:800px){.selection-strip:not(.hidden){position:fixed;bottom:calc(65px + env(safe-area-inset-bottom));z-index:20;left:10px;right:10px;min-height:51px;border:1px solid #d4e1d6;border-radius:12px;background:#fff;box-shadow:0 7px 28px #18371f26;display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;color:#2c4838;font-weight:700;font-size:12px}.selection-strip span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.selection-strip button{border:0;background:#2b694e;color:white;border-radius:9px;padding:10px 14px;font-weight:800;white-space:nowrap}}
+
+/* v0.3 — oriented timber palette and point-and-place cursor */
+.beam-palette{display:grid;gap:9px;margin-top:12px}
+.beam-preset{display:flex;align-items:center;gap:13px;text-align:left;width:100%;min-height:68px;padding:10px 12px;background:#fafaf7;border:1px solid #e3e7dc;border-radius:13px;color:#30443a;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.beam-preset:active{cursor:grabbing}.beam-preset:hover,.beam-preset.armed{border-color:#568971;background:#edf5ee;box-shadow:0 2px 10px #345b3d19}.beam-preset>span:nth-child(2){flex:1;min-width:0}.beam-preset strong,.beam-preset small{display:block}.beam-preset strong{font-size:12px}.beam-preset small{font-size:10px;margin-top:5px;color:#728078}.beam-grip{font-size:20px;color:#a7b2a9}
+.beam-preset-graphic{width:48px;height:43px;flex:none;border-radius:9px;background:#efe5d7;position:relative}.beam-preset-graphic:before{content:'';position:absolute;background:linear-gradient(125deg,#dfb681,#a97140);border:1px solid #ad8156;box-shadow:3px 3px 0 #9c6a3a;border-radius:3px}.beam-horizontal:before{width:36px;height:9px;left:5px;top:15px}.beam-vertical:before{width:9px;height:32px;left:18px;top:4px}.beam-depth:before{width:30px;height:10px;left:8px;top:14px;transform:rotate(-35deg)}
+.placement-notice{position:absolute;z-index:8;top:63px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #b5d2c2;background:#eaf5ed;border-radius:11px;box-shadow:0 10px 25px #233b2e1c;max-width:calc(100% - 18px);font-size:12px;color:#1b4934;pointer-events:auto}.placement-notice button{border:0;background:#d7eadc;border-radius:6px;width:25px;height:25px;flex:none;color:#275341}
+.palette-drag-ghost{position:fixed;z-index:120;pointer-events:none;padding:10px 15px;border:1px solid #84b296;border-radius:12px;background:#eaf6e9;box-shadow:0 6px 22px #102e1c30;color:#234535;font-weight:750;font-size:12px;transform:translate(14px,-55%);white-space:nowrap}
+#scene.placing{cursor:crosshair!important}
+@media (max-width:800px){.placement-notice{top:70px;font-size:11px}.beam-palette{grid-template-columns:1fr}.view-controls{flex-wrap:wrap;justify-content:flex-end}.view-btn{padding:8px 7px;font-size:10px}}
+
+/* During a mobile pointer drag, reveal a live canvas above the parts palette
+   without hiding the touched palette tile; touch pointer capture stays valid. */
+@media(max-width:800px){
+ body.beam-mobile-drag #stageArea{display:flex!important;position:fixed;z-index:14;top:65px;left:0;right:0;bottom:70px;padding:8px;background:#eef2eb;box-shadow:0 9px 26px #0a2a1938}
+ body.beam-mobile-drag #stageArea .stage{height:calc(100% - 85px);min-height:0;flex:1}
+ body.beam-mobile-drag #stageArea .stats,body.beam-mobile-drag #stageArea .stage-bottom{display:none}
+ body.beam-mobile-drag #stageArea .stage-toolbar{margin:0 4px 6px}
+}

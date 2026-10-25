@@ -21,3 +21,15 @@ test('add module updates width, counts, and undo restores initial width',()=>{
  listener({target:button});assert.match(a.nodes.get('#statWidth').innerHTML,/2\.445/);assert.match(a.nodes.get('#moduleCount').textContent,/4/);
  const undo={dataset:{},id:'undoBtn',closest(selector){return selector==='button'?this:null;}};listener({target:undo});assert.match(a.nodes.get('#statWidth').innerHTML,/1\.875/);
 });
+test('tapping a palette type arms placement and does not insert a centered beam',()=>{
+ const a=makeApp(),click=a.listeners.get('document:click');
+ const tile={dataset:{beamType:'x'},id:'',closest(sel){return sel==='button'?this:null;}};
+ click({target:tile});
+ assert.equal(JSON.parse(a.stored()).beams.length,0,'type selection must not insert a beam');
+ const down=a.listeners.get('#scene:pointerdown'),up=a.listeners.get('#scene:pointerup');
+ down({pointerId:1,offsetX:360,offsetY:200});
+ up({pointerId:1,offsetX:360,offsetY:200});
+ const p=JSON.parse(a.stored());assert.equal(p.beams.length,1);
+ assert.equal(p.beams[0].axis,'x');assert(p.beams[0].length>=50);
+ assert(p.beams[0].x>=0 && p.beams[0].x<p.width);
+});
