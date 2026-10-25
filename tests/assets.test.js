@@ -16,17 +16,17 @@ test('every local script and stylesheet referenced in HTML exists',()=>{
 });
 test('all runtime scripts are in correct dependency order',()=>{
  const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1].split('?')[0]);
- assert.deepEqual(scripts,['room-space.js','model.js','drafting.js','render3d.js','room-studio.js','app.js']);
+ assert.deepEqual(scripts,['room-space.js','sketch-grid.js','model.js','drafting.js','render3d.js','room-studio.js','app.js']);
 });
 test('PWA caches the same versioned files used by the page',()=>{
  const cached=[...service.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
  const names=[...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m=>m[1]).filter(ownUrl);
  for(const name of names)assert.ok(cached.includes(name),'PWA must cache exact versioned asset: '+name);
- assert.match(service,/douglas-designer-v0\.7\.1/);
+ assert.match(service,/douglas-designer-v0\.7\.2/);
 });
 test('user-facing version matches the release candidate and provides editor controls',()=>{
- assert.match(html,/v0\.7\.1 RC/);
- for(const id of ['gridSize','magnetToggle','drawTool','selectTool','shortcutHelp','geometryScene','scene'])
+ assert.match(html,/v0\.7\.2 RC/);
+ for(const id of ['gridSize','magnetToggle','drawTool','selectTool','shortcutHelp','geometryScene','scene','sketchGridVisible','sketchGridStep','sketchAxes','sketchWallGrid','sketchParallel'])
   assert.match(html,new RegExp('id="'+id+'"'));
 });
 
@@ -36,4 +36,11 @@ test('SketchUp-style room workspace keeps mobile stage and makes materials reach
  assert.match(app,/\$\('#stageArea'\)\.classList\.remove\('hidden'\)/);
  assert.match(html,/data-mobile="finishes"/);
  assert.match(html,/id="roomWorkspaceMode"/);
+});
+
+test('Sketch Studio raster, axis and projection controls are wired into the drawing engine',()=>{
+ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+ assert.match(app,/G\.mesh\(project,project\.room,sketchSettings\)/);
+ assert.match(app,/parallel:sketchSettings\.parallel/);
+ assert.match(app,/fn\(project\)/,'mutation callback receives live project reference');
 });

@@ -2,10 +2,20 @@
 
 Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-werkwijze, interactieve 3D-controle en een gekoppelde zaaglijst. De interface is geïnspireerd op de eenvoudige ontwerpflow van Floorplanner, maar gespecialiseerd in maatwerk houten constructies.
 
-> **Status:** ontwikkelfase, v0.6.0 Studio **releasekandidaat**. Niet alle roadmapfuncties zijn gebouwd of getest op een fysieke iPhone. Op GitHub Pages staat uitsluitend wat in de \`main\`-branch is samengevoegd en succesvol gedeployed.
+> **Status:** ontwikkelfase. Op `main` staan v0.7.0 en v0.7.1; v0.7.2 is een aparte Sketch Studio-releasekandidaat. GitHub Actions zijn groen maar een fysieke iPhone-/desktopacceptatie staat nog open. GitHub Pages publiceert alleen samengevoegde wijzigingen op `main`.
 
 
-## v0.7.0 Room Studio — aparte releasekandidaat
+## v0.7.2 Sketch Studio Foundation — releasekandidaat
+
+Op de branch `feature/v0.7.2-sketch-grid-foundation` staat [concept-PR #13](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/13).
+
+**P0-bugfix:** de centrale app-projectmutatie geeft nu het actieve project aan de foto-, ruimte- en materiaal-UI door. Daardoor slaan die acties wijzigingen op in de werkelijke app-state; voorheen verwachtten ze een argument dat niet geleverd werd.
+
+**Nieuw:** 3D-grondraster en raster op de binnenwanden, opvallende rode breedte-/groene diepte-/blauwe hoogte-as, rastermaat 50/100/250/500 mm, assen/raster/wandraster aan-uit, perspectief/parallelle projectie. Het canvas krijgt een rustige grijze achtergrond. Oude frames/zaaglijsten blijven ongewijzigd.
+
+Gedetailleerde scope, grenzen en acceptatiecriteria: [Sketch Studio specificatie](SKETCH_STUDIO_SPEC.md) en [Release notes v0.7.2](RELEASE_NOTES_v0.7.2.md). Visuele Chrome/Safari-acceptatie is nodig voordat dit een publieke release is.
+
+## v0.7.0 Room Studio — historie
 
 Op de branch `feature/v0.7.0-room-studio` ([concept-PR #10](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/10)) wordt een eerste **foto-ondersteunde 3D-ruimteworkflow** ontwikkeld. Dit is **niet** de publieke versie op GitHub Pages.
 

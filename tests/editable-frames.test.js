@@ -1,3 +1,4 @@
+const SketchGrid=require('../sketch-grid.js');
 const Room=require('../room-space.js');
 const Draft=require('../drafting.js');
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
@@ -48,7 +49,7 @@ function harness(){
  const ctx={beginPath(){},moveTo(){},lineTo(){},stroke(){},fill(){},arc(x,y,r){if(r===9)handles.push({x,y})},roundRect(){},clearRect(){},setTransform(){},fillText(){},save(){},restore(){},closePath(){},measureText(t){return {width:String(t).length*6}}};
  const el=id=>{if(!nodes.has(id))nodes.set(id,{id,dataset:{},style:{},innerHTML:'',textContent:'',value:'',checked:false,firstChild:{textContent:''},width:0,height:0,classList:{add(){},remove(){},toggle(){}},setAttribute(){},getContext(){return ctx},getBoundingClientRect(){return {width:800,height:520,left:0,top:0,right:800,bottom:520}},addEventListener:(e,cb)=>events.set(id+':'+e,cb),setPointerCapture(){},scrollIntoView(){},click(){},toBlob(cb){cb({})}});return nodes.get(id)};
  const doc={querySelector:el,querySelectorAll:()=>[],addEventListener:(e,cb)=>events.set('document:'+e,cb),activeElement:{tagName:'BODY'},body:{classList:{add(){},remove(){}}},createElement:()=>el('created')};
- const win={DouglasModel:M,DouglasRoom:Room,DouglasDrafting:Draft,innerWidth:1400,devicePixelRatio:1,addEventListener:(e,cb)=>events.set('window:'+e,cb),confirm:()=>true,print(){}};
+ const win={DouglasModel:M,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1400,devicePixelRatio:1,addEventListener:(e,cb)=>events.set('window:'+e,cb),confirm:()=>true,print(){}};
  const ctxVM={window:win,document:doc,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},navigator:{},location:{protocol:'file:'},console,Map,Date,Intl,Math,JSON,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob'},revokeObjectURL(){}},confirm:()=>true};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),ctxVM,{timeout:10000});
  const click=id=>events.get('document:click')({target:{id,dataset:{},closest(sel){return sel==='button'?this:null;}}});

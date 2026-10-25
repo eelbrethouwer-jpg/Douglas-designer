@@ -4,7 +4,7 @@
 const R=root.DouglasRoom;
 const $=(q,el=document)=>el.querySelector(q);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let get,mutate,redraw,view,toast,moveKitchen,modal,photoImage,photoSource='',previewMode=false,moveActive=false;
+let get,mutate,redraw,view,toast,moveKitchen,isSaved=()=>true,modal,photoImage,photoSource='',previewMode=false,moveActive=false;
 const dims=[['width','Breedte ruimte'],['depth','Diepte ruimte'],['height','Hoogte ruimte']];
 function room(){return get().room;}
 function style(){return get().style;}
@@ -235,8 +235,12 @@ async function uploadFile(file){
    patchRoom(r=>{r.photo=data;r.corners=[];});
    previewMode=false;photoImage=null;photoSource='';
    drawPhoto();
-   captureStatus('✓ Foto toegevoegd. Tik nu vier punten op de vloer, of vul alleen de ruimtematen in.');
-   toast('Foto is toegevoegd');
+   if(isSaved()){
+    captureStatus('✓ Foto toegevoegd en lokaal opgeslagen. Tik vier vloerpunten aan, of gebruik alleen de ruimtematen.');
+    toast('Foto toegevoegd en opgeslagen');
+   }else{
+    captureStatus('⚠ De foto is geladen maar kon niet worden opgeslagen. Exporteer het project als JSON-back-up.',true);
+   }
   }catch(error){captureStatus('Foto verwerken mislukt: '+error.message,true);}
   finally{URL.revokeObjectURL(url);}
  };
@@ -282,6 +286,6 @@ function addEvents(){
  $('#roomAgainstBack').addEventListener('click',()=>patchRoom((r,p)=>{const o=R.orientation(p,r);r.placement.z=r.depth-o.depth-100;}));
  document.addEventListener('click',e=>{const b=e.target.closest('[data-finish]');if(b)setColor(b.dataset.finish,b.dataset.finishId);});
 }
-function mount(api){get=api.getProject;mutate=api.commit;redraw=api.render;view=api.setView;toast=api.toast;moveKitchen=api.setRoomMove;initUI();refresh();}
+function mount(api){get=api.getProject;mutate=api.commit;redraw=api.render;view=api.setView;toast=api.toast;moveKitchen=api.setRoomMove;isSaved=api.isSaved||(()=>true);initUI();refresh();}
 root.DouglasRoomStudio={mount,refresh};
 })(typeof globalThis!=='undefined'?globalThis:this);

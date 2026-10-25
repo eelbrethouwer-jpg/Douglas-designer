@@ -99,3 +99,18 @@ test('depth picking allows a room-specific eye distance and preserves nearest su
  const a=quad(-350,null),b=quad(2500,{type:'beam',id:'behind'});
  assert.equal(R.pick([a,b],50,50,12000),null);
 });
+
+test('parallel camera projection has no depth-dependent shrinkage',()=>{
+ const camera={yaw:0,pitch:0},viewport={w:800,h:500},center=[0,0,0];
+ const near=R.projectWorld([500,0,-400],center,camera,viewport,1,2000,true);
+ const far=R.projectWorld([500,0,400],center,camera,viewport,1,2000,true);
+ assert.equal(near.x,far.x);
+ const nearP=R.projectWorld([500,0,-400],center,camera,viewport,1,2000,false);
+ const farP=R.projectWorld([500,0,400],center,camera,viewport,1,2000,false);
+ assert.notEqual(nearP.x,farP.x);
+});
+test('parallel mode samples linear screen-space depth and preserves front-face occlusion',()=>{
+ const a=quad(-150,null),b=quad(1000,{type:'module',id:'behind'});
+ assert.equal(R.pick([b,a],50,50,2000,true),null);
+ assert.match(R.VERTEX_SHADER,/u_parallel/);
+});

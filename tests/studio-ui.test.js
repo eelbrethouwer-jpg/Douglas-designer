@@ -1,3 +1,4 @@
+const SketchGrid=require('../sketch-grid.js');
 const Room=require('../room-space.js');
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const M=require('../model.js'),D=require('../drafting.js');
@@ -6,7 +7,7 @@ function start(){
  const ctx={beginPath(){},moveTo(){},lineTo(){},stroke(){},fill(){},arc(){},roundRect(){},clearRect(){},setTransform(){},fillText(){},save(){},restore(){},closePath(){},measureText(t){return {width:String(t).length*6}}};
  const node=id=>{if(!nodes.has(id))nodes.set(id,{id,dataset:{},style:{},innerHTML:'',textContent:'',value:'5',checked:false,firstChild:{textContent:''},width:0,height:0,classList:{add(){},remove(){},toggle(){return false}},setAttribute(){},getContext(){return ctx},getBoundingClientRect(){return {width:900,height:550,left:0,top:0,right:900,bottom:550}},addEventListener(n,f){events.set(id+':'+n,f)},setPointerCapture(){},scrollIntoView(){},click(){}});return nodes.get(id)};
  const document={querySelector:node,querySelectorAll(){return []},addEventListener(n,f){events.set('document:'+n,f)},activeElement:{tagName:'BODY'},body:{classList:{add(){},remove(){}}},createElement(){return node('new')}};
- const window={DouglasModel:M,DouglasRoom:Room,DouglasDrafting:D,innerWidth:1440,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},print(){},confirm(){return true}};
+ const window={DouglasModel:M,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:D,DouglasRoomStudio:{mount(api){this.api=api},refresh(){}},innerWidth:1440,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},print(){},confirm(){return true}};
  const context={window,document,localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},navigator:{},location:{protocol:'file:'},Intl,Map,Math,JSON,Date,console,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}},confirm(){return true}};
  const src=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
  const probe=src.replace(/\}\)\(\);\s*$/,String.raw`window.__test={setView,toScreen,getProject:()=>project,setRoomMove,get camera(){return camera},get mode(){return drawMode},get grid(){return gridSize},get magnet(){return magnetEnabled}};})();`);
@@ -14,7 +15,7 @@ function start(){
  vm.runInNewContext(probe,context,{timeout:10000});
  const click=id=>events.get('document:click')({target:{id,dataset:{},closest(sel){return sel==='button'?this:null;}}});
  const pt=(x,y)=>({pointerId:1,offsetX:x,offsetY:y,clientX:x,clientY:y});
- return {events,nodes,storage,api:window.__test,click,pt};
+ return {events,nodes,storage,api:window.__test,room:window.DouglasRoomStudio.api,click,pt};
 }
 test('studio initializes drafting precision and direct controls',()=>{
  const h=start();
@@ -88,4 +89,35 @@ test('SketchUp style Shift-drag pans the live 3D view without changing geometry'
  h.events.get('#scene:pointerup')(next);
  assert.equal(h.api.camera.panX-before,57);
  assert.equal(h.api.camera.panY,38);
+});
+
+test('real app commit passes its live project to room photo and material callbacks',()=>{
+ const h=start(),before=M.boardPlan(h.api.getProject()).totalLength;
+ h.room.commit(p=>{
+   p.room.width=5800;
+   p.room.enabled=true;
+   p.room.photo='data:image/jpeg;base64,AQ==';
+   p.style=Room.normalizeStyle({...p.style,top:'top-2',wood:'wood-3'});
+ });
+ const saved=JSON.parse(h.storage.get('douglas-designer-v1'));
+ assert.equal(saved.room.width,5800);
+ assert.equal(saved.room.enabled,true);
+ assert.equal(saved.style.top,'top-2');
+ assert.equal(saved.room.photo,'data:image/jpeg;base64,AQ==');
+ assert.equal(M.boardPlan(saved).totalLength,before);
+ h.click('undoBtn');assert.equal(h.api.getProject().room.enabled,false);
+ h.click('redoBtn');assert.equal(h.api.getProject().room.width,5800);
+});
+test('Sketch Studio grid controls persist and perspective/parallel changes on-screen projection',()=>{
+ const h=start(),before=h.api.toScreen([0,0,0]);
+ h.events.get('#sketchParallel:click')();
+ const after=h.api.toScreen([0,0,0]);
+ assert.notEqual(before.x,after.x);
+ assert.match(h.nodes.get('#sketchParallel').textContent,/Parallel/);
+ h.events.get('#sketchGridStep:change')({target:{value:'50'}});
+ h.events.get('#sketchAxes:change')({target:{checked:false}});
+ const settings=JSON.parse(h.storage.get('douglas-designer-sketch-grid-v1'));
+ assert.equal(settings.step,50);
+ assert.equal(settings.axes,false);
+ assert.equal(settings.parallel,true);
 });
