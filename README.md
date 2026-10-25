@@ -2,19 +2,22 @@
 
 Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-werkwijze, interactieve 3D-controle en een gekoppelde zaaglijst. De interface is geïnspireerd op de eenvoudige ontwerpflow van Floorplanner, maar gespecialiseerd in maatwerk houten constructies.
 
-> **Status:** ontwikkelfase, v0.6.0 Studio **releasekandidaat**. Niet alle roadmapfuncties zijn gebouwd of getest op een fysieke iPhone. Op GitHub Pages staat uitsluitend wat in de \`main\`-branch is samengevoegd en succesvol gedeployed.
+> **Status op 25 oktober 2026:** v0.7.0 is op `main` samengevoegd en als GitHub-release gepubliceerd. Dit bevestigt de code en CI-uitrol, **niet** de visuele kwaliteit op een echte iPhone. De v0.7.1-fixes staan in een nog niet samengevoegde draft-PR met falende tests.
 
 
-## v0.7.0 Room Studio — aparte releasekandidaat
+## v0.7.0 Room Studio — gepubliceerd, acceptatie nog open
 
-Op de branch `feature/v0.7.0-room-studio` ([concept-PR #10](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/10)) wordt een eerste **foto-ondersteunde 3D-ruimteworkflow** ontwikkeld. Dit is **niet** de publieke versie op GitHub Pages.
+De wijzigingen voor de eerste foto-ondersteunde ruimteworkflow zijn [samengevoegd via PR #10](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/10); [v0.7.0](https://github.com/eelbrethouwer-jpg/Douglas-designer/releases/tag/v0.7.0) is op 25 oktober 2026 gepubliceerd.
 
-Nieuw in deze kandidaat: foto toevoegen en vier vloerhoeken markeren, echte ruimtematen invullen, vloer en wanden in 3D tonen, complete keuken draaien en plaatsen, waarschuwingen bij afmetingen en een ingebouwde catalogus met 66 generieke varianten. Fotopreview is indicatief. Voor hoogwaardige echte PBR-materialen, fabrikantmodellen, automatische fotoherkenning en verdere bouwkundige controles zijn nog afzonderlijke ontwikkelstappen nodig.
+De code bevat ruimtefoto, vier vloerhoeken, handmatige kamerafmetingen, eenvoudige 3D-ruimte, keukenplaatsing en generieke kleur-/frontkeuzes. De fotoprojectie is schematisch en niet maatvast. Betrouwbare touch-, camerahoek- en end-to-end-acceptatie zijn nog niet aangetoond.
 
-Zie [release notes v0.7.0](RELEASE_NOTES_v0.7.0.md) voor de gebouwde functies, beperkingen en acceptatiecriteria. **Pas na groene CI én fysieke Safari-/desktoptest mergen.**
+**Volgende kandidaat:** [v0.7.1 / PR #11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11) richt zich op een zichtbaar Room-canvas, live plattegrond, foto-upload en materiaalinteractie. Deze PR heeft momenteel rode CI en is **niet** gepubliceerd. De [kwaliteitscriteria](QUALITY_GATES.md) blokkeren samenvoegen totdat het is opgelost.
 
 ## Documentatie
 
+- [Projectvisie en ontwerpafspraken](PROJECT_VISION.md)
+- [Technische architectuur](ARCHITECTURE.md)
+- [Kwaliteitscontrole en releasevoorwaarden](QUALITY_GATES.md)
 - [Roadmap en releasevolgorde](ROADMAP.md)
 - [Product- en interactiespecificatie](PRODUCT_SPEC.md)
 - [Release notes v0.6.0](RELEASE_NOTES_v0.6.0.md)
@@ -24,11 +27,11 @@ Zie [release notes v0.7.0](RELEASE_NOTES_v0.7.0.md) voor de gebouwde functies, b
 
 Publieke versie: **https://eelbrethouwer-jpg.github.io/Douglas-designer/**
 
-De releasekandidaat staat in [PR #7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7); hij bouwt voort op [PR #6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6). Die branches zijn niet automatisch publieke releases.
+De eerdere Studio-PR's [#6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6) en [#7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7) zijn inmiddels in `main` verwerkt. Voor een actuele status raadpleeg [de roadmap](ROADMAP.md) en [open PR's](https://github.com/eelbrethouwer-jpg/Douglas-designer/pulls).
 
 Ook lokaal te draaien door de map op een statische webserver te hosten. Je kunt dan \`index.html\` openen; geen serverdatabase of account nodig. Tijdens ontwikkeling zijn \`node\` en een moderne browser voldoende.
 
-## Wat werkt in de Studio-releasekandidaat
+## Functionaliteit in `main` (code aangetroffen; echte UX-acceptatie staat apart)
 
 - Basis- en voorbeeldkeuken met modules: laden, deuren, koelkast, kamado en open vak.
 - **Vrij beginnen op een leeg tekenvlak** zonder geforceerd startframe.
