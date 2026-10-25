@@ -38,6 +38,7 @@ function normalizeStyle(raw){const v=raw&&typeof raw==='object'?raw:{};const res
  res.doorType=components.doors.includes(v.doorType)?v.doorType:components.doors[2];
  res.drawerType=components.drawers.includes(v.drawerType)?v.drawerType:components.drawers[2];
  res.handle=components.handles.includes(v.handle)?v.handle:components.handles[0];
+ res.accessory=components.accessories.includes(v.accessory)?v.accessory:components.accessories[0];
  return res;
 }
 function colorOf(kind,id){return (palettes[kind]||[]).find(x=>x.id===id)?.color||palettes[kind]?.[0]?.color||'#777777';}
