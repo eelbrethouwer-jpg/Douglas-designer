@@ -43,3 +43,48 @@ test('unsupported GPU remains an intentional Canvas2D fallback',()=>{
  assert.equal(R.create(null).ready,false);
  assert.equal(R.create({getContext(){return {}}}).ready,false);
 });
+
+
+test('renderer sets world-space camera uniforms and writes depth-tested geometry',()=>{
+ const seen={calls:[],uniforms:[]};
+ const gl={VERTEX_SHADER:1,FRAGMENT_SHADER:2,COMPILE_STATUS:3,LINK_STATUS:4,ARRAY_BUFFER:5,
+  DEPTH_TEST:6,LESS:7,BLEND:8,CULL_FACE:9,COLOR_BUFFER_BIT:16,DEPTH_BUFFER_BIT:32,
+  DYNAMIC_DRAW:10,FLOAT:11,TRIANGLES:12,
+  createShader(){return {}},shaderSource(){},compileShader(){},getShaderParameter(){return true},
+  createProgram(){return {}},attachShader(){},linkProgram(){},getProgramParameter(){return true},
+  deleteShader(){},getAttribLocation(_,name){return name==='a_pos'?0:1},
+  createBuffer(){return {}},getUniformLocation(_,name){return name},
+  viewport(){},clearColor(){},clearDepth(){},enable(which){seen.calls.push(['enable',which])},
+  depthFunc(which){seen.calls.push(['depth',which])},disable(){},clear(){},useProgram(){},
+  uniform2f(...args){seen.uniforms.push(args)},uniform3f(...args){seen.uniforms.push(args)},
+  uniform1f(...args){seen.uniforms.push(args)},bindBuffer(){},
+  bufferData(_,buffer){seen.bytes=buffer.byteLength},
+  enableVertexAttribArray(){},vertexAttribPointer(){},
+  drawArrays(_,start,count){seen.calls.push(['draw',start,count])}};
+ const canvas={width:0,height:0,getContext(){return gl},addEventListener(){}};
+ const gpu=R.create(canvas);
+ assert.equal(gpu.ready,true);
+ assert.equal(gpu.render([quad(-125,null)],{w:800,h:500},2,
+   {center:[500,500,500],yaw:.4,pitch:-.8,scale:.55,panX:14,panY:6}),true);
+ assert.equal(canvas.width,1600);assert.equal(canvas.height,1000);
+ assert.equal(seen.bytes,144); // two triangles, 6 vertices, 6 floats, 4 bytes
+ assert.ok(seen.uniforms.some(x=>x[0]==='u_center'&&x[1]===500));
+ assert.ok(seen.uniforms.some(x=>x[0]==='u_pan'&&x[1]===14&&x[2]===6));
+ assert.ok(seen.calls.some(x=>x[0]==='enable'&&x[1]===gl.DEPTH_TEST));
+ assert.ok(seen.calls.some(x=>x[0]==='draw'&&x[2]===6));
+});
+test('camera matches the overlay at top, bottom, side and free orbit angles',()=>{
+ for(const yaw of [0,-.8,Math.PI/2,2.3]){
+  for(const pitch of [-1.55,-.35,.4,1.55]){
+   const viewport={w:928,h:610},center=[500,400,250],v=[120,830,75],scale=.41;
+   const a=R.projectWorld(v,center,{yaw,pitch},viewport,scale);
+   const [x,y,z]=v.map((n,i)=>n-center[i]);
+   const rx=Math.cos(yaw)*x+Math.sin(yaw)*z;
+   const rz=-Math.sin(yaw)*x+Math.cos(yaw)*z;
+   const ry=Math.cos(pitch)*y-Math.sin(pitch)*rz;
+   const rd=Math.sin(pitch)*y+Math.cos(pitch)*rz;
+   assert.ok(Math.abs(a.x-(viewport.w/2+rx*scale*2000/(2000+rd)))<1e-9);
+   assert.ok(Math.abs(a.y-(viewport.h*.55-ry*scale*2000/(2000+rd)))<1e-9);
+  }
+ }
+});
