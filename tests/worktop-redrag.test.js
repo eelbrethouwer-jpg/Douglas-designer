@@ -1,3 +1,4 @@
+const Draft=require('../drafting.js');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
@@ -13,7 +14,7 @@ function editor(){
     addEventListener(name,fn){events.set(id+':'+name,fn)}
   });return nodes.get(id)}
   const document={querySelector:el,querySelectorAll(){return []},addEventListener(n,fn){events.set('document:'+n,fn)},activeElement:{tagName:'BODY'},body:{classList:{add(){},remove(){}}},createElement(){return el('created')}};
-  const window={DouglasModel:Model,innerWidth:1400,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},confirm(){return true},print(){}};
+  const window={DouglasModel:Model,DouglasDrafting:Draft,innerWidth:1400,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},confirm(){return true},print(){}};
   const sandbox={window,document,confirm(){return true},navigator:{},location:{protocol:'file:'},localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},Intl,console,Map,Math,JSON,Date,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};
   // Production app stays encapsulated; test-only hook exposes coordinates and scene geometry.
   const src=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
