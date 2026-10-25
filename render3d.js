@@ -48,6 +48,7 @@ uniform vec3 u_center;
 uniform vec2 u_viewport;
 uniform vec2 u_angles;
 uniform float u_scale;
+uniform vec2 u_pan;
 varying vec3 v_color;
 void main(){
  vec3 p=a_pos-u_center;
@@ -59,7 +60,7 @@ void main(){
  float w=max(20.0,2000.0+dz);
  // Position is computed from original world vertices (not a preprojected polygon).
  // Camera and overlay use the same projection, including the vertical .55 center.
- gl_Position=vec4(4000.0*xx*u_scale/u_viewport.x,4000.0*yy*u_scale/u_viewport.y-0.10*w,w-500.0,w);
+ gl_Position=vec4(4000.0*xx*u_scale/u_viewport.x+2.0*u_pan.x/u_viewport.x*w,4000.0*yy*u_scale/u_viewport.y-0.10*w-2.0*u_pan.y/u_viewport.y*w,w-500.0,w);
  v_color=a_color;
 }`;
 const FRAGMENT_SHADER='precision highp float;varying vec3 v_color;void main(){gl_FragColor=vec4(v_color,1.0);}';
@@ -72,7 +73,7 @@ function create(canvas){
  if(!canvas||typeof canvas.getContext!=='function')return {ready:false};
  let gl;try{gl=canvas.getContext('webgl',{alpha:true,antialias:true,depth:true,preserveDrawingBuffer:true,premultipliedAlpha:false});}catch(e){return {ready:false};}
  if(!gl||typeof gl.createShader!=='function'||typeof gl.drawArrays!=='function')return {ready:false};
- let program,buffer,position,color,viewportUniform,centerUniform,anglesUniform,scaleUniform;
+ let program,buffer,position,color,viewportUniform,centerUniform,anglesUniform,scaleUniform,panUniform;
  try{
   const vs=shader(gl,gl.VERTEX_SHADER,VERTEX_SHADER),fs=shader(gl,gl.FRAGMENT_SHADER,FRAGMENT_SHADER);
   program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
@@ -80,8 +81,8 @@ function create(canvas){
   gl.deleteShader(vs);gl.deleteShader(fs);
   position=gl.getAttribLocation(program,'a_pos');color=gl.getAttribLocation(program,'a_color');buffer=gl.createBuffer();
   viewportUniform=gl.getUniformLocation(program,'u_viewport');centerUniform=gl.getUniformLocation(program,'u_center');
-  anglesUniform=gl.getUniformLocation(program,'u_angles');scaleUniform=gl.getUniformLocation(program,'u_scale');
-  if(position<0||color<0||!buffer||!viewportUniform||!centerUniform||!anglesUniform||!scaleUniform)throw Error('WebGL attributes/uniforms missing');
+  anglesUniform=gl.getUniformLocation(program,'u_angles');scaleUniform=gl.getUniformLocation(program,'u_scale');panUniform=gl.getUniformLocation(program,'u_pan');
+  if(position<0||color<0||!buffer||!viewportUniform||!centerUniform||!anglesUniform||!scaleUniform||!panUniform)throw Error('WebGL attributes/uniforms missing');
  }catch(e){return {ready:false,error:String(e)};}
  let ready=true;canvas.addEventListener?.('webglcontextlost',e=>{e.preventDefault();ready=false;});
  return {get ready(){return ready;},
@@ -99,6 +100,7 @@ function create(canvas){
     gl.uniform3f(centerUniform,...scene.center);
     gl.uniform2f(anglesUniform,scene.yaw,scene.pitch);
     gl.uniform1f(scaleUniform,scene.scale);
+    gl.uniform2f(panUniform,scene.panX||0,scene.panY||0);
     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,values,gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(position);gl.enableVertexAttribArray(color);
     gl.vertexAttribPointer(position,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(color,3,gl.FLOAT,false,24,12);
