@@ -608,6 +608,12 @@ window.addEventListener('keyup',e=>{if(e.key.toLowerCase()==='s'){magnetHeldOff=
 window.addEventListener('blur',()=>{magnetHeldOff=false;});
 canvas.addEventListener('pointerdown',e=>{
   canvas.setPointerCapture(e.pointerId);
+  // SketchUp-style navigation: Shift+drag or middle mouse pans instead of orbiting.
+  if(e.shiftKey===true||e.button===1){
+    pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+    dragging={mode:'pan-camera',startX:e.offsetX,startY:e.offsetY,moved:false};
+    return;
+  }
   if(roomMoveMode&&project.room?.enabled){
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
     dragging={mode:'move-kitchen',before:JSON.stringify(project),startPlacement:{...project.room.placement},startX:e.offsetX,startY:e.offsetY,moved:false};
@@ -648,6 +654,9 @@ canvas.addEventListener('pointerdown',e=>{
 });
 canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
+  if(dragging.mode==='pan-camera'){
+    camera.panX+=dx;camera.panY+=dy;draw();return;
+  }
   if(dragging.mode==='move-kitchen'){
     const p0=toScreenRaw([0,0,0]),px=toScreenRaw([100,0,0]),pz=toScreenRaw([0,0,100]);
     const ux=(px.x-p0.x)/100,uy=(px.y-p0.y)/100,vx=(pz.x-p0.x)/100,vy=(pz.y-p0.y)/100,det=ux*vy-uy*vx;
