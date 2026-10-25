@@ -16,7 +16,7 @@ test('every local script and stylesheet referenced in HTML exists',()=>{
 });
 test('all runtime scripts are in correct dependency order',()=>{
  const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1].split('?')[0]);
- assert.deepEqual(scripts,['model.js','drafting.js','render3d.js','app.js']);
+ assert.deepEqual(scripts,['room-space.js','model.js','drafting.js','render3d.js','room-studio.js','app.js']);
 });
 test('PWA caches the same versioned files used by the page',()=>{
  const cached=[...service.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
