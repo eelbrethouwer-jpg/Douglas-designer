@@ -86,7 +86,7 @@ function setRoomMove(enabled){roomMoveMode=!!enabled&&!!project.room?.enabled;
  return roomMoveMode;
 }
 function switchPanel(name){
- document.body?.classList?.toggle('room-editing',window.innerWidth<=800&&(name==='room'||name==='finishes'));
+ document.body?.classList?.toggle?.('room-editing',window.innerWidth<=800&&(name==='room'||name==='finishes'));
  if(window.innerWidth<=800&&(name==='room'||name==='finishes')){
    $('#stageArea').classList.remove('hidden');
    $('#sidebar').classList.add('mobile-visible');
