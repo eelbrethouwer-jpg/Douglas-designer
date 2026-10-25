@@ -8,12 +8,19 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 **Ontwerpprincipe:** het gemak van een 2D-planner combineren met een betrouwbare 3D-controle. Geen visuele trucs die afwijken van de maten of de zaaglijst.
 
-## Actuele stand (gecontroleerd op 25-10-2026)
+## Actuele nulmeting — 25 oktober 2026
 
-- **Op `main`:** de wijzigingen uit [PR #6](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/6) en [PR #7](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/7) zijn inmiddels samengevoegd. Automatische framebalken zijn bewerkbaar; er is een wereldruimte-WebGL-renderer met rasteropties, magnetische aansluitpunten, 2D pannen en Studio-sneltoetsen.
-- **Extra kwaliteitsborging in concept:** [PR #9](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/9): productspecificatie, extra 3D- en assettests en expliciete PWA-cachecorrecties. Deze wijzigingen zijn nog niet publiek vrijgegeven.
-- **Bekende tekortkoming:** het werkblad vertoont vanuit sommige kijkhoeken gaten of overliggende vormen; 3D-weergave moet betrouwbaarder.
-- **Nog geen bouwgereed CAD-systeem:** draagkracht, verbindingsterkte, hitteafstanden en apparaatventilatie worden niet bewezen door de huidige visualisatie.
+**Bron van waarheid:** `main` op commit `f5dd47bfb7c1ebe9e3cfb65ac9bb962b97cbdf7f`. Publieke release `v0.7.0` is gepubliceerd; de bijbehorende `main`-pushworkflow **slaagt**. Dat zegt niets over fysieke iPhone-bediening.
+
+- **In `main`:** Studio-basis, bewerkbare frames, WebGL, Room Studio en 66 generieke kleur-/componentreferenties. De enkele foto is **geen automatische maatvaste 3D-reconstructie**.
+- **Bekend gebruikersprobleem:** na foto-upload of maat-/materiaalwijziging is op mobiel vaak geen zichtbaar resultaat. Werken direct op het canvas zoals SketchUp is een leidende UX-eis.
+- **Draft-PR [#11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11), v0.7.1:** pogingen tot zichtbaar werkvlak, live plattegrond, upload en materiaalverbetering. **Niet samengevoegd, CI rood.**
+- **CI-meting PR #11:** [run 40185888759](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40185888759): **74 van 78 tests geslaagd, 4 mislukt**. Twee framebewerkings-UI-tests geven een `forEach`-fout; een materiaalkeuze-test en een maat/plattegrond-test tonen verouderde UI-output. Oorzaak nog niet definitief vastgesteld.
+- **Nog niet aangetoond:** echte iPhone Safari-acceptatie, volledige camerahoekcontrole, end-to-end foto→ruimte→ontwerp→bewaren/importeren en gebruikersacceptatie.
+
+**Onmiddellijke volgende actie (P0):** CI-fouten in PR #11 analyseren/herstellen, vervolgens op desktop en echte iPhone het zichtbare gedrag bewijzen. Pas dan v0.7.1 mergen of publiceren. Daarna de 3D-renderkwaliteit en fundamentele bewerkflow stabiliseren, vóór uitbreiding met fotorealisme.
+
+**Vaste werkbasis:** [PROJECT_VISION.md](PROJECT_VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [QUALITY_GATES.md](QUALITY_GATES.md) en [PRODUCT_SPEC.md](PRODUCT_SPEC.md).
 
 ## Roadmap in volgorde
 
@@ -22,7 +29,8 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 | 1 | v0.5.1 | Bestaande automatische frames selecteren, verplaatsen, verlengen, herstellen | P0 | Code samengevoegd; fysieke iPhone-acceptatie open |
 | 2 | v0.6.x | Betrouwbaar gesloten werkblad, dieptebuffer en 3D in alle camerahoeken | P0 | Renderer technisch vernieuwd; visueel nog niet geverifieerd |
 | 3 | v0.6.0 RC | Studio-basis: 2D pannen, raster, magneet, toetsen en nieuwe GPU-geometrie | P1 | Code samengevoegd; volledige visuele acceptatie open |
-| 4 | v0.7.0 RC | Room Capture, ruimteplaatsing, foto-preview en kleurbibliotheek | P1 | Concept-PR #10, acceptatie open |
+| 4 | v0.7.0 | Room Capture, ruimteplaatsing, foto-preview en kleurbibliotheek | P1 | Gepubliceerd op `main`; fysieke UX-acceptatie nog open |
+| 4B | v0.7.1 | Mobiel zichtbare Room Studio, werkende foto-/materiaalbediening, CI herstellen | P0 | Draft-PR #11, 4 tests rood; acceptatie open |
 | 5 | v0.8.0 | Volledige 3D-materialen, apparaatmodellen en constructieve verbindingen | P1 | Gepland |
 | 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
 | 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gepland |
@@ -67,7 +75,7 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 **Acceptatie:** tien balken achter elkaar tekenen en bewerken zonder onbedoeld draaien of verspringen; verplaatsen en passend maken blijft na elke bewerking mogelijk.
 
-### Fase 4A — Room Studio (v0.7.0, PR #10)
+### Fase 4A — Room Studio (v0.7.0, PR #10; inmiddels gepubliceerd)
 
 De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in een herkenbare ruimte gaat vóór uitgebreidere bouwkundige verbindingen.
 
@@ -79,7 +87,7 @@ De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in e
 - Schematische foto-overlay (niet bouwmaatvast en niet fotorealistisch).
 - Projecten met foto blijven in eigen JSON-back-up bewaarbaar; andere v0.6-functies blijven werken.
 
-**Release-gates:** volledige regressieset, Chrome desktop, Safari op echte iPhone, alle camera-hoeken, export/import, geen dataverlies. Productversie pas na acceptatie.
+**Nog openstaande acceptatie-gates:** volledige regressieset, Chrome desktop, Safari op echte iPhone, alle camera-hoeken, export/import, geen dataverlies. De tag bestaat al, maar kwalificeert de UX nog niet als bewezen stabiel.
 
 **Niet inbegrepen in deze eerste RC:** automatische AI-3D-reconstructie, PBR en echte 3D-merkenbibliotheek. Die blijven vervolgwerk.
 
