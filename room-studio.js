@@ -19,8 +19,9 @@ function initUI(){
  body.insertAdjacentHTML('beforeend',`
  <section class="sidebar-panel hidden" id="panel-room">
  <div class="section-title"><span>ONTWERP IN JE EIGEN RUIMTE</span></div>
- <p class="hint">Meet de ruimte na. Een enkele foto levert geen betrouwbare dieptematen op.</p>
- <button id="roomCaptureOpen" class="room-big-action" type="button">📷 Foto toevoegen of bekijken</button>
+ <p class="hint">Wijzig een maat en bekijk direct het resultaat op het 3D-werkvlak. Dit is de ruimte rondom je buitenkeuken.</p>
+ <div class="room-mini-wrap"><div class="room-mini-top"><strong>Bovenaanzicht ruimte</strong><small id="roomMiniSize">—</small></div><canvas id="roomMiniPlan" width="360" height="226" aria-label="Bovenaanzicht van ruimte en buitenkeuken"></canvas><div class="room-mini-bottom"><span><i class="mini-legend-wall"></i> Ruimte</span><span><i class="mini-legend-kitchen"></i> Buitenkeuken</span></div></div>
+ <div class="room-first-actions"><button id="roomCaptureOpen" class="room-big-action" type="button">📷 Foto toevoegen / openen</button><button id="roomShow3d" class="room-big-action secondary" type="button">◈ Bekijk 3D</button></div>
  <label class="check-row"><input id="roomEnabled" type="checkbox"> 3D-ruimte tonen</label>
  <div class="section-title space-top"><span>RUIMTEAFMETINGEN (MM)</span></div>
  <div class="room-fields">${dims.map(([k,v])=>field(k,v)).join('')}</div>
@@ -35,8 +36,9 @@ function initUI(){
  <p class="hint">Positie is in de ruimte, niet in de zaaglijst. Voor kamado en koelkast zelf hitteafstand en ventilatie controleren.</p>
  </section>
  <section class="sidebar-panel hidden" id="panel-finishes">
- <div class="section-title"><span>REALISTISCHE KLEURSTUDIO</span></div>
- <p class="hint">Kies materiaal- en kleurreferenties. De huidige 3D-engine toont ingekleurde vlakken; PBR-texturen en merkmodellen zijn nog niet ingebouwd.</p>
+ <div class="section-title"><span>AFWERKINGEN & MATERIAALKLEUREN</span></div>
+ <div class="room-first-actions"><button id="finishShow3d" class="room-big-action" type="button">◈ Bekijk mijn wijzigingen in 3D</button></div>
+ <p class="hint">Selecteer hieronder een kleur. Het 3D-model verandert direct. Fotorealistische texturen en merkmodellen volgen in een latere release.</p>
  <div id="finishCollections"></div>
  <div class="section-title space-top"><span>FRONTEN & BESLAG</span></div>
  <label class="room-field">Deuren ${select('doorType',R.components.doors)}</label>
@@ -50,9 +52,9 @@ function initUI(){
  modal=document.createElement('div');modal.id='roomCaptureDialog';modal.className='room-modal hidden';
  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Ruimtefoto kalibreren');
  modal.innerHTML=`<div class="room-modal-card"><header class="room-modal-head"><div><strong>Room Capture</strong><small>Van je eigen foto naar een in te meten 3D-ruimte</small></div><button id="roomClose" aria-label="Sluiten" type="button">✕</button></header>
- <div class="room-modal-body"><div class="room-photo-tools"><label class="room-file">📷 Kies foto<input id="roomImageInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*" capture="environment"></label>
+ <div class="room-modal-body"><div class="room-photo-tools"><button id="roomChoosePhoto" type="button" class="room-file">🖼️ Bestaande foto kiezen</button><button id="roomTakePhoto" type="button" class="room-file room-camera">📷 Camera openen</button><input id="roomImageInput" class="room-hidden-input" type="file" accept="image/*"><input id="roomCameraInput" class="room-hidden-input" type="file" accept="image/*" capture="environment">
  <button id="roomResetCorners" type="button" class="outline-btn">Hoeken opnieuw</button><button id="roomPhotoPreview" class="outline-btn" type="button">Fotopreview</button></div>
- <div class="room-photo-stage"><canvas id="roomPhotoCanvas" width="960" height="600" aria-label="Ruimtefoto met vloerhoeken"></canvas><div id="roomPhotoEmpty">Voeg een foto toe om te beginnen.</div></div>
+ <p class="room-capture-status" id="roomCaptureStatus" role="status" aria-live="polite">Kies een foto, of maak eerst een 3D-ruimte met handmatig ingevoerde maten.</p><div class="room-photo-stage"><canvas id="roomPhotoCanvas" width="960" height="600" aria-label="Ruimtefoto met vloerhoeken"></canvas><div id="roomPhotoEmpty">Voeg een foto toe om te beginnen.</div></div>
  <div class="room-photo-help"><strong id="roomPhotoInstruction">Markeer vier vloerhoeken</strong><span id="roomPhotoProgress">0 / 4</span></div>
  <p class="hint">Klik achtereenvolgens op de vloer: voor-links, voor-rechts, achter-rechts, achter-links. Dit is een visuele perspectiefhulp; je bevestigt de echte maten hieronder.</p>
  <div class="room-photo-dims">${dims.map(([k,v])=>field(k,v)).join('')}</div>
@@ -62,7 +64,13 @@ function initUI(){
  document.body.append(modal);
  addEvents();drawPhoto();
 }
-function patchRoom(cb){mutate(p=>{p.room=R.normalizeRoom(p.room,p);cb(p.room,p);p.room=R.normalizeRoom(p.room,p);});}
+function patchRoom(cb){
+ mutate(p=>{p.room=R.normalizeRoom(p.room,p);cb(p.room,p);p.room=R.normalizeRoom(p.room,p);});
+}
+function captureStatus(message,warning=false){
+ const output=$('#roomCaptureStatus');
+ if(output){output.textContent=message;output.classList.toggle('warning',warning);}
+}
 function changeRoom(key,value){
  patchRoom((r,p)=>{
   if(['width','depth','height','x','z'].includes(key)){
@@ -92,9 +100,19 @@ function refresh(){
  const warnings=$('#roomWarnings');warnings.textContent=issues.length?'⚠ '+issues.join(' · '):r.enabled?'✓ Keuken past binnen de opgegeven ruimte (geometrische controle).':'De ruimte staat uit.';
  warnings.classList.toggle('room-has-warning',issues.length>0);
  updateCollections();
+ drawMiniPlan();
  drawPhoto();
+ const info=$('#roomWorkspaceMode');
+ if(info)info.textContent=r.enabled?'3D-ruimte: '+f(r.width)+' × '+f(r.depth)+' × '+f(r.height)+' mm':'3D-ruimte uitgeschakeld';
 }
-function openCapture(){if(!modal)return;modal.classList.remove('hidden');previewMode=false;photoSource='';photoImage=null;refresh();$('#roomClose').focus();}
+function openCapture(){
+ if(!modal)return;
+ modal.classList.remove('hidden');
+ previewMode=false;photoSource='';photoImage=null;
+ refresh();
+ captureStatus(room().photo?'Foto geladen. Markeer de vier vloerhoeken of bekijk je fotopreview.':'Kies een foto of gebruik de handmatige 3D-ruimte.');
+ $('#roomClose').focus();
+}
 function closeCapture(){modal.classList.add('hidden');$('#roomCaptureOpen').focus();}
 function loadImage(source,then){if(!source){photoImage=null;photoSource='';then?.();return;}
  if(source===photoSource&&photoImage?.complete){then?.();return;}
