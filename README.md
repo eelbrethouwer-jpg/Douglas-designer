@@ -4,6 +4,15 @@ Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-w
 
 > **Status:** ontwikkelfase, v0.6.0 Studio **releasekandidaat**. Niet alle roadmapfuncties zijn gebouwd of getest op een fysieke iPhone. Op GitHub Pages staat uitsluitend wat in de \`main\`-branch is samengevoegd en succesvol gedeployed.
 
+
+## v0.7.0 Room Studio — aparte releasekandidaat
+
+Op de branch `feature/v0.7.0-room-studio` ([concept-PR #10](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/10)) wordt een eerste **foto-ondersteunde 3D-ruimteworkflow** ontwikkeld. Dit is **niet** de publieke versie op GitHub Pages.
+
+Nieuw in deze kandidaat: foto toevoegen en vier vloerhoeken markeren, echte ruimtematen invullen, vloer en wanden in 3D tonen, complete keuken draaien en plaatsen, waarschuwingen bij afmetingen en een ingebouwde catalogus met 66 generieke varianten. Fotopreview is indicatief. Voor hoogwaardige echte PBR-materialen, fabrikantmodellen, automatische fotoherkenning en verdere bouwkundige controles zijn nog afzonderlijke ontwikkelstappen nodig.
+
+Zie [release notes v0.7.0](RELEASE_NOTES_v0.7.0.md) voor de gebouwde functies, beperkingen en acceptatiecriteria. **Pas na groene CI én fysieke Safari-/desktoptest mergen.**
+
 ## Documentatie
 
 - [Roadmap en releasevolgorde](ROADMAP.md)
