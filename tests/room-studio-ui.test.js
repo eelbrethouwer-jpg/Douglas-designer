@@ -5,7 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const R=require('../room-space.js');
 const M=require('../model.js');
-function studio(){
+function studio({legacyCommit=false,saved=true}={}){
  const listeners=new Map(),nodes=new Map(),calls={rects:0,fileClicks:0,views:[]};
  const ctx={clearRect(){},fillRect(){calls.rects++},strokeRect(){},beginPath(){},moveTo(){},lineTo(){},closePath(){},fill(){},stroke(){},fillText(){},save(){},restore(){},translate(){},rotate(){},ellipse(){},arc(){},drawImage(){},setTransform(){}};
  const getElement=id=>{
@@ -39,9 +39,14 @@ function studio(){
  let p=M.demoProject();p.room=R.normalizeRoom(null,p);p.style=R.normalizeStyle(null);
  context.DouglasRoomStudio.mount({
   getProject:()=>p,
-  commit(fn){const before=JSON.stringify(p);fn(p);context.DouglasRoomStudio.refresh();return before!==JSON.stringify(p)},
+  commit(fn){
+   const before=JSON.stringify(p);
+   if(legacyCommit)fn();else fn(p);
+   context.DouglasRoomStudio.refresh();
+   return before!==JSON.stringify(p);
+  },
   render(){},setView(view){calls.views.push(view)},setRoomMove(){return true},
-  toast(message){calls.toast=message}
+  toast(message){calls.toast=message},isSaved(){return saved}
  });
  return {listeners,nodes,calls,project:()=>p};
 }
@@ -83,4 +88,32 @@ test('room measurements visibly change floorplan and room dimensions without cha
  assert.equal(h.project().room.width,6100);
  assert.match(h.nodes.get('#roomMiniSize').textContent,/6\.100/);
  assert.equal(M.boardPlan(h.project()).totalLength,timber);
+});
+
+test('reproduced iPhone screenshot: Room Capture saves a chosen photo with legacy commit(fn) calling fn() without p',()=>{
+ const h=studio({legacyCommit:true});
+ h.listeners.get('#roomCaptureOpen:click')();
+ const fileControl={files:[{type:'image/jpeg',size:5000}],value:'chosen'};
+ assert.doesNotThrow(()=>h.listeners.get('#roomImageInput:change')({target:fileControl}));
+ assert.match(h.project().room.photo,/^data:image\/jpeg;base64,/);
+ assert.match(h.nodes.get('#roomCaptureStatus').textContent,/Foto toegevoegd en lokaal opgeslagen/);
+ assert.doesNotMatch(h.nodes.get('#roomCaptureStatus').textContent,/undefined|p\.room/);
+ const sketchBefore=M.boardPlan(h.project()).totalLength;
+ h.listeners.get('document:change')({target:{
+   dataset:{room:'width'},value:'6200',
+   closest(selector){return selector==='#panel-room,#roomCaptureDialog'},
+   matches(selector){return selector==='[data-room]';}
+ }});
+ assert.equal(h.project().room.width,6200);
+ h.listeners.get('document:click')({target:{closest(selector){
+  return selector==='[data-finish]'?{dataset:{finish:'wood',finishId:'wood-3'}}:null;
+ }}});
+ assert.equal(h.project().style.wood,'wood-3');
+ assert.equal(M.boardPlan(h.project()).totalLength,sketchBefore);
+});
+test('photo processing warns clearly when the browser cannot persist a picked photo',()=>{
+ const h=studio({legacyCommit:true,saved:false});
+ h.listeners.get('#roomCaptureOpen:click')();
+ h.listeners.get('#roomImageInput:change')({target:{files:[{type:'image/jpeg',size:100}],value:''}});
+ assert.match(h.nodes.get('#roomCaptureStatus').textContent,/kon niet worden opgeslagen/);
 });
