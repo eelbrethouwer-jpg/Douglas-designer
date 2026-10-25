@@ -1,0 +1,3 @@
+/* GPU geometry stays behind the pointer/annotation canvas. */
+.stage #geometryScene{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.stage #scene{position:relative;z-index:1;background:transparent}
