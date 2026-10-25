@@ -8,9 +8,9 @@
 - Upload van een eigen foto op desktop of iPhone; lokaal naar een verkleinde JPEG omgezet.
 - Vier handmatig aan te wijzen vloerhoekpunten (voor-links → voor-rechts → achter-rechts → achter-links).
 - Begeleide workflow om een 3D-ruimte te maken en bij te stellen met ingevoerde, echte maten.
-- Een keuken als geheel plaatsen in de ruimte met X/Z-coördinaten, 0/90/180/270 graden, centreren of bij de achterwand.
+- Een keuken als geheel plaatsen in de ruimte met X/Z-coördinaten, 0/90/180/270 graden, centreren, aan een achterwand plaatsen en **direct slepen in bovenaanzicht**.
 - Geometrische buitenruimte- en hoogtewaarschuwingen; plaatsingswijzigingen veranderen **geen** balkmaten of zaagstukken.
-- **Fotopreview (conceptprojectie):** keukenvolume schematisch op de originele foto, expliciet niet fotorealistisch of maatvast.
+- **Fotopreview (conceptprojectie):** module-indeling schematisch op de originele foto, expliciet niet fotorealistisch of maatvast.
 - Catalogus met 66 generieke kleur- en componentvarianten: 32 kleurreferenties (hout, werkblad, kastfront en kamado) en 34 componentopties (deuren, lades, grepen en accessoires).
 - Kleuren in bestaande 3D-renderer zichtbaar; eenvoudige variatie in deur- en lade-indelingen.
 - Opslaan, undo/redo, project JSON-export met optionele foto; bestaande projecten krijgen standaard een uitgeschakelde ruimte en blijven importeerbaar.
