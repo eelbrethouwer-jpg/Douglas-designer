@@ -4,10 +4,10 @@
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const finite=(value,fallback)=>Number.isFinite(Number(value))?Number(value):fallback;
 const colors={
-  wood:['Douglas naturel','#b8824f'],['Douglas warm','#aa784f'],['Douglas licht','#dab588'],['Douglas donker','#765339'],['Douglas zwart','#353b38'],['Douglas vergrijsd','#92988b'],
-  top:['Beton licht','#b1b0a6'],['Beton donker','#696f70'],['Graniet zwart','#373b3d'],['Graniet grijs','#767c80'],['Keramiek zand','#d3c5ad'],['Keramiek antraciet','#44494d'],['Composiet wit','#e0ded3'],['Composiet zwart','#343a3b'],['RVS geborsteld','#a9b2b7'],['Terrazzo','#c8bfb0'],['Hout warm','#986e49'],['Leisteen','#535f64'],
-  front:['Douglas vlak','#ad7548'],['Douglas latten','#986b47'],['Douglas donker','#6e513e'],['Zwart mat','#323737'],['Antraciet','#4c5557'],['Olijfgroen','#66725a'],['Zandkleur','#b7a993'],['RVS','#9ba6ac'],
-  kamado:['Keramiek groen','#354740'],['Keramiek zwart','#252c2d'],['Mat zwart','#393d3d'],['Keramiek rood','#883b31'],['Keramiek blauw','#3b596a'],['Keramiek crème','#c1b8a1']
+  wood:[['Douglas naturel','#b8824f'],['Douglas warm','#aa784f'],['Douglas licht','#dab588'],['Douglas donker','#765339'],['Douglas zwart','#353b38'],['Douglas vergrijsd','#92988b']],
+  top:[['Beton licht','#b1b0a6'],['Beton donker','#696f70'],['Graniet zwart','#373b3d'],['Graniet grijs','#767c80'],['Keramiek zand','#d3c5ad'],['Keramiek antraciet','#44494d'],['Composiet wit','#e0ded3'],['Composiet zwart','#343a3b'],['RVS geborsteld','#a9b2b7'],['Terrazzo','#c8bfb0'],['Hout warm','#986e49'],['Leisteen','#535f64']],
+  front:[['Douglas vlak','#ad7548'],['Douglas latten','#986b47'],['Douglas donker','#6e513e'],['Zwart mat','#323737'],['Antraciet','#4c5557'],['Olijfgroen','#66725a'],['Zandkleur','#b7a993'],['RVS','#9ba6ac']],
+  kamado:[['Keramiek groen','#354740'],['Keramiek zwart','#252c2d'],['Mat zwart','#393d3d'],['Keramiek rood','#883b31'],['Keramiek blauw','#3b596a'],['Keramiek crème','#c1b8a1']]
 };
 const palettes=Object.fromEntries(Object.entries(colors).map(([key,pairs])=>[key,pairs.map(([label,color],i)=>({id:key+'-'+i,label,color,kind:key,license:'Eigen kleurreferentie',dimensionsVerified:false}))]));
 const components={
