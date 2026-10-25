@@ -69,3 +69,12 @@
 .stage-caption{display:none!important}
 .welcome-layer{overflow-y:auto}
 .welcome-card{margin:auto}
+/* v0.5.1: Frame beams remain accessible without filling the sidebar. */
+.frame-library{margin:20px 0 0;padding:10px;border:1px solid #dde5dc;border-radius:12px;background:#f8faf7}
+.frame-library>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 3px;color:#334c3d;font-size:12px;font-weight:750;list-style:none}
+.frame-library>summary::-webkit-details-marker{display:none}
+.frame-library>summary:after{content:'⌄';font-size:16px}
+.frame-library[open]>summary:after{content:'⌃'}
+.frame-library>summary small{font-size:10px;white-space:nowrap;color:#839185}
+.frame-library[open] .module-list{max-height:380px;overflow:auto;overscroll-behavior:contain}
+.frame-library>summary:focus-visible{outline:2px solid #418469;outline-offset:3px}
