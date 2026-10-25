@@ -78,3 +78,14 @@ test('top view drag moves entire kitchen in room coordinates without changing th
  const stored=JSON.parse(h.storage.get('douglas-designer-v1'));
  assert.equal(stored.room.placement.x,p.room.placement.x);
 });
+
+test('SketchUp style Shift-drag pans the live 3D view without changing geometry',()=>{
+ const h=start(),before=h.api.camera.panX;
+ const p=h.pt(120,160);p.shiftKey=true;
+ h.events.get('#scene:pointerdown')(p);
+ const next=h.pt(177,198);next.shiftKey=true;
+ h.events.get('#scene:pointermove')(next);
+ h.events.get('#scene:pointerup')(next);
+ assert.equal(h.api.camera.panX-before,57);
+ assert.equal(h.api.camera.panY,38);
+});
