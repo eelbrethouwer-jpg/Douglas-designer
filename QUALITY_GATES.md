@@ -42,15 +42,13 @@ Testplan inclusief echte browser/iPhone:
 - Mobiel; iPhone portrait/landscape, werkvlak niet verborgen door paneel, touch en zoom.
 - PWA; online eerste bezoek, update van bestaande installatie, cache legen/migreren zonder ontwerpverlies.
 
-## 4. Nulmeting op 25-10-2026
-- `main`: commit `f5dd47bfb7c1ebe9e3cfb65ac9bb962b97cbdf7f`, release `v0.7.0` gepubliceerd. Push-workflow `40184686866` **geslaagd**. Dit bewijst niet dat Room Studio op de iPhone visueel werkt.
-- Concept-PR [#11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11), `fix/v0.7.1-sketchup-room-usability`: **niet samengevoegd**. Recente PR-run [40185888759](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40185888759) **mislukt**.
-- Bij die run **78 tests, 74 geslaagd, 4 mislukt**:
-  - `editable-frames.test.js`: twee UI-/selectietests falen met `$(...).forEach is not a function`.
-  - `room-studio-ui.test.js`: test na materiaalkeuze verwacht visueel actieve stijl, maar de gegenereerde HTML markeert de oude stijl nog als actief.
-  - `room-studio-ui.test.js`: na maatwijziging bevat het live overzicht nog de oude tekst `4.500 × 3.200 mm`, in plaats van de nieuwe breedte `6.100 mm`.
-- Mogelijk is bij delen sprake van onvolledige DOM-mocks, maar dat is **niet aangetoond**. Testdefecten mogen niet blind worden weggefilterd: eerst werkelijke oorzaak reproduceren en herstellen.
-- Echte Safari-/Chrome-test, 360° visuele controle en end-to-end import/export **niet door deze documentatiewijziging uitgevoerd**.
+## 4. Nulmeting op 25-10-2026 (geactualiseerd na v0.7.1-release)
+
+- **Actuele `main`:** commit `ddf7c79aeae5592eb2b0bfe906422cf79412907e`. Releases [v0.7.0](https://github.com/eelbrethouwer-jpg/Douglas-designer/releases/tag/v0.7.0) en [v0.7.1](https://github.com/eelbrethouwer-jpg/Douglas-designer/releases/tag/v0.7.1) zijn gepubliceerd.
+- **PR [#11](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/11) v0.7.1:** samengevoegd. [Laatste PR-CI 40185989055](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40185989055) geslaagd: **78 tests, 78 geslaagd, 0 mislukt**. [Main-push 40186162402](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40186162402) geslaagd.
+- **Historisch incident (hersteld in CI):** eerdere [run 40185888759](https://github.com/eelbrethouwer-jpg/Douglas-designer/actions/runs/40185888759) had 4 van 78 falende tests: twee frame-selectie/DOM-tests, een materiaalkeuze-UI-test en een live ruimteafmetingen-test. Het verschil tussen die oude mislukking en de groene finale run is een relevante regressiegeschiedenis, **geen actuele open CI-blokkade**.
+- **Nog niet aangetoond in deze beoordeling:** bediening op een echte iPhone Safari, Chrome desktop met volledige visuele test, 360° camerahoekcontrole en end-to-end import/export na foto→ruimte→ontwerp. De CI-score mag daarvoor niet in de plaats komen.
+- **Actuele P0-actie:** aantoonbare gebruikersacceptatie van v0.7.1 op desktop en iPhone; als er daarbij functionele problemen blijken, nieuwe reproduceerbare bugfix met testcriteria.
 
 ## 5. Releaseprotocol
 1. Maak per release/bugfix een eigen branch en draft PR, vanaf actuele `main`.
