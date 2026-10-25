@@ -284,7 +284,7 @@ function objects(){shapes=[];hitShapes=[];
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
-  if(project.countertop){box(-8,project.height-25,-14,project.width+16,25,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
+  if(project.countertop){box(-8,project.height-24,-14,project.width+16,24,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
 function drawGrid(){const step=250,margin=600,y=-55;
