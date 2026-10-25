@@ -22,8 +22,8 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 | 1 | v0.5.1 | Bestaande automatische frames selecteren, verplaatsen, verlengen, herstellen | P0 | Code samengevoegd; fysieke iPhone-acceptatie open |
 | 2 | v0.6.x | Betrouwbaar gesloten werkblad, dieptebuffer en 3D in alle camerahoeken | P0 | Renderer technisch vernieuwd; visueel nog niet geverifieerd |
 | 3 | v0.6.0 RC | Studio-basis: 2D pannen, raster, magneet, toetsen en nieuwe GPU-geometrie | P1 | Code samengevoegd; volledige visuele acceptatie open |
-| 4 | v0.7.0 | Parametrische houtconstructie, opleggingen en verbindingen | P1 | Gepland |
-| 5 | v0.8.0 | Realistische buitenkeukenmodules, apparaten en werkbladen | P1 | Gepland |
+| 4 | v0.7.0 RC | Room Capture, ruimteplaatsing, foto-preview en kleurbibliotheek | P1 | Concept-PR #10, acceptatie open |
+| 5 | v0.8.0 | Volledige 3D-materialen, apparaatmodellen en constructieve verbindingen | P1 | Gepland |
 | 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
 | 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gepland |
 | 8 | v1.0.0 | Stabiele eerste productieversie + complete acceptatietest | P1 | Gepland |
@@ -67,7 +67,23 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 
 **Acceptatie:** tien balken achter elkaar tekenen en bewerken zonder onbedoeld draaien of verspringen; verplaatsen en passend maken blijft na elke bewerking mogelijk.
 
-### Fase 4 — Houtconstructie en verbindingen (v0.7.0)
+### Fase 4A — Room Studio (v0.7.0, PR #10)
+
+De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in een herkenbare ruimte gaat vóór uitgebreidere bouwkundige verbindingen.
+
+- Een JPEG-foto lokaal importeren en vier vloerhoeken handmatig markeren.
+- Ruimtebreedte, -diepte en -hoogte **handmatig bevestigd**, onafhankelijk van de foto.
+- Vloer/achterwand/zijwand in 3D; keuken in X/Z verplaatsen en per 90 graden draaien.
+- Overlapwaarschuwingen; plaatsing verandert niet de onderdelen en zaaglengtes.
+- Kleurcatalogus en eenvoudige front-/ladevarianten, 66 generieke referenties.
+- Schematische foto-overlay (niet bouwmaatvast en niet fotorealistisch).
+- Projecten met foto blijven in eigen JSON-back-up bewaarbaar; andere v0.6-functies blijven werken.
+
+**Release-gates:** volledige regressieset, Chrome desktop, Safari op echte iPhone, alle camera-hoeken, export/import, geen dataverlies. Productversie pas na acceptatie.
+
+**Niet inbegrepen in deze eerste RC:** automatische AI-3D-reconstructie, PBR en echte 3D-merkenbibliotheek. Die blijven vervolgwerk.
+
+### Fase 4B — Houtconstructie en verbindingen (doorgeschoven naar v0.8.0)
 
 - Per balk instelbare doorsnede en oriëntatie (standaard 50 × 100 mm, later andere Douglas profielen).
 - Eenduidige werkelijke 3D-maatvoering; geen renderpositie die afwijkt van zaagmaat.
