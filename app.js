@@ -520,7 +520,7 @@ canvas.addEventListener('pointerdown',e=>{
     dragging={mode:'draw-beam',start,startX:e.offsetX,startY:e.offsetY,moved:false};
     return;
   }
-  const resize=selected?.type==='beam' && handleAt(e.offsetX,e.offsetY);
+  const resize=(selected?.type==='beam'||selected?.type==='frame') && handleAt(e.offsetX,e.offsetY);
   if(resize){
     const b=getSelected();if(b && viewAxes()?.includes(b.axis)){
       pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
@@ -536,11 +536,11 @@ canvas.addEventListener('pointerdown',e=>{
     // Prioritize the currently selected manual beam if its projected surface
     // is under the pointer; neighboring frame beams otherwise steal the grab.
     const picked=hit(e.offsetX,e.offsetY);
-    const selectedFace=selected?.type==='beam' && (gpu.ready ? (picked?.type==='beam'&&picked.id===selected.id) : shapes.some(s=>s.owner?.type==='beam' && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY)));
-    const pick=selectedFace ? {type:'beam',id:selected.id} : picked;
+    const selectedFace=(selected?.type==='beam'||selected?.type==='frame') && (gpu.ready ? (picked?.type===selected.type&&picked.id===selected.id) : shapes.some(s=>s.owner?.type===selected.type && s.owner.id===selected.id && faceContains(s.verts,e.offsetX,e.offsetY)));
+    const pick=selectedFace ? {type:selected.type,id:selected.id} : picked;
     // Direct touch-and-drag on a loose beam; no extra mode toggle required.
-    if(pick?.type==='beam'){
-      if(selected?.id!==pick.id)setSelected('beam',pick.id);
+    if(pick?.type==='beam'||pick?.type==='frame'){
+      if(selected?.id!==pick.id)setSelected(pick.type,pick.id);
       const b=getSelected();
       if(b){dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}
     }
@@ -559,16 +559,23 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   if(dragging.mode==='resize-beam'){
     const b=getSelected();if(!b)return;
     const w=drawPoint(e.offsetX,e.offsetY);
-    if(w)M.resizeBeamEndpoint(b,dragging.endpoint,w[b.axis]);
+    if(w){
+      if(selected?.type==='frame'){
+        const copy={...b};M.resizeBeamEndpoint(copy,dragging.endpoint,w[b.axis]);
+        M.editFrameBeam(project,selected.id,{[b.axis]:copy[b.axis],length:copy.length});
+      }else M.resizeBeamEndpoint(b,dragging.endpoint,w[b.axis]);
+    }
     draw();return;
   }
   if(dragging.moved){if(dragging.mode==='place-beam')return;if(dragging.mode==='move-beam'){
     const b=getSelected();if(!b)return;
     const sx=e.offsetX-dragging.startX,sy=e.offsetY-dragging.startY;
     const delta=dragWorldDelta(sx,sy,dragging.startBeam);
-    b.x=Math.round((dragging.startBeam.x+delta.x)/5)*5;
-    b.y=Math.round((dragging.startBeam.y+delta.y)/5)*5;
-    b.z=Math.round((dragging.startBeam.z+delta.z)/5)*5;
+    const next={x:Math.round((dragging.startBeam.x+delta.x)/5)*5,
+      y:Math.round((dragging.startBeam.y+delta.y)/5)*5,
+      z:Math.round((dragging.startBeam.z+delta.z)/5)*5};
+    if(selected.type==='frame')M.editFrameBeam(project,selected.id,next);
+    else Object.assign(b,next);
     draw();
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';$$('.view-btn').forEach(b=>b.classList.remove('selected'));draw();}}
 });
@@ -593,12 +600,12 @@ function pointerEnd(e){
     // Recalculate the face-to-face span after EVERY placement, not only when
     // the beam is first dragged out of the palette. Both position and cut length
     // remain in the same undo step.
-    const fit=beam && M.fitBeamBetween(project,beam);
+    const fit=selected?.type==='beam'&&beam ? M.fitBeamBetween(project,beam) : null;
     if(fit){beam[beam.axis]=fit.start;beam.length=fit.length;}
     if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
     if(fit)toast(`Balk opnieuw passend gemaakt: ${fmt(fit.length)} mm`);
   }
-  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam')setSelected(id.type,id.id);else if(id?.type==='frame'){toast('Dit is een automatische framebalk. Kies Balken voor extra balken.');}else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
+  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam'||id?.type==='frame')setSelected(id.type,id.id);else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
 canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
