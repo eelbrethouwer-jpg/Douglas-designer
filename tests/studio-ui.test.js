@@ -1,3 +1,4 @@
+const SketchGrid=require('../sketch-grid.js');
 const Room=require('../room-space.js');
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const M=require('../model.js'),D=require('../drafting.js');
@@ -6,7 +7,7 @@ function start(){
  const ctx={beginPath(){},moveTo(){},lineTo(){},stroke(){},fill(){},arc(){},roundRect(){},clearRect(){},setTransform(){},fillText(){},save(){},restore(){},closePath(){},measureText(t){return {width:String(t).length*6}}};
  const node=id=>{if(!nodes.has(id))nodes.set(id,{id,dataset:{},style:{},innerHTML:'',textContent:'',value:'5',checked:false,firstChild:{textContent:''},width:0,height:0,classList:{add(){},remove(){},toggle(){return false}},setAttribute(){},getContext(){return ctx},getBoundingClientRect(){return {width:900,height:550,left:0,top:0,right:900,bottom:550}},addEventListener(n,f){events.set(id+':'+n,f)},setPointerCapture(){},scrollIntoView(){},click(){}});return nodes.get(id)};
  const document={querySelector:node,querySelectorAll(){return []},addEventListener(n,f){events.set('document:'+n,f)},activeElement:{tagName:'BODY'},body:{classList:{add(){},remove(){}}},createElement(){return node('new')}};
- const window={DouglasModel:M,DouglasRoom:Room,DouglasDrafting:D,innerWidth:1440,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},print(){},confirm(){return true}};
+ const window={DouglasModel:M,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:D,innerWidth:1440,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},print(){},confirm(){return true}};
  const context={window,document,localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},navigator:{},location:{protocol:'file:'},Intl,Map,Math,JSON,Date,console,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}},confirm(){return true}};
  const src=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
  const probe=src.replace(/\}\)\(\);\s*$/,String.raw`window.__test={setView,toScreen,getProject:()=>project,setRoomMove,get camera(){return camera},get mode(){return drawMode},get grid(){return gridSize},get magnet(){return magnetEnabled}};})();`);
