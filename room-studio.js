@@ -5,6 +5,7 @@ const R=root.DouglasRoom;
 const $=(q,el=document)=>el.querySelector(q);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let get,mutate,redraw,view,toast,moveKitchen,isSaved=()=>true,modal,photoImage,photoSource='',previewMode=false,moveActive=false;
+let selectedCorner=-1,cornerGesture=null,cornerDraft=null;
 const dims=[['width','Breedte ruimte'],['depth','Diepte ruimte'],['height','Hoogte ruimte']];
 function room(){return get().room;}
 function style(){return get().style;}
@@ -51,12 +52,17 @@ function initUI(){
  if(stage)stage.insertAdjacentHTML('afterend','<button type="button" id="roomToolbarBtn" class="outline-btn room-toolbar" title="Ruimtefoto en 3D ruimte">📷 Ruimtefoto</button>');
  modal=document.createElement('div');modal.id='roomCaptureDialog';modal.className='room-modal hidden';
  modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Ruimtefoto kalibreren');
- modal.innerHTML=`<div class="room-modal-card"><header class="room-modal-head"><div><strong>Room Capture <span class="room-capture-version">v0.7.3</span></strong><small>Van je eigen foto naar een in te meten 3D-ruimte</small></div><button id="roomClose" aria-label="Sluiten" type="button">✕</button></header>
+ modal.innerHTML=`<div class="room-modal-card"><header class="room-modal-head"><div><strong>Room Capture <span class="room-capture-version">v0.7.4</span></strong><small>Van je eigen foto naar een in te meten 3D-ruimte</small></div><button id="roomClose" aria-label="Sluiten" type="button">✕</button></header>
  <div class="room-modal-body"><div class="room-photo-tools"><button id="roomChoosePhoto" type="button" class="room-file">🖼️ Bestaande foto kiezen</button><button id="roomTakePhoto" type="button" class="room-file room-camera">📷 Camera openen</button><input id="roomImageInput" class="room-hidden-input" type="file" accept="image/*"><input id="roomCameraInput" class="room-hidden-input" type="file" accept="image/*" capture="environment">
  <button id="roomResetCorners" type="button" class="outline-btn">Hoeken opnieuw</button><button id="roomPhotoPreview" class="outline-btn" type="button">Fotopreview</button></div>
  <p class="room-capture-status" id="roomCaptureStatus" role="status" aria-live="polite">Kies een foto, of maak eerst een 3D-ruimte met handmatig ingevoerde maten.</p><div class="room-photo-stage"><canvas id="roomPhotoCanvas" width="960" height="600" aria-label="Ruimtefoto met vloerhoeken"></canvas><div id="roomPhotoEmpty">Voeg een foto toe om te beginnen.</div></div>
  <div class="room-photo-help"><strong id="roomPhotoInstruction">Markeer vier vloerhoeken</strong><span id="roomPhotoProgress">0 / 4</span></div>
- <p class="hint">Klik achtereenvolgens op de vloer: voor-links, voor-rechts, achter-rechts, achter-links. Dit is een visuele perspectiefhulp; je bevestigt de echte maten hieronder.</p>
+ <p class="room-point-help">Tik op een punt en <strong>sleep het naar de juiste plek</strong>. Of kies hieronder een punt en tik op een nieuwe positie in de foto.</p>
+ <div id="roomCornerTools" class="room-corner-tools" role="group" aria-label="Vloerpunten afzonderlijk aanpassen">
+   <button type="button" data-corner="0" disabled>Punt 1</button><button type="button" data-corner="1" disabled>Punt 2</button>
+   <button type="button" data-corner="2" disabled>Punt 3</button><button type="button" data-corner="3" disabled>Punt 4</button>
+ </div>
+ <p class="hint">Volgorde: voor-links → voor-rechts → achter-rechts → achter-links. Plaats punten op de <strong>vloer</strong>, niet op kastdeurtjes. Vul je werkelijk gemeten afmetingen hieronder in.</p>
  <div class="room-photo-dims">${dims.map(([k,v])=>field(k,v)).join('')}</div>
  <button id="roomApply" class="room-apply" type="button">✓ Maak / update 3D-ruimte</button>
  <p class="hint">De foto blijft lokaal bij het JSON-project. Exporteer het project als back-up. Fotopreview toont een indicatieve projectie, geen fotorealistische of exacte camerakalibratie.</p>
@@ -151,17 +157,106 @@ function refresh(){
 }
 function openCapture(){
  if(!modal)return;
+ selectedCorner=-1;cornerGesture=null;cornerDraft=null;
  modal.classList.remove('hidden');
  previewMode=false;photoSource='';photoImage=null;
  refresh();
  captureStatus(room().photo?'Foto geladen. Markeer de vier vloerhoeken of bekijk je fotopreview.':'Kies een foto of gebruik de handmatige 3D-ruimte.');
  $('#roomClose').focus();
 }
-function closeCapture(){modal.classList.add('hidden');$('#roomCaptureOpen').focus();}
+function closeCapture(){cornerGesture=null;cornerDraft=null;selectedCorner=-1;modal.classList.add('hidden');$('#roomCaptureOpen').focus();}
 function loadImage(source,then){if(!source){photoImage=null;photoSource='';then?.();return;}
  if(source===photoSource&&photoImage?.complete){then?.();return;}
  photoSource=source;const img=new Image();img.onload=()=>{photoImage=img;then?.();};img.onerror=()=>{photoImage=null;then?.();};img.src=source;}
 const cornersNames=['voor-links','voor-rechts','achter-rechts','achter-links'];
+// Use CSS pixels, not the high-resolution canvas bitmap, for iPhone hit targets.
+function photoPoint(e){
+ const box=e.currentTarget.getBoundingClientRect();
+ if(!box.width||!box.height)return null;
+ return [Math.max(0,Math.min(1,(e.clientX-box.left)/box.width)),
+         Math.max(0,Math.min(1,(e.clientY-box.top)/box.height))];
+}
+function closestPhotoCorner(point,canvas,corners){
+ if(!point||!corners.length)return -1;
+ const box=canvas.getBoundingClientRect();
+ const radius=Math.max(28,Math.min(box.width,box.height)*.04);
+ let closest=-1,best=radius*radius;
+ corners.forEach((corner,index)=>{
+  const dx=(corner[0]-point[0])*box.width,dy=(corner[1]-point[1])*box.height;
+  const dist=dx*dx+dy*dy;
+  if(dist<=best){best=dist;closest=index;}
+ });
+ return closest;
+}
+function cornerUi(corners){
+ const tools=$('#roomCornerTools');
+ if(tools){
+  tools.classList.toggle('hidden',!corners.length||previewMode);
+  tools.querySelectorAll?.('[data-corner]').forEach(btn=>{
+   const index=Number(btn.dataset.corner);
+   btn.disabled=index>=corners.length;
+   btn.classList.toggle('active',index===selectedCorner&&!previewMode);
+   btn.setAttribute('aria-pressed',String(index===selectedCorner&&!previewMode));
+  });
+ }
+ const instruction=$('#roomPhotoInstruction');
+ if(instruction)instruction.textContent=previewMode?'Indicatieve fotopreview':
+  selectedCorner>=0?'Punt '+(selectedCorner+1)+' gekozen — sleep of tik de nieuwe plek':
+  corners.length===4?'Vier punten geplaatst — sleep een punt om te corrigeren':
+  'Tik vloerhoek '+(corners.length+1)+': '+cornersNames[corners.length];
+}
+function startPhotoGesture(e){
+ if(!photoImage||previewMode||cornerGesture)return;
+ const point=photoPoint(e);if(!point)return;
+ const existing=cornerDraft||room().corners;
+ // An explicitly selected number has priority, even if the new location is near another marker.
+ const nearest=selectedCorner>=0?selectedCorner:closestPhotoCorner(point,e.currentTarget,existing);
+ const index=nearest>=0?nearest:existing.length;
+ if(index>=4)return;
+ selectedCorner=index;
+ cornerDraft=existing.map(c=>c.slice());
+ if(index===cornerDraft.length)cornerDraft.push(point);
+ else if(nearest<0)cornerDraft[index]=point;
+ cornerGesture={pointerId:e.pointerId,index,initial:existing[index]?.slice()||null,
+   added:index===existing.length,point,changed:false};
+ e.currentTarget.setPointerCapture?.(e.pointerId);
+ e.preventDefault?.();
+ drawPhotoNow();
+}
+function movePhotoGesture(e){
+ if(!cornerGesture||e.pointerId!==cornerGesture.pointerId)return;
+ const point=photoPoint(e);if(!point)return;
+ cornerDraft[cornerGesture.index]=point;
+ const old=cornerGesture.point;
+ if(Math.hypot(point[0]-old[0],point[1]-old[1])>0.002)cornerGesture.changed=true;
+ e.preventDefault?.();drawPhotoNow();
+}
+function finishPhotoGesture(e,cancel=false){
+ if(!cornerGesture||e.pointerId!==cornerGesture.pointerId)return;
+ const gesture=cornerGesture;
+ // Tap on a pre-existing handle selects it; the next tap elsewhere repositions it.
+ const shouldSave=!cancel&&(gesture.added||gesture.changed||
+   (gesture.initial&&Math.hypot(gesture.point[0]-gesture.initial[0],gesture.point[1]-gesture.initial[1])>0.001));
+ if(!cancel&&shouldSave){
+  const point=photoPoint(e);
+  if(point)cornerDraft[gesture.index]=point;
+ }
+ const update=shouldSave?cornerDraft.map(c=>c.slice()):null;
+ cornerGesture=null;cornerDraft=null;
+ try{e.currentTarget.releasePointerCapture?.(e.pointerId);}catch(_){}
+ if(cancel){selectedCorner=-1;drawPhoto();return;}
+ if(update){
+  patchRoom(r=>{r.corners=update;});
+  // After an initial four-point capture, allow tapping any point to correct it.
+  selectedCorner=-1;
+  captureStatus(update.length===4?'Vier vloerpunten opgeslagen. Je kunt ieder punt nog verslepen.':
+    'Punt '+update.length+' geplaatst. Markeer de volgende vloerhoek.');
+ }else if(gesture.initial){
+  selectedCorner=gesture.index;
+ }
+ drawPhoto();
+}
+
 function drawPhoto(){
  const canvas=$('#roomPhotoCanvas');if(!canvas||modal?.classList.contains('hidden'))return;
  loadImage(room().photo,()=>drawPhotoNow());
@@ -174,14 +269,18 @@ function drawPhotoNow(){
  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#e8e8df';ctx.fillRect(0,0,canvas.width,canvas.height);
  if(img){ctx.drawImage(img,0,0,canvas.width,canvas.height);$('#roomPhotoEmpty').classList.add('hidden');}
  else{$('#roomPhotoEmpty').classList.remove('hidden');}
- const corners=room().corners;
+ const corners=cornerDraft||room().corners;
  if(previewMode&&corners.length===4&&img)drawPreview(ctx,canvas.width,canvas.height,corners);
  else if(corners.length&&img){
    if(corners.length===4){ctx.beginPath();corners.forEach((p,i)=>i?ctx.lineTo(p[0]*canvas.width,p[1]*canvas.height):ctx.moveTo(p[0]*canvas.width,p[1]*canvas.height));ctx.closePath();ctx.fillStyle='rgba(29,135,91,.12)';ctx.fill();ctx.strokeStyle='#43d58f';ctx.lineWidth=3;ctx.stroke();}
-   corners.forEach((p,i)=>{const x=p[0]*canvas.width,y=p[1]*canvas.height;ctx.beginPath();ctx.arc(x,y,11,0,Math.PI*2);ctx.fillStyle='#145c45';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText(String(i+1),x,y+5);});
+   corners.forEach((p,i)=>{const x=p[0]*canvas.width,y=p[1]*canvas.height;ctx.beginPath();ctx.arc(x,y,i===selectedCorner?18:14,0,Math.PI*2);
+    ctx.fillStyle=i===selectedCorner?'#eaa94a':'#145c45';ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+    ctx.fillStyle=i===selectedCorner?'#173c2d':'#fff';ctx.font='bold 15px system-ui';ctx.textAlign='center';
+    ctx.fillText(String(i+1),x,y+5);});
  }
  $('#roomPhotoProgress').textContent=corners.length+' / 4';
- $('#roomPhotoInstruction').textContent=previewMode?'Indicatieve fotopreview':corners.length===4?'Vloer gemarkeerd — bevestig de ruimte':'Klik vloerhoek '+(corners.length+1)+': '+cornersNames[corners.length];
+ cornerUi(corners);
 }
 function drawPreview(ctx,w,h,corners){
  const p=get(),r=room(),M=root.DouglasModel;
@@ -282,13 +381,20 @@ function addEvents(){
  }
  $('#roomShow3d').addEventListener('click',()=>view('3d'));
  $('#finishShow3d').addEventListener('click',()=>view('3d'));
- $('#roomResetCorners').addEventListener('click',()=>{patchRoom(r=>r.corners=[]);previewMode=false;drawPhoto();});
- $('#roomPhotoPreview').addEventListener('click',()=>{if(room().corners.length!==4){toast('Markeer eerst vier vloerhoeken.');return;}previewMode=!previewMode;drawPhoto();});
- $('#roomPhotoCanvas').addEventListener('pointerdown',e=>{
-  if(!photoImage||previewMode||room().corners.length>=4)return;
-  const bounds=e.currentTarget.getBoundingClientRect(),point=[Math.max(0,Math.min(1,(e.clientX-bounds.left)/bounds.width)),Math.max(0,Math.min(1,(e.clientY-bounds.top)/bounds.height))];
-  patchRoom(r=>r.corners.push(point));
+ $('#roomResetCorners').addEventListener('click',()=>{selectedCorner=-1;cornerGesture=null;cornerDraft=null;previewMode=false;patchRoom(r=>r.corners=[]);drawPhoto();});
+ $('#roomPhotoPreview').addEventListener('click',()=>{if(room().corners.length!==4){toast('Markeer eerst vier vloerhoeken.');return;}previewMode=!previewMode;selectedCorner=-1;drawPhoto();});
+ $('#roomCornerTools').addEventListener('click',e=>{
+  const button=e.target.closest?.('[data-corner]');
+  if(!button||button.disabled||previewMode)return;
+  selectedCorner=Number(button.dataset.corner);
+  captureStatus('Punt '+(selectedCorner+1)+' geselecteerd. Tik op de foto waar dit punt moet komen.');
+  drawPhoto();
  });
+ const photoCanvas=$('#roomPhotoCanvas');
+ photoCanvas.addEventListener('pointerdown',startPhotoGesture);
+ photoCanvas.addEventListener('pointermove',movePhotoGesture);
+ photoCanvas.addEventListener('pointerup',e=>finishPhotoGesture(e));
+ photoCanvas.addEventListener('pointercancel',e=>finishPhotoGesture(e,true));
  $('#roomApply').addEventListener('click',()=>{
   patchRoom((r,p)=>{r.enabled=true;const dims=R.orientation(p,r);
     if(!Number.isFinite(r.placement.x))r.placement.x=Math.round((r.width-dims.width)/2);
