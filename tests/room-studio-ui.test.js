@@ -39,7 +39,7 @@ function studio(){
  let p=M.demoProject();p.room=R.normalizeRoom(null,p);p.style=R.normalizeStyle(null);
  context.DouglasRoomStudio.mount({
   getProject:()=>p,
-  commit(fn){const before=JSON.stringify(p);fn(p);return before!==JSON.stringify(p)},
+  commit(fn){const before=JSON.stringify(p);fn(p);context.DouglasRoomStudio.refresh();return before!==JSON.stringify(p)},
   render(){},setView(view){calls.views.push(view)},setRoomMove(){return true},
   toast(message){calls.toast=message}
  });
