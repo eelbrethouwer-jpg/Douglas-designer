@@ -3,6 +3,7 @@
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
+const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
 function normalize(raw){const p=M.normalizeProject(raw);p.room=R.normalizeRoom(raw?.room,p);p.style=R.normalizeStyle(raw?.style);return p;}
 const D=window.DouglasDrafting; if(!D) throw new Error('drafting.js ontbreekt');
 const $=(s)=>document.querySelector(s);
@@ -14,6 +15,22 @@ const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
 const STORAGE='douglas-designer-v1'; // Stable key: never discard v0.1 projects
 const WELCOME_KEY='douglas-designer-welcome-v2';
+const SKETCH_KEY='douglas-designer-sketch-grid-v1';
+let sketchSettings;
+try{sketchSettings=G.settings(JSON.parse(localStorage.getItem(SKETCH_KEY)||'null'));}catch(_){sketchSettings=G.settings();}
+function saveSketchSettings(){try{localStorage.setItem(SKETCH_KEY,JSON.stringify(sketchSettings));}catch(_){}}
+function setSketchSetting(key,value){
+ sketchSettings=G.settings({...sketchSettings,[key]:value});
+ saveSketchSettings();syncSketchControls();draw();
+}
+function syncSketchControls(){
+ const grid=$('#sketchGridVisible'),axis=$('#sketchAxes'),walls=$('#sketchWallGrid'),step=$('#sketchGridStep'),parallel=$('#sketchParallel');
+ if(grid)grid.checked=sketchSettings.visible;
+ if(axis)axis.checked=sketchSettings.axes;
+ if(walls)walls.checked=sketchSettings.walls;
+ if(step)step.value=String(sketchSettings.step);
+ if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
+}
 let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=normalize(M.demoProject());}
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null;
@@ -238,7 +255,7 @@ function shade(hex,mul){const r=rgb(hex).map(v=>Math.max(0,Math.min(255,Math.rou
 let scale=0, sceneCenter, cameraDistance=2000;
 function rotate(v){const x=v[0]-sceneCenter[0],y=v[1]-sceneCenter[1],z=v[2]-sceneCenter[2];const c=Math.cos(camera.yaw),s=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);const xx=c*x+s*z,zz=-s*x+c*z;return [xx,cp*y-sp*zz,sp*y+cp*zz];}
 let roomGeometryMode=false;
-function toScreenRaw(v){const r=rotate(v),f=cameraDistance/(cameraDistance+r[2]);return {x:viewport.w/2+r[0]*scale*f+camera.panX,y:viewport.h*.55-r[1]*scale*f+camera.panY,d:r[2]};}
+function toScreenRaw(v){const r=rotate(v),f=sketchSettings.parallel?1:cameraDistance/(cameraDistance+r[2]);return {x:viewport.w/2+r[0]*scale*f+camera.panX,y:viewport.h*.55-r[1]*scale*f+camera.panY,d:r[2]};}
 function worldKitchen(v){return R.transformKitchen(v,project,project.room);}
 function toScreen(v){return toScreenRaw(worldKitchen(v));}
 function poly(coords,fill,owner,stroke='rgba(46,37,28,.18)'){
@@ -324,6 +341,15 @@ function objects(){shapes=[];hitShapes=[];
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
   if(project.countertop){box(-8,project.height-24,-14,project.width+16,24,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
  drawRoomGeometry();
+ drawSketchGuides();
+}
+function drawSketchGuides(){
+ roomGeometryMode=true;
+ try{
+  for(const guide of G.mesh(project,project.room,sketchSettings)){
+   poly(guide.vertices,guide.fill,null,guide.fill);
+  }
+ }finally{roomGeometryMode=false;}
 }
 function drawRoomGeometry(){
  const r=project.room;if(!r?.enabled)return;
@@ -395,14 +421,12 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   scale=fitting*camera.zoom;
   objects();shapes.sort((a,b)=>b.depth-a.depth);
   hitShapes=shapes.filter(s=>s.owner);
-  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY,eye:cameraDistance});
+  const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY,eye:cameraDistance,parallel:sketchSettings.parallel});
   if(!gpuRendered){
-    drawGrid();
     for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
   }else{
     // Solid surfaces are painted by WebGL with a real depth buffer.
     // Keep the editing handles, selected outlines and dimensions in the 2D overlay.
-    if(!project.modules.length){ctx.save();ctx.globalAlpha=.32;drawGrid();ctx.restore();}
     for(const s of shapes){if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=1.6;path(s.verts);ctx.stroke();}}
   }
   drawDims();if(currentView==='3d')drawLabels();
@@ -433,7 +457,7 @@ function faceContains(pts,x,y){let inside=false;for(let a=0,b=pts.length-1;a<pts
   if(((pts[a].y>y)!=(pts[b].y>y))&&(x<(pts[b].x-pts[a].x)*(y-pts[a].y)/(pts[b].y-pts[a].y)+pts[a].x))inside=!inside;
   }return inside;}
 function hit(x,y){if(gpu.ready)return gpu.pick(shapes,x,y);for(let i=hitShapes.length-1;i>=0;i--)if(faceContains(hitShapes[i].verts,x,y))return hitShapes[i].owner;return null;}
-function setView(v){currentView=v;camera.panX=0;camera.panY=0;snapHint=null;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,-Math.PI/2+.012],bottom:[-.01,Math.PI/2-.012]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
+function setView(v){if(v==='iso')v='3d';if(v==='right')v='side';currentView=v;camera.panX=0;camera.panY=0;snapHint=null;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,-Math.PI/2+.012],bottom:[-.01,Math.PI/2-.012]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
  let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
  for(const g of p.groups)h+=`<tr><td>${esc(g.name)}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
@@ -569,6 +593,11 @@ document.addEventListener('pointerup',e=>{
 document.addEventListener('pointercancel',()=>{paletteGesture=null;$('#paletteDragGhost').classList.add('hidden');document.body?.classList.remove('beam-mobile-drag');});
 $('#inspector').addEventListener('change',handleInput);
 $('#sidebar').addEventListener('change',updateSettings);
+$('#sketchGridVisible')?.addEventListener('change',e=>setSketchSetting('visible',e.target.checked));
+$('#sketchGridStep')?.addEventListener('change',e=>setSketchSetting('step',Number(e.target.value)));
+$('#sketchAxes')?.addEventListener('change',e=>setSketchSetting('axes',e.target.checked));
+$('#sketchWallGrid')?.addEventListener('change',e=>setSketchSetting('walls',e.target.checked));
+$('#sketchParallel')?.addEventListener('click',()=>setSketchSetting('parallel',!sketchSettings.parallel));
 $('#gridSize').addEventListener('change',e=>{
   const allowed=[5,10,25,50];const n=Number(e.target.value);
   gridSize=allowed.includes(n)?n:5;updateDraftControls();draw();
@@ -737,10 +766,10 @@ canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointer
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
-persist();updateDraftControls();render();
+persist();updateDraftControls();syncSketchControls();render();
 window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove});
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.7.1',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.7.2',{updateViaCache:'none'}).catch(()=>{});
 })();
