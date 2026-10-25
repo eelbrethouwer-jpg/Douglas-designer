@@ -170,4 +170,4 @@ De automatische Node- en CI-tests bewijzen model- en interfacecodepaden, niet da
 
 ## 11. Planningsoverzicht
 
-Zie [ROADMAP.md](ROADMAP.md) voor de versievolgorde. Dit productdocument beschrijft het gewenste gedrag, niet de claim dat het al bestaat. De huidige v0.6 Studio is een **releasekandidaat**, terwijl verbindingstypen, uitgebreide apparaten, platenzaagplan, multi-projectbeheer en bouwdocumenten latere fases zijn.
+Zie [ROADMAP.md](ROADMAP.md) voor de versievolgorde. Dit productdocument beschrijft het gewenste gedrag, niet de claim dat het al bestaat. De huidige gepubliceerde versie is **v0.7.1** (25 oktober 2026): de code-/CI-controles zijn geslaagd (78/78), maar echte iPhone- en desktop-acceptatie is nog niet volledig aangetoond. Verbindingstypen, uitgebreide apparaten, platenzaagplan, multi-projectbeheer en bouwdocumenten blijven latere fases. Voor de actuele implementatie en bewijsstatus: [ARCHITECTURE.md](ARCHITECTURE.md) en [QUALITY_GATES.md](QUALITY_GATES.md).
