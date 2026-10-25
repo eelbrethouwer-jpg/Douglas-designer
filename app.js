@@ -15,7 +15,7 @@ const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
 const STORAGE='douglas-designer-v1'; // Stable key: never discard v0.1 projects
 const WELCOME_KEY='douglas-designer-welcome-v2';
 let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=normalize(M.demoProject());}
-let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false;
+let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
 const canvas=$('#scene'),ctx=canvas.getContext('2d');
@@ -80,6 +80,10 @@ function setSelected(type,id){
     $('#inspector').classList.toggle('mobile-visible',!!id);
   }
   if($('#interactionTip'))$('#interactionTip').textContent=id?'Onderdeel geselecteerd · sleep direct of tik op Bewerken':'Tik op een onderdeel om direct te bewerken';
+}
+function setRoomMove(enabled){roomMoveMode=!!enabled&&!!project.room?.enabled;
+ if(roomMoveMode){toggleDrawMode(false);setView('top');if(window.innerWidth<=800)switchMobile('design');toast('Sleep de keuken in het bovenaanzicht. Tik op Gereed om te stoppen.');}
+ return roomMoveMode;
 }
 function switchPanel(name){activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
 function switchMobile(name){
@@ -587,6 +591,11 @@ window.addEventListener('keyup',e=>{if(e.key.toLowerCase()==='s'){magnetHeldOff=
 window.addEventListener('blur',()=>{magnetHeldOff=false;});
 canvas.addEventListener('pointerdown',e=>{
   canvas.setPointerCapture(e.pointerId);
+  if(roomMoveMode&&project.room?.enabled){
+    pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+    dragging={mode:'move-kitchen',before:JSON.stringify(project),startPlacement:{...project.room.placement},startX:e.offsetX,startY:e.offsetY,moved:false};
+    return;
+  }
   if(drawMode){
     const start=drawPoint(e.offsetX,e.offsetY);if(!start)return;
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
@@ -622,6 +631,17 @@ canvas.addEventListener('pointerdown',e=>{
 });
 canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
+  if(dragging.mode==='move-kitchen'){
+    const p0=toScreenRaw([0,0,0]),px=toScreenRaw([100,0,0]),pz=toScreenRaw([0,0,100]);
+    const ux=(px.x-p0.x)/100,uy=(px.y-p0.y)/100,vx=(pz.x-p0.x)/100,vy=(pz.y-p0.y)/100,det=ux*vy-uy*vx;
+    if(Math.abs(det)>1e-6){
+      const sx=e.offsetX-dragging.startX,sy=e.offsetY-dragging.startY;
+      project.room.placement.x=Math.round((dragging.startPlacement.x+(sx*vy-sy*vx)/det)/10)*10;
+      project.room.placement.z=Math.round((dragging.startPlacement.z+(ux*sy-uy*sx)/det)/10)*10;
+      draw();
+    }
+    return;
+  }
   if(dragging.mode==='draw-beam'){
     const end=drawPoint(e.offsetX,e.offsetY);
     previewBeam=end?M.drawingBeam(dragging.start,end,viewAxes(),{step:gridSize}):null;
@@ -656,6 +676,11 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';Array.from(document.querySelectorAll('.view-btn')).forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){
+  if(dragging?.mode==='move-kitchen'){
+    const before=dragging.before;dragging=null;pointers.delete(e.pointerId);
+    if(JSON.stringify(project)!==before){undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+    else draw();return;
+  }
   if(dragging?.mode==='draw-beam'){
     const end=drawPoint(e.offsetX,e.offsetY);
     const beam=end?M.drawingBeam(dragging.start,end,viewAxes(),{step:gridSize}):null;
@@ -687,7 +712,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camer
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
 persist();updateDraftControls();render();
-window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast});
+window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove});
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
