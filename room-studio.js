@@ -316,7 +316,7 @@ function drawPreview(ctx,w,h,corners){
      ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.strokeStyle='#25342e';ctx.lineWidth=2;ctx.stroke();
    }
  }
- if(p.countertop)polygon([[-8,p.height,-15],[p.width+8,p.height,-15],[p.width+8,p.height,p.depth+15],[-8,p.height,p.depth+15]],worktop);
+ if(p.countertop){const ct=M.countertopBox?M.countertopBox(p):{x:-8,z:-15,w:p.width+16,d:p.depth+30};polygon([[ct.x,p.height,ct.z],[ct.x+ct.w,p.height,ct.z],[ct.x+ct.w,p.height,ct.z+ct.d],[ct.x,p.height,ct.z+ct.d]],worktop);}
  // Front posts stay visually legible and retain their underlying CAD dimensions.
  const posts=M.boundaries(p).posts;
  for(const x of posts)polygon([[x,0,0],[x+35,0,0],[x+35,p.height-28,0],[x,p.height-28,0]],wood);

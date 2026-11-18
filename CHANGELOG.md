@@ -1,3 +1,14 @@
+## v1.0.0-rc1 — release candidate
+
+- Meerdere projecten (aanmaken, dupliceren, hernoemen, prullenbak, back-up/herstel); oude opslag blijft ongemoeid als back-up.
+- Zaaglijst en materiaallijst per balkprofiel; instelbare aannames en eigen prijzen; CSV-export.
+- Werkblad-instellingen, apparaatmaten met pasvorm-waarschuwingen, conflictcontrole (overlap, niet-ondersteunde balken).
+- Bouwdocument: onderdelenlijst met codes, aanzichten (voor/zij/boven) met maatlijnen, printbaar, CSV.
+- Delen zonder server: link of `.douglas.json` (laptop → telefoon); aanleveren van foto's en maten (telefoon → laptop), met validatie van binnenkomende data.
+- Meten-tool (M) en reeks kopiëren.
+- `tools/browser-check.js` en `tools/e2e.js`: echte-browsertests (Chrome headless).
+- Bekende beperkingen: geen iPhone-test, geen Push/Pull of multi-select, eenvoudige verbindingstypen, geen constructeursvalidatie.
+
 ## Ongepubliceerd — materiaallijst (voorstel voor roadmap fase 6)
 
 - Nieuw `materials.js`: berekent uit het model een materiaallijst naast het zaagplan: RVS-schroeven (uit het aantal verbindingen/contactpunten tussen balken), werkblad en frontpanelen (m²), scharnieren en ladegeleiders, apparatuur (alleen telbaar) en olie/beits.

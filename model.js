@@ -12,6 +12,18 @@
     doors: {label:'Deurenkast', color:'#ad794b', min:260},
     open: {label:'Open vak', color:'#b48a60', min:220}
   };
+  // Douglas-profielen (breedte s × hoogte t in mm, bij oriëntatie als de standaard 50 × 100).
+  // De standaardbalk blijft 50 × 100 mm; de andere maten zijn opties die de gebruiker bewust kiest.
+  const DEFAULT_PROFILE='50x100';
+  const PROFILES={
+    '28x70':{id:'28x70',label:'28 × 70 mm (rachel)',s:28,t:70},
+    '50x50':{id:'50x50',label:'50 × 50 mm',s:50,t:50},
+    '50x100':{id:'50x100',label:'50 × 100 mm (standaard)',s:50,t:100},
+    '50x150':{id:'50x150',label:'50 × 150 mm',s:50,t:150},
+    '70x70':{id:'70x70',label:'70 × 70 mm',s:70,t:70},
+    '100x100':{id:'100x100',label:'100 × 100 mm',s:100,t:100}
+  };
+  const profileOf=(b)=>PROFILES[b&&b.profile]||PROFILES[DEFAULT_PROFILE];
   const number = (v, fallback=0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const round=(v)=>Math.round(v);
@@ -33,11 +45,32 @@
     }
     return m;
   }
+  // Werkblad: afmetingen in mm. Standaard = de tot nu toe getoonde waarden (24 mm dik, 8 mm zij-, 14 mm voor-/achteroverstek).
+  const COUNTERTOP_LIMITS={thickness:[10,80],overhangSide:[0,200],overhangFront:[0,300],overhangBack:[0,300]};
+  // Eigen apparaatmaten (fabrikantgegevens die de gebruiker zelf invoert); 0 = onbekend.
+  function normalizeAppliance(a){const d=(v)=>clamp(round(number(v,0)),0,2500);return {w:d(a.w),d:d(a.d),h:d(a.h)};}
+  // Referentiemateriaal uit aanleveringen (opmerkingen + foto's); alleen JPEG-data-URI's, begrensd.
+  const JPEG_RE=/^data:image\/jpeg;base64,[a-z0-9+/=]+$/i;
+  function normalizeReference(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+    const notes=String(raw.notes==null?'':raw.notes).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim().slice(0,2000);
+    const photos=(Array.isArray(raw.photos)?raw.photos:[]).filter(p=>typeof p==='string'&&p.length<=450000&&JPEG_RE.test(p)).slice(0,4);
+    return notes||photos.length?{notes,photos}:null;
+  }
+  function defaultCountertop(){return {thickness:24,overhangSide:8,overhangFront:14,overhangBack:14};}
+  function normalizeCountertop(raw){
+    const c=defaultCountertop();if(!raw||typeof raw!=='object'||Array.isArray(raw))return c;
+    for(const [k,[lo,hi]] of Object.entries(COUNTERTOP_LIMITS))c[k]=clamp(round(number(raw[k],c[k])),lo,hi);return c;
+  }
+  function countertopBox(p){
+    const c=p.countertopSpec||defaultCountertop();
+    return {x:-c.overhangSide,y:p.height-c.thickness,z:-c.overhangFront,w:p.width+2*c.overhangSide,h:c.thickness,d:p.depth+c.overhangFront+c.overhangBack};
+  }
   function demoProject() {
     return {
       version:1, id:uid(), name:'Mijn buitenkeuken', width:1875, depth:870, height:950,
       section:50, sectionLong:100, stockLength:2800, kerf:3, beamPrice:16.95,
-      countertop:true, frameEdits:{}, materials:defaultMaterials(), modules:[
+      countertop:true, countertopSpec:defaultCountertop(), frameEdits:{}, materials:defaultMaterials(), modules:[
         {id:uid(),kind:'drawers',width:520,name:'Ladekast'},
         {id:uid(),kind:'fridge',width:600,name:'Koelkast'},
         {id:uid(),kind:'kamado',width:555,name:'Kamado'}
@@ -87,16 +120,20 @@
     p.beamPrice=clamp(number(raw.beamPrice,p.beamPrice),0,1000);
     p.countertop=raw.countertop!==false;
     p.materials=normalizeMaterials(raw.materials);
+    p.countertopSpec=normalizeCountertop(raw.countertopSpec);
+    {const ref=normalizeReference(raw.reference);if(ref)p.reference=ref;}
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
-      name:String(m.name||TYPES[m.kind].label).slice(0,60)
+      name:String(m.name||TYPES[m.kind].label).slice(0,60),
+      ...(m.appliance&&typeof m.appliance==='object'?{appliance:normalizeAppliance(m.appliance)}:{})
     })) : p.modules;
     // An explicit empty module array is a valid FREE drawing document.
     p.beams=Array.isArray(raw.beams) ? raw.beams.slice(0,100).map(b=>({
       id:String(b.id||uid()),name:String(b.name||'Losse balk').slice(0,60),
       x:round(number(b.x)),y:round(number(b.y)),z:round(number(b.z)),
       axis:['x','y','z'].includes(b.axis)?b.axis:'x',
-      length:clamp(round(number(b.length,500)),50,6500)
+      length:clamp(round(number(b.length,500)),50,6500),
+      profile:PROFILES[b.profile]?b.profile:DEFAULT_PROFILE
     })) : [];
     // Only intentional frame edits are persisted; keep generated geometry parametric.
     p.frameEdits={};
@@ -107,6 +144,7 @@
         for(const axis of ['x','y','z'])if(Number.isFinite(edit[axis]))clean[axis]=clamp(round(edit[axis]),-10000,10000);
         if(Number.isFinite(edit.length))clean.length=clamp(round(edit.length),50,6500);
         if(typeof edit.name==='string')clean.name=edit.name.slice(0,60);
+        if(PROFILES[edit.profile])clean.profile=edit.profile;
         if(edit.disabled===true)clean.disabled=true;
         if(Object.keys(clean).length)p.frameEdits[id]=clean;
       }
@@ -137,7 +175,7 @@
     return {sections, posts:[...sections.map(s=>s.post),x]};
   }
   function beamBox(b){
-    const s=50, t=100;
+    const {s,t}=profileOf(b);
     if(b.axis==='x') return {x:b.x,y:b.y,z:b.z,w:b.length,h:t,d:s};
     if(b.axis==='y') return {x:b.x,y:b.y,z:b.z,w:s,h:b.length,d:t};
     return {x:b.x,y:b.y,z:b.z,w:s,h:t,d:b.length};
@@ -150,7 +188,7 @@
       const patch=p.frameEdits?.[id];
       if(patch?.disabled)return null;
       const b={id,name,axis,length:round(length),x:round(x),y:round(y),z:round(z),group};
-      if(patch)for(const key of ['name','length','x','y','z'])if(patch[key]!==undefined)b[key]=patch[key];
+      if(patch)for(const key of ['name','length','x','y','z','profile'])if(patch[key]!==undefined)b[key]=patch[key];
       cuts.push(b);return b;
     }
     for(const [i,x] of posts.entries()){
@@ -185,6 +223,7 @@
     if(Object.hasOwn(changes,'length')&&Number.isFinite(Number(changes.length)))
       patch.length=clamp(round(Number(changes.length)),50,6500);
     if(Object.hasOwn(changes,'name'))patch.name=String(changes.name).slice(0,60)||base.name;
+    if(Object.hasOwn(changes,'profile')&&PROFILES[changes.profile])patch.profile=changes.profile;
     if(Object.hasOwn(changes,'disabled'))patch.disabled=changes.disabled===true;
     p.frameEdits={...(p.frameEdits||{}),[id]:patch};
     return true;
@@ -223,21 +262,77 @@
     return gaps[0]||null;
   }
   function allBeams(p){return [...framePieces(p),...p.beams.map(b=>({...b,group:'Losse balken'}))];}
-  function boardPlan(p){
-    const cuts=allBeams(p).map(b=>({name:b.name,length:b.length,group:b.group}));
-    const groups=new Map();
-    for(const c of cuts) {const key=c.length+'|'+c.name;const item=groups.get(key)||{length:c.length,name:c.name,count:0};item.count++;groups.set(key,item);}
-    const sorted=[...cuts].sort((a,b)=>b.length-a.length), boards=[], impossible=[];
-    for(const cut of sorted){
-      if(cut.length>p.stockLength){impossible.push(cut);continue;}
-      let board=boards.find(b=>b.used+cut.length+(b.cuts.length?p.kerf:0)<=p.stockLength);
-      if(!board){board={used:0,cuts:[]};boards.push(board);}
-      board.used+=cut.length+(board.cuts.length?p.kerf:0);board.cuts.push(cut);
+  // Contactpunten: twee niet-parallelle balken waarvan een kopse kant de ander raakt
+  // (tolerantie 1 mm, dwarsoverlap > 5 mm). Geeft Map<id, Set<id>>.
+  const AXDIM={x:['x','w'],y:['y','h'],z:['z','d']};
+  function beamContacts(p){
+    const items=allBeams(p).map(b=>({b,box:beamBox(b)})),map=new Map(items.map(i=>[i.b.id,new Set()]));
+    for(const a of items){
+      const axis=a.b.axis,[k,l]=AXDIM[axis],ends=[a.box[k],a.box[k]+a.box[l]],others=['x','y','z'].filter(o=>o!==axis);
+      for(const o of items){
+        if(o===a||o.b.axis===axis)continue;
+        const lo=o.box[k]-1,hi=o.box[k]+o.box[l]+1;
+        if(!ends.some(e=>e>=lo&&e<=hi))continue;
+        const touching=others.every(t=>{const [tk,tl]=AXDIM[t];return Math.min(a.box[tk]+a.box[tl],o.box[tk]+o.box[tl])-Math.max(a.box[tk],o.box[tk])>5;});
+        if(touching){map.get(a.b.id).add(o.b.id);map.get(o.b.id).add(a.b.id);}
+      }
     }
-    return {groups:[...groups.values()].sort((a,b)=>b.length-a.length),boards,impossible,
+    return map;
+  }
+  // Geometrische controle (geen constructieve berekening): overlappende balken en balken zonder steunpunt.
+  // Reeks: maakt `count` kopieën van een balk, telkens `spacing` mm verder langs `axis` (x/y/z).
+  // Kopieën zijn vrije balken (ook als het origineel een framebalk is). Respecteert het maximum van 100 losse balken.
+  function arrayBeams(p,source,axis,count,spacing){
+    if(!source||!['x','y','z'].includes(axis))return {ok:false,error:'Ongeldige richting',beams:[]};
+    const n=Math.round(number(count,0)),step=Math.round(number(spacing,0));
+    if(n<1||n>50)return {ok:false,error:'Aantal moet tussen 1 en 50 liggen',beams:[]};
+    if(step===0||Math.abs(step)>10000)return {ok:false,error:'Afstand moet tussen 1 en 10.000 mm liggen (niet 0)',beams:[]};
+    const room=Math.max(0,100-p.beams.length),made=Math.min(n,room),beams=[];
+    for(let i=1;i<=made;i++){
+      const b={id:uid(),name:String(source.name||'Balk').slice(0,52)+' '+(i+1),axis:source.axis,length:source.length,x:source.x,y:source.y,z:source.z,profile:profileOf(source).id};
+      b[axis]=source[axis]+step*i;beams.push(b);
+    }
+    return {ok:true,beams,skipped:n-made};
+  }
+  function conflicts(p){
+    const items=allBeams(p).map(b=>({b,box:beamBox(b)})),overlaps=[],unsupported=[];
+    const ov=(a,b,k,l)=>Math.min(a[k]+a[l],b[k]+b[l])-Math.max(a[k],b[k]);
+    for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+      const a=items[i],b=items[j];
+      if(ov(a.box,b.box,'x','w')>5&&ov(a.box,b.box,'y','h')>5&&ov(a.box,b.box,'z','d')>5)overlaps.push([a.b,b.b]);
+    }
+    const contacts=beamContacts(p);
+    for(const {b,box} of items){
+      // Alleen vrije balken: een balk die de grond niet raakt en geen enkele andere balk raakt, hangt in de lucht.
+      if(b.group==='Losse balken'&&box.y>0&&contacts.get(b.id).size===0)unsupported.push(b);
+    }
+    return {overlaps,unsupported};
+  }
+  function boardPlan(p){
+    const cuts=allBeams(p).map(b=>({id:b.id,name:b.name,length:b.length,group:b.group,profile:profileOf(b).id}));
+    const groups=new Map();
+    for(const c of cuts) {const key=c.profile+'|'+c.length+'|'+c.name;const item=groups.get(key)||{profile:c.profile,length:c.length,name:c.name,count:0};item.count++;groups.set(key,item);}
+    const boards=[], impossible=[], byProfile=[];
+    // Hout van verschillende profielen kan nooit uit dezelfde handelsbalk komen: plan per profiel.
+    for(const id of Object.keys(PROFILES)){
+      const mine=cuts.filter(c=>c.profile===id).sort((a,b)=>b.length-a.length);
+      if(!mine.length)continue;
+      const list=[];
+      for(const cut of mine){
+        if(cut.length>p.stockLength){impossible.push(cut);continue;}
+        let board=list.find(b=>b.used+cut.length+(b.cuts.length?p.kerf:0)<=p.stockLength);
+        if(!board){board={used:0,cuts:[],profile:id};list.push(board);}
+        board.used+=cut.length+(board.cuts.length?p.kerf:0);board.cuts.push(cut);
+      }
+      boards.push(...list);
+      // Standaardprofiel: prijs uit de zaaginstellingen; overige profielen: eigen invoer, anders onbekend.
+      const own=id===DEFAULT_PROFILE?p.beamPrice:p.materials?.prices?.['balk-'+id];
+      byProfile.push({profile:id,label:PROFILES[id].label,count:list.length,price:own??0,priceKnown:own!==undefined});
+    }
+    return {groups:[...groups.values()].sort((a,b)=>b.length-a.length||a.profile.localeCompare(b.profile)),boards,impossible,byProfile,
       totalLength:cuts.reduce((s,c)=>s+c.length,0),pieces:cuts.length,
       waste:boards.reduce((s,b)=>s+p.stockLength-b.used,0),
-      estimatedPrice:boards.length*p.beamPrice};
+      estimatedPrice:byProfile.reduce((s,x)=>s+x.count*x.price,0)};
   }
   function warnings(p){
     const result=[];
@@ -247,6 +342,15 @@
     for(const s of sections){
       const min=TYPES[s.module.kind].min;
       if(s.module.width<min)result.push(`${s.module.name}: opening ${s.module.width} mm, richtwaarde ${min} mm.`);
+    }
+    const openingH=p.height-325,interiorD=p.depth-200; // tussen onder- en bovenligger; tussen voor- en achterstaander
+    for(const m of p.modules){
+      const a=m.appliance;if(!a||!(m.kind==='fridge'||m.kind==='kamado'))continue;
+      const label=m.kind==='fridge'?'Koelkast':'Kamado',issues=[];
+      if(a.w>0&&a.w>m.width)issues.push(`breedte ${a.w} mm > opening ${m.width} mm`);
+      if(a.d>0&&a.d>interiorD)issues.push(`diepte ${a.d} mm > beschikbaar ${interiorD} mm`);
+      if(a.h>0&&a.h>openingH)issues.push(`hoogte ${a.h} mm > opening ${openingH} mm`);
+      if(issues.length)result.push(`${m.name||label}: apparaat past niet (${issues.join('; ')}).`);
     }
     const fridge=p.modules.find(m=>m.kind==='fridge');
     if(fridge)result.push('Koelkast: ventilatie- en montageruimte afhankelijk van het apparaat; nog niet berekend.');
@@ -260,7 +364,10 @@
       if(box.x<0||box.y<0||box.z<0||box.x+box.w>p.width||box.y+box.h>p.height||box.z+box.d>p.depth)result.push(`${b.name}: valt (deels) buiten de buitenkeuken.`);
     }
     if(boardPlan(p).impossible.length)result.push('Minstens één balk is langer dan de gekozen handelslengte.');
+    const cf=conflicts(p);
+    if(cf.overlaps.length)result.push(`${cf.overlaps.length} balkcombinatie(s) overlappen elkaar: ${cf.overlaps.slice(0,3).map(([a,b])=>a.name+' / '+b.name).join(', ')}${cf.overlaps.length>3?', …':''}.`);
+    if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,arrayBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

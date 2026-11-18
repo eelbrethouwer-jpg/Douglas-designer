@@ -2,6 +2,8 @@
 (function(){
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
+const DOCS=window.DouglasDocuments||null;
+const APP_VERSION='1.0.0-rc1';
 const MAT=window.DouglasMaterials||null; // optioneel: zonder materials.js blijft de zaaglijst werken
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
 const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
@@ -14,7 +16,10 @@ const fmt=(n)=>new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(n
 const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n);
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
-const STORAGE='douglas-designer-v1'; // Stable key: never discard v0.1 projects
+const SHARE=window.DouglasShare||null; // optioneel: zonder share.js verdwijnen delen/aanleveren
+const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
+const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
+let storageProblem=false;
 const WELCOME_KEY='douglas-designer-welcome-v2';
 const SKETCH_KEY='douglas-designer-sketch-grid-v1';
 let sketchSettings;
@@ -32,7 +37,7 @@ function syncSketchControls(){
  if(step)step.value=String(sketchSettings.step);
  if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
 }
-let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=normalize(M.demoProject());}
+let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null,lastSaveOk=true;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
@@ -42,11 +47,21 @@ const gpu=window.DouglasGpuRenderer?.create(gpuCanvas)||{ready:false};
 let shapes=[], hitShapes=[], viewport={w:800,h:500}, dragging=null, pointers=new Map(),pinchDistance=0;
 let armedBeamType=null,previewBeam=null,paletteGesture=null,suppressPresetClick=false;
 let drawMode=false;
+let measureMode=false,measureData=null; // meetgereedschap: {a,b,fixed}
 let beamEndHandles=[];
 let gridSize=5,magnetEnabled=true,magnetHeldOff=false,snapHint=null;
 const viewAxes=()=>currentView==='front'?['x','y']:currentView==='side'?['z','y']:(currentView==='top'||currentView==='bottom')?['x','z']:null;
 const snap5=n=>D.snap(n,gridSize);
+function toggleMeasureMode(active){
+  measureMode=active;measureData=null;if(active){drawMode=false;disarmBeam();if(!viewAxes())setView('front');}
+  $('#measureTool').classList.toggle('active',active);$('#measureTool').setAttribute('aria-pressed',String(active));
+  $('#selectTool').classList.toggle('active',!active&&!drawMode);$('#drawTool').classList.toggle('active',drawMode);
+  $('#drawHelp').classList.toggle('hidden',!active&&!drawMode);
+  if(active)$('#drawHelp').textContent='Klik het eerste en daarna het tweede punt · magneet en raster gelden · Esc om te stoppen';
+  canvas.classList.toggle('draw-active',active);draw();
+}
 function toggleDrawMode(active){
+  if(measureMode){measureMode=false;measureData=null;$('#measureTool').classList.remove('active');$('#measureTool').setAttribute('aria-pressed','false');}
   drawMode=active;disarmBeam();
   if(active&&!viewAxes())setView('front');
   $('#selectTool').classList.toggle('active',!active);
@@ -84,16 +99,22 @@ function handleAt(px,py){
 
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
 function persist(){
- try{
-  localStorage.setItem(STORAGE,JSON.stringify(project));lastSaveOk=true;
-  $('#saveStatus').textContent='● Lokaal opgeslagen';
- }catch(e){
-  lastSaveOk=false;
-  $('#saveStatus').textContent='● Opslag niet beschikbaar';
-  toast('Opslag is vol of geblokkeerd. Exporteer het project als JSON-back-up.');
- }
+ const r=store.save(project.id,project);
+ if(r.ok){lastSaveOk=true;storageProblem=false;const t=new Date(r.savedAt);$('#saveStatus').textContent='● Lokaal opgeslagen · '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');}
+ else{lastSaveOk=false;$('#saveStatus').textContent='● Opslag niet beschikbaar';toast((r.error||'Opslag is vol of geblokkeerd')+'. Exporteer het project als JSON-back-up.');}
 }
 function commit(fn){const before=JSON.stringify(project);fn(project);project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+function resetSession(){undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
+// Nieuw project aanmaken en openen; het huidige project blijft ongemoeid in de lijst staan.
+function openNewProject(raw,msg){
+ const p=normalize(raw),r=store.create(p);
+ if(!r.ok){toast('Niet gelukt: '+r.error+'. Het huidige project blijft actief.');return false;}
+ project=p;resetSession();render();hideWelcome();switchMobile('design');closeModal();if(msg)toast(msg);return true;
+}
+function switchProject(id){
+ const raw=store.load(id);if(!raw){toast('Project niet gevonden');return;}
+ project=normalize(raw);store.setActive(id);resetSession();render();closeModal();toast('Geopend: '+project.name);
+}
 function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);return null;}
 function setSelected(type,id){
@@ -227,7 +248,7 @@ function render(){
   $('#moduleList').innerHTML=modules.map((m,i)=>`<div class="module-card ${selected?.id===m.id?'active':''}" data-select-module="${esc(m.id)}"><div class="module-symbol">${icons[m.kind]}</div><div class="module-meta"><strong>${esc(m.name)}</strong><small>${fmt(m.width)} mm breed · ${M.TYPES[m.kind].label}</small></div><div class="reorder"><button data-move-module="${esc(m.id)}" data-direction="-1" title="Naar links" ${i===0?'disabled':''}>↑</button><button data-move-module="${esc(m.id)}" data-direction="1" title="Naar rechts" ${i===modules.length-1?'disabled':''}>↓</button></div></div>`).join('');
   $('#beamList').innerHTML=beams.length?beams.map(b=>`<div class="module-card ${selected?.id===b.id?'active':''}" data-select-beam="${esc(b.id)}"><div class="module-symbol">▥</div><div class="module-meta"><strong>${esc(b.name)}</strong><small>${fmt(b.length)} mm · as ${b.axis.toUpperCase()}</small></div><span style="color:#8e9890">›</span></div>`).join(''):'<p class="hint">Nog geen extra balken geplaatst.</p>';
   $('#presetGrid').innerHTML=Object.entries(M.TYPES).map(([key,v])=>`<button class="preset" data-add="${key}"><span class="preset-icon">${icons[key]}</span>${v.label} ＋</button>`).join('');
-  $('#projectName').value=project.name;$('#projectWidth').value=project.width;$('#projectDepth').value=project.depth;$('#projectHeight').value=project.height;$('#stockLength').value=project.stockLength;$('#kerf').value=project.kerf;$('#beamPrice').value=project.beamPrice;$('#countertopCheck').checked=project.countertop;
+  $('#projectName').value=project.name;$('#projectWidth').value=project.width;$('#projectDepth').value=project.depth;$('#projectHeight').value=project.height;$('#stockLength').value=project.stockLength;$('#kerf').value=project.kerf;$('#beamPrice').value=project.beamPrice;$('#countertopCheck').checked=project.countertop;{const c=project.countertopSpec||M.defaultCountertop();$('#ctThickness').value=c.thickness;$('#ctSide').value=c.overhangSide;$('#ctFront').value=c.overhangFront;$('#ctBack').value=c.overhangBack;}
   $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;
   renderInspector();draw();
   window.DouglasRoomStudio?.refresh?.();
@@ -237,14 +258,14 @@ function renderInspector(){
   if(!obj){
     $('#inspectorTitle').textContent='Projectoverzicht';
     const plan=M.boardPlan(project),warn=M.warnings(project);
-    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>50 × 100 mm · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${euro(plan.estimatedPrice)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft uitsluitend de Douglas balken; geen werkblad, platen, apparatuur, bevestigingsmiddelen of arbeid. De 3D-modules zijn schematisch.</p>`;
+    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>${plan.byProfile.length>1?plan.byProfile.map(x=>x.count+'× '+x.profile.replace('x',' × ')).join(' · '):'50 × 100 mm'} · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${euro(plan.estimatedPrice)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft de Douglas balken (standaardprofiel, tenzij je een eigen prijs invult). Platen, schroeven, beslag en afwerking staan in de materiaallijst. De 3D-modules zijn schematisch.</p>`;
     foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="openCutlist">▤ Zaaglijst & materiaal bekijken →</button><button class="outline-btn full" id="imageBtn">↓ 3D-aanzicht opslaan (PNG)</button></div>';
     return;
   }
   if(selected.type==='module'){
     const spec=M.TYPES[obj.kind];const kindOptions=Object.entries(M.TYPES).map(([k,v])=>`<option value="${k}" ${obj.kind===k?'selected':''}>${v.label}</option>`).join('');
     $('#inspectorTitle').textContent=obj.name;
-    body.innerHTML=`<div class="preview-icon">${icons[obj.kind]}</div><p class="inspector-label">MODULE INSTELLINGEN</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}" maxlength="60"></label><label class="field">Type<select data-edit="kind">${kindOptions}</select></label><div class="field-grid"><label class="field">Opening breedte (mm)<input data-edit="width" type="number" min="200" max="2400" step="5" value="${obj.width}"></label></div><div class="divider"></div><p class="inspector-label">GEOMETRIE</p><div class="detail-label"><span>Modulebreedte</span><strong>${fmt(obj.width)} mm</strong></div><div class="detail-label"><span>Buitenhoogte</span><strong>${fmt(project.height)} mm</strong></div><div class="detail-label"><span>Constructiediepte</span><strong>${fmt(project.depth)} mm</strong></div><div class="divider"></div><div class="warning">Modulebeeld is indicatief, niet op basis van fabrikantmetingen. Controleer inbouwmaten, ventilatie en hittebescherming vóór de bouw.</div>`;
+    body.innerHTML=`<div class="preview-icon">${icons[obj.kind]}</div><p class="inspector-label">MODULE INSTELLINGEN</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}" maxlength="60"></label><label class="field">Type<select data-edit="kind">${kindOptions}</select></label><div class="field-grid"><label class="field">Opening breedte (mm)<input data-edit="width" type="number" min="200" max="2400" step="5" value="${obj.width}"></label></div>${(obj.kind==='fridge'||obj.kind==='kamado')?`<div class="divider"></div><p class="inspector-label">APPARAAT — EIGEN MATEN</p><p class="mini-note">Vul de maten uit de fabrikantgegevens in (0 = onbekend). De app controleert alleen of het apparaat in de opening past; ventilatie en hitteafstand blijven je eigen controle.</p><div class="field-grid"><label class="field">Breedte<input data-edit="app_w" type="number" min="0" max="2500" step="5" value="${obj.appliance?.w||0}"></label><label class="field">Diepte<input data-edit="app_d" type="number" min="0" max="2500" step="5" value="${obj.appliance?.d||0}"></label><label class="field">Hoogte<input data-edit="app_h" type="number" min="0" max="2500" step="5" value="${obj.appliance?.h||0}"></label></div>`:''}<div class="divider"></div><p class="inspector-label">GEOMETRIE</p><div class="detail-label"><span>Modulebreedte</span><strong>${fmt(obj.width)} mm</strong></div><div class="detail-label"><span>Buitenhoogte</span><strong>${fmt(project.height)} mm</strong></div><div class="detail-label"><span>Constructiediepte</span><strong>${fmt(project.depth)} mm</strong></div><div class="divider"></div><div class="warning">Modulebeeld is indicatief, niet op basis van fabrikantmetingen. Controleer inbouwmaten, ventilatie en hittebescherming vóór de bouw.</div>`;
     foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze module</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }else{
     const isFrame=selected.type==='frame';
@@ -252,10 +273,11 @@ function renderInspector(){
     const axisField=isFrame?
       `<div class="detail-label"><span>Richting</span><strong>${obj.axis.toUpperCase()} — automatisch frame</strong></div>`:
       `<label class="field">Lengterichting<select data-edit="axis"><option value="x" ${obj.axis==='x'?'selected':''}>X — breedte</option><option value="y" ${obj.axis==='y'?'selected':''}>Y — hoogte</option><option value="z" ${obj.axis==='z'?'selected':''}>Z — diepte</option></select></label>`;
-    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">${isFrame?'AUTOMATISCHE FRAMEBALK — BEWERKBAAR':'VRIJE BALK'} · 50 × 100 MM</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label>${axisField}<label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><div class="nudge-tools"><span>VERPLAATS 5 MM</span><div><button data-nudge="x:-5" title="5 mm links">←</button><button data-nudge="y:5" title="5 mm omhoog">↑</button><button data-nudge="y:-5" title="5 mm omlaag">↓</button><button data-nudge="x:5" title="5 mm rechts">→</button></div><div><button data-nudge="z:-5">Diepte −</button><button data-nudge="z:5">Diepte ＋</button></div></div><div class="notice-small">${isFrame?'Deze balk hoort bij het automatische frame. Jouw positie en lengte worden bewaard en meegerekend in de zaaglijst. Controleer na aanpassen alle verbindingen en draagkracht.':'Sleep de balk direct op het canvas. In 3D en vooraanzicht beweeg je horizontaal en in hoogte; in bovenaanzicht verplaats je de diepte. Coördinaten zijn in mm vanaf links/onder/voorzijde.'}</div>`;
+    body.innerHTML=`<div class="preview-icon">▥</div><p class="inspector-label">${isFrame?'AUTOMATISCHE FRAMEBALK — BEWERKBAAR':'VRIJE BALK'} · ${M.profileOf(obj).label.replace(' (standaard)','').replace(' (rachel)','').toUpperCase()}</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><label class="field">Profiel (doorsnede)<select data-edit="profile">${Object.values(M.PROFILES).map(pr=>`<option value="${pr.id}" ${M.profileOf(obj).id===pr.id?'selected':''}>${pr.label}</option>`).join('')}</select></label><div class="field-grid"><label class="field">Lengte (mm)<input data-edit="length" type="number" min="50" max="6500" step="5" value="${obj.length}"></label>${axisField}<label class="field">X vanaf links<input data-edit="x" type="number" step="5" value="${obj.x}"></label><label class="field">Y vanaf onder<input data-edit="y" type="number" step="5" value="${obj.y}"></label><label class="field">Z vanaf voorzijde<input data-edit="z" type="number" step="5" value="${obj.z}"></label></div><div class="nudge-tools"><span>VERPLAATS 5 MM</span><div><button data-nudge="x:-5" title="5 mm links">←</button><button data-nudge="y:5" title="5 mm omhoog">↑</button><button data-nudge="y:-5" title="5 mm omlaag">↓</button><button data-nudge="x:5" title="5 mm rechts">→</button></div><div><button data-nudge="z:-5">Diepte −</button><button data-nudge="z:5">Diepte ＋</button></div></div><div class="notice-small">${isFrame?'Deze balk hoort bij het automatische frame. Jouw positie en lengte worden bewaard en meegerekend in de zaaglijst. Controleer na aanpassen alle verbindingen en draagkracht.':'Sleep de balk direct op het canvas. In 3D en vooraanzicht beweeg je horizontaal en in hoogte; in bovenaanzicht verplaats je de diepte. Coördinaten zijn in mm vanaf links/onder/voorzijde.'}</div>`;
     foot.innerHTML=isFrame?
       '<div class="right-foot-actions"><button class="outline-btn full" id="restoreSelectedFrame">↺ Originele framebalk herstellen</button><button class="outline-btn full" id="duplicateBeam">⧉ Losse kopie maken</button><button class="outline-btn full delete-btn" id="deleteSelected">Deze framebalk uitschakelen</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>':
       '<div class="right-foot-actions"><button class="primary-btn full" id="fitSelectedBeam">↔ Passend maken tussen balken</button><button class="outline-btn full" id="duplicateBeam">⧉ Balk dupliceren</button><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze balk</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
+    body.innerHTML+=`<div class="divider"></div><p class="inspector-label">REEKS KOPIËREN</p><p class="mini-note">Maakt vrije kopieën, telkens een stap verder (bijv. rachels h.o.h. 400 mm).</p><div class="field-grid"><label class="field">Aantal<input id="arrCount" type="number" min="1" max="50" step="1" value="3"></label><label class="field">Afstand (mm)<input id="arrSpacing" type="number" step="5" value="400"></label></div><label class="field">Richting<select id="arrAxis"><option value="x" ${obj.axis==='x'?'':'selected'}>X — breedte</option><option value="y">Y — hoogte</option><option value="z" ${obj.axis==='x'?'selected':''}>Z — diepte</option></select></label><button class="outline-btn full" id="arrayBeamBtn">⧉ Reeks maken</button>`;
   }
 }
 /* Lightweight 3D geometry projector — not a static mockup and no external CDN required. */
@@ -349,7 +371,7 @@ function objects(){shapes=[];hitShapes=[];
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
-  if(project.countertop){box(-8,project.height-24,-14,project.width+16,24,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
+  if(project.countertop){const ct=M.countertopBox(project);box(ct.x,ct.y,ct.z,ct.w,ct.h,ct.d,RGB.top,null,gpu.ready?Infinity:110);}
  drawRoomGeometry();
  drawSketchGuides();
 }
@@ -441,9 +463,17 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
     for(const s of shapes){if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=1.6;path(s.verts);ctx.stroke();}}
   }
   drawDims();if(currentView==='3d')drawLabels();
-  if(snapHint&&drawMode){
+  if(snapHint&&(drawMode||measureMode)){
     ctx.save();ctx.lineWidth=2;ctx.strokeStyle='#15826a';ctx.fillStyle='#fff';
     ctx.beginPath();ctx.arc(snapHint.x,snapHint.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
+  }
+  if(measureData&&measureData.a){
+    const plane=viewAxes(),b=measureData.b||measureData.a,A=toScreen([measureData.a.x,measureData.a.y,measureData.a.z]),B=toScreen([b.x,b.y,b.z]),r=D.measure(measureData.a,b,plane);
+    ctx.save();ctx.strokeStyle='#d9822b';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();ctx.setLineDash([]);
+    for(const P of [A,B]){ctx.beginPath();ctx.arc(P.x,P.y,5,0,Math.PI*2);ctx.fill();ctx.stroke();}
+    if(r&&r.dist>0){const txt=`${fmt(r.dist)} mm  (Δ${r.h.toUpperCase()} ${fmt(r.dx)} · Δ${r.v.toUpperCase()} ${fmt(r.dy)})`;ctx.font='700 12px sans-serif';const w=ctx.measureText(txt).width+16,mx=(A.x+B.x)/2,my=(A.y+B.y)/2-16;
+      ctx.fillStyle='rgba(255,255,255,.95)';ctx.fillRect(mx-w/2,my-12,w,22);ctx.strokeStyle='#d9822b';ctx.lineWidth=1;ctx.strokeRect(mx-w/2,my-12,w,22);ctx.fillStyle='#7a4a12';ctx.textAlign='center';ctx.fillText(txt,mx,my+4);}
+    ctx.restore();
   }
   beamEndHandles=[];
   if((selected?.type==='beam'||selected?.type==='frame') && !drawMode){
@@ -488,17 +518,161 @@ function materialsHTML(){
  return h;
 }
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
- let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
- for(const g of p.groups)h+=`<tr><td>${esc(g.name)}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
+ let h=(DOCS?`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:16px"><button class="primary-btn" id="showDocument">▤ Bouwdocument (tekeningen + lijsten)</button><button class="outline-btn" id="csvParts">↓ Onderdelenlijst CSV</button></div>`:'')+`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
+ for(const g of p.groups)h+=`<tr><td>${esc(g.name)}${g.profile!==M.DEFAULT_PROFILE?` <small style="color:#8a968d">${esc(M.PROFILES[g.profile].label)}</small>`:''}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
  h+=`</tbody></table><h4 class="cut-section">GEOPTIMALISEERD ZAAGPLAN — HANDELSLENGTE ${fmt(project.stockLength)} MM</h4>`;
- p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
+ p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}${b.profile!==M.DEFAULT_PROFILE?`<br><small>${esc(b.profile)}</small>`:''}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
  if(p.impossible.length)h+=`<div class="warning">${p.impossible.length} zaagstukken overschrijden de balklengte van ${fmt(project.stockLength)} mm en zijn NIET opgenomen in het zaagplan.</div>`;
  h+=materialsHTML();
  h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">De balkenraming hierboven omvat alleen Douglas balken; platen, schroeven, beslag en afwerking staan in de materiaallijst. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
  return h;
 }
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
+function showDocument(){if(!DOCS)return;modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='BOUWDOCUMENT / ONTWERPRAMING';$('#modalTitle').textContent='Bouwdocument';
+  $('#modalContent').innerHTML=`<div class="right-foot-actions" style="flex-direction:row;margin-bottom:12px"><button class="outline-btn" id="openCutlist">← Terug naar zaaglijst</button></div>`+DOCS.documentHTML(project,M,MAT,{version:APP_VERSION});$('#modalContent').scrollTop=0;}
+function projectsHTML(){
+ const items=store.list(),trash=store.trashList(),when=(t)=>new Date(t).toLocaleString('nl-NL',{dateStyle:'short',timeStyle:'short'});
+ const kb=(n)=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB';
+ let h=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:14px"><button class="primary-btn" data-proj="new">＋ Nieuw (met vak)</button><button class="outline-btn" data-proj="free">✎ Vrij tekenen</button><button class="outline-btn" data-proj="demo">◈ Voorbeeld</button><button class="outline-btn" data-proj="import">↥ Project importeren</button></div>`;
+ h+=`<table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
+ for(const it of items)h+=`<tr${it.active?' style="background:#f2f7f1"':''}><td><input data-proj-name="${esc(it.id)}" value="${esc(it.name)}" maxlength="80" aria-label="Projectnaam" style="width:100%;min-width:140px;border:1px solid #dce1d9;border-radius:7px;padding:7px 9px;font:inherit">${it.active?'<small style="color:#2f7059;font-weight:700"> ● actief</small>':''}</td><td>${esc(when(it.updatedAt))}</td><td>${kb(it.bytes)}</td><td style="white-space:nowrap;text-align:right">${it.active?'':`<button class="outline-btn" data-proj="open:${esc(it.id)}">Openen</button> `}<button class="outline-btn" data-proj="dup:${esc(it.id)}" title="Dupliceren">⧉</button> <button class="outline-btn delete-btn" data-proj="del:${esc(it.id)}" title="Verwijderen (naar prullenbak)">✕</button></td></tr>`;
+ h+=`</tbody></table>`;
+ if(trash.length){h+=`<h4 class="cut-section">PRULLENBAK (LAATSTE ${trash.length})</h4><table class="cuttable"><tbody>`;for(const t of trash)h+=`<tr><td>${esc(t.name)}</td><td>${esc(when(t.deletedAt))}</td><td style="text-align:right"><button class="outline-btn" data-proj="restore:${esc(t.trashId)}">↺ Terugzetten</button></td></tr>`;h+=`</tbody></table>`;}
+ h+=`<h4 class="cut-section">BACK-UP</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-proj="exportAll">↓ Alle projecten exporteren</button></div><div class="notice-small">Je projecten staan alleen in deze browser. Opslag in gebruik: ca. ${kb(store.usage()*2)} (browsers staan meestal ca. 5 MB toe; foto's nemen de meeste ruimte in). Maak regelmatig een back-up. Importeren voegt altijd <strong>nieuwe</strong> projecten toe en overschrijft nooit iets.</div>`;
+ return h;
+}
+function showProjects(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='PROJECTEN';$('#modalTitle').textContent='Mijn projecten';$('#modalContent').innerHTML=projectsHTML();}
+function projectAction(spec){
+ const [act,...rest]=spec.split(':'),id=rest.join(':');
+ if(act==='new')openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');
+ else if(act==='free'){if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);}}
+ else if(act==='demo')openNewProject(M.demoProject(),'Voorbeeld geopend');
+ else if(act==='import')$('#fileInput').click();
+ else if(act==='open')switchProject(id);
+ else if(act==='dup'){const r=store.duplicate(id);if(r.ok){toast('Gedupliceerd');showProjects();}else toast('Dupliceren mislukt: '+r.error);}
+ else if(act==='del'){
+  const was=id===project.id,r=store.trash(id);
+  if(!r.ok){toast('Verwijderen mislukt: '+r.error);return;}
+  if(was){if(r.activeId)switchProject(r.activeId);else openNewProject(M.demoProject());}
+  toast('Naar prullenbak verplaatst; terug te zetten in dit overzicht');showProjects();
+ }
+ else if(act==='restore'){const r=store.restore(id);if(r.ok){toast('Teruggezet');switchProject(r.id);showProjects();}else toast('Terugzetten mislukt: '+r.error);}
+ else if(act==='exportAll'){download('douglas-designer-alle-projecten.json',store.exportAll());toast('Back-up van alle projecten opgeslagen');}
+}
+
+/* ---------- delen en aanleveren (zonder server) ---------- */
+let shareLink='',deliveryDraft={name:'',width:'',depth:'',height:'',notes:'',photos:[]},pendingReceive=null;
+const canNativeShare=()=>typeof navigator!=='undefined'&&typeof navigator.share==='function';
+function openModal(eyebrow,title,html){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent=eyebrow;$('#modalTitle').textContent=title;$('#modalContent').innerHTML=html;$('#modalContent').scrollTop=0;}
+async function copyText(text,okMsg){try{await navigator.clipboard.writeText(text);toast(okMsg||'Gekopieerd');return true;}catch(_){toast('Kopiëren niet gelukt; selecteer de tekst en kopieer handmatig');return false;}}
+function fileFor(name,text,type='application/json'){return new File([text],name,{type});}
+async function shareOrDownload(file,title,text){
+ try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title,text});return;}}
+ catch(e){if(e&&e.name==='AbortError')return;}
+ download(file.name,await file.text(),file.type);toast('Bestand opgeslagen; stuur het zelf door (mail, WhatsApp, AirDrop)');
+}
+function showShare(){
+ if(!SHARE)return;
+ const ref=project.reference;
+ let h=`<div class="notice-small" style="margin-top:0">Deze app heeft geen server: delen gaat via een <strong>link</strong> of een <strong>bestand</strong>. Foto's gaan alleen mee als bestand. De gegevens in een link blijven in de link zelf en worden niet naar een server gestuurd.</div>`;
+ h+=`<h4 class="cut-section">LINK NAAR DIT PROJECT (ZONDER FOTO'S)</h4><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="shareLinkInput" readonly value="Link wordt gemaakt…" style="flex:1;min-width:220px;border:1px solid #dce1d9;border-radius:8px;padding:9px;font:inherit" aria-label="Deellink"><button class="outline-btn" data-share="copyLink">⧉ Kopieer link</button>${canNativeShare()?'<button class="outline-btn" data-share="nativeLink">⇪ Delen…</button>':''}</div><p class="mini-note" id="shareLinkNote"></p>`;
+ h+=`<h4 class="cut-section">MATERIAALLIJST</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-share="copyList">⧉ Kopieer als tekst</button>${canNativeShare()?'<button class="outline-btn" data-share="nativeList">⇪ Delen…</button>':''}<button class="outline-btn" data-share="csvList">↓ CSV</button></div>`;
+ h+=`<h4 class="cut-section">PROJECTBESTAND</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-share="nativeFile">⇪ ${canNativeShare()?'Bestand delen…':'Bestand opslaan'}</button><button class="outline-btn" data-share="download">↓ Download (.json)</button></div><p class="mini-note">Een ontvangen bestand open je via <em>Project importeren</em>; het wordt altijd als nieuw project toegevoegd.</p>`;
+ h+=`<h4 class="cut-section">AANLEVEREN VANAF JE TELEFOON</h4><p class="mini-note">Open deze app op je telefoon en kies <em>Delen → Aanleveren</em>. Vul maten in, voeg foto's toe en stuur het naar jezelf. Op je laptop importeer je het bestand of open je de link.</p><button class="primary-btn" data-share="deliver">📷 Aanleveren…</button>`;
+ if(ref){h+=`<h4 class="cut-section">ONTVANGEN REFERENTIES IN DIT PROJECT</h4>${ref.notes?`<div class="notice-small" style="margin-top:0;white-space:pre-wrap">${esc(ref.notes)}</div>`:''}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">${ref.photos.map((p,i)=>`<div style="width:150px"><img src="${p}" alt="Referentiefoto ${i+1}" style="width:150px;height:110px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9"><div style="display:flex;gap:4px;margin-top:4px"><button class="outline-btn" style="flex:1;min-height:30px;padding:0 6px;font-size:11px" data-share="usePhoto:${i}">Als ruimtefoto</button><button class="outline-btn delete-btn" style="min-height:30px;padding:0 8px" data-share="delPhoto:${i}" aria-label="Foto verwijderen">✕</button></div></div>`).join('')}</div>`;}
+ openModal('DELEN','Delen & aanleveren',h);
+ shareLink='';
+ SHARE.encodeLinkData(SHARE.buildProjectPayload(project)).then(data=>{
+  const el=$('#shareLinkInput');if(!el)return;
+  shareLink=SHARE.linkFor(location.href,data);el.value=shareLink;
+  const note=$('#shareLinkNote');if(note)note.textContent=shareLink.length>8000?'Deze link is lang ('+Math.round(shareLink.length/1000)+' kB); sommige apps knippen lange links af. Gebruik dan het projectbestand.':'';
+ }).catch(()=>{const el=$('#shareLinkInput');if(el)el.value='Link maken is niet gelukt; gebruik het projectbestand.';});
+}
+async function shareAction(spec){
+ const [act,...rest]=spec.split(':'),arg=rest.join(':');
+ if(act==='copyLink'){if(shareLink)await copyText(shareLink,'Link gekopieerd');}
+ else if(act==='nativeLink'){if(shareLink)try{await navigator.share({title:project.name,url:shareLink});}catch(e){if(e&&e.name!=='AbortError')await copyText(shareLink,'Delen niet mogelijk; link gekopieerd');}}
+ else if(act==='copyList'||act==='nativeList'){
+  if(!MAT){toast('Materiaallijst niet beschikbaar');return;}
+  const text=MAT.toText(MAT.build(project,M),project.name);
+  if(act==='copyList')await copyText(text,'Materiaallijst gekopieerd');
+  else try{await navigator.share({title:'Materiaallijst '+project.name,text});}catch(e){if(e&&e.name!=='AbortError')await copyText(text,'Delen niet mogelijk; tekst gekopieerd');}
+ }
+ else if(act==='csvList'){if(MAT)download(safeName()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}
+ else if(act==='nativeFile')await shareOrDownload(fileFor(safeName()+'.douglas.json',JSON.stringify(SHARE.buildProjectPayload(project))),project.name);
+ else if(act==='download')exportProject();
+ else if(act==='deliver')showDeliver();
+ else if(act==='usePhoto'){const ph=project.reference?.photos?.[+arg];if(!ph)return;commit(()=>{project.room=R.normalizeRoom({...project.room,photo:ph,corners:[],enabled:project.room?.enabled},project);});toast('Ruimtefoto ingesteld. Markeer de vier vloerhoeken via Ruimte.');showShare();}
+ else if(act==='delPhoto'){commit(()=>{const r=project.reference;if(!r)return;r.photos.splice(+arg,1);if(!r.photos.length&&!r.notes)delete project.reference;});showShare();}
+}
+function deliveryFormHTML(){
+ const d=deliveryDraft,f=(k,l,ph)=>`<label class="field">${l}<input data-draft="${k}" type="number" min="1200" max="20000" step="10" inputmode="numeric" placeholder="${ph}" value="${esc(d[k])}"></label>`;
+ return `<div class="notice-small" style="margin-top:0">Vul in wat je weet; alles is optioneel. Je verstuurt het daarna naar jezelf (WhatsApp, Mail, AirDrop). Maten in <strong>millimeter</strong>. Foto's worden verkleind (max. ${SHARE.LIMITS.photos}).</div>
+ <label class="field" style="margin-top:12px">Omschrijving<input data-draft="name" maxlength="${SHARE.LIMITS.name}" placeholder="bijv. Terras achter" value="${esc(d.name)}"></label>
+ <div class="field-grid">${f('width','Ruimte breedte (mm)','4500')}${f('depth','Ruimte diepte (mm)','3200')}${f('height','Ruimte hoogte (mm)','2700')}</div>
+ <label class="field">Opmerkingen<textarea data-draft="notes" rows="3" maxlength="${SHARE.LIMITS.notes}" placeholder="bijv. afstand tot de schuur, stopcontact links" style="border:1px solid #dce1d9;border-radius:8px;padding:9px;font:inherit;resize:vertical">${esc(d.notes)}</textarea></label>
+ <div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-deliver="addPhoto">🖼️ Foto's kiezen</button><button class="outline-btn" data-deliver="takePhoto">📷 Foto maken</button></div>
+ <div id="deliverPhotos" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">${deliveryPhotosHTML()}</div>
+ <div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-deliver="send">⇪ ${canNativeShare()?'Versturen…':'Bestand opslaan'}</button><button class="outline-btn" data-deliver="link">⧉ Link kopiëren (zonder foto's)</button></div><p class="mini-note">Bestand = inclusief foto's. Link = alleen maten en opmerkingen.</p>`;
+}
+const deliveryPhotosHTML=()=>deliveryDraft.photos.map((p,i)=>`<div style="position:relative"><img src="${p}" alt="Foto ${i+1}" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9"><button class="outline-btn delete-btn" style="position:absolute;top:2px;right:2px;min-height:24px;width:24px;padding:0" data-deliver="rm:${i}" aria-label="Foto verwijderen">✕</button></div>`).join('')||'<span class="mini-note">Nog geen foto\'s</span>';
+function showDeliver(){if(SHARE)openModal('AANLEVEREN','Aanleveren (maten & foto\'s)',deliveryFormHTML());}
+function compressImageFile(file){return new Promise((res,rej)=>{
+ if(!(/^image\//.test(file.type)||/\.(jpe?g|png|webp)$/i.test(file.name)))return rej(new Error('Geen afbeelding'));
+ const url=URL.createObjectURL(file),img=new Image();
+ img.onload=()=>{URL.revokeObjectURL(url);let maxDim=1280,q=.72;
+  for(let i=0;i<7;i++){const s=Math.min(1,maxDim/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');
+   c.width=Math.max(1,Math.round(img.naturalWidth*s));c.height=Math.max(1,Math.round(img.naturalHeight*s));
+   c.getContext('2d').drawImage(img,0,0,c.width,c.height);const out=c.toDataURL('image/jpeg',q);
+   if(out.length<=SHARE.LIMITS.photoChars&&SHARE.JPEG.test(out))return res(out);maxDim=Math.round(maxDim*.8);q=Math.max(.45,q-.06);}
+  rej(new Error('Foto te groot'));};
+ img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Foto kon niet gelezen worden (formaat niet ondersteund)'));};img.src=url;});}
+async function addDeliveryPhotos(files){
+ let added=0;
+ for(const f of [...files]){
+  if(deliveryDraft.photos.length>=SHARE.LIMITS.photos){toast('Maximaal '+SHARE.LIMITS.photos+' foto\'s');break;}
+  try{deliveryDraft.photos.push(await compressImageFile(f));added++;}catch(e){toast(f.name+': '+e.message);}
+ }
+ const box=$('#deliverPhotos');if(box)box.innerHTML=deliveryPhotosHTML();
+ if(added)toast(added+' foto'+(added===1?'':"'s")+' toegevoegd');
+}
+function deliveryPayload(withPhotos){return SHARE.buildDeliveryPayload({...deliveryDraft,room:{width:deliveryDraft.width,depth:deliveryDraft.depth,height:deliveryDraft.height},photos:withPhotos?deliveryDraft.photos:[]});}
+async function deliverAction(spec){
+ const [act,...rest]=spec.split(':'),arg=rest.join(':');
+ if(act==='addPhoto')$('#photoInput').click();
+ else if(act==='takePhoto')$('#cameraInput').click();
+ else if(act==='rm'){deliveryDraft.photos.splice(+arg,1);$('#deliverPhotos').innerHTML=deliveryPhotosHTML();}
+ else if(act==='send'||act==='link'){
+  const payload=deliveryPayload(act==='send'),v=SHARE.validate(payload);
+  if(!v.ok){toast(v.error==='De aanlevering bevat geen maten, opmerkingen of foto\'s'?'Vul minstens iets in: maten, opmerking of een foto':v.error);return;}
+  if(act==='send')await shareOrDownload(fileFor('aanlevering-'+((deliveryDraft.name||'ruimte').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'ruimte')+'.douglas.json',JSON.stringify(payload)),'Aanlevering '+(deliveryDraft.name||'ruimte'),SHARE.deliverySummaryText(v.summary));
+  else{const data=await SHARE.encodeLinkData(payload),url=SHARE.linkFor(location.href,data);await copyText(url,'Link gekopieerd'+(url.length>8000?' (lang: gebruik liever het bestand)':''));}
+ }
+}
+// Ontvangen bestand of link: eerst tonen wat erin zit; pas toepassen na bevestiging.
+function receivePayload(parsed){
+ const v=SHARE?SHARE.validate(parsed):{ok:false,error:'Delen is niet beschikbaar'};
+ if(!v.ok){toast('Niet gelukt: '+v.error);return false;}
+ pendingReceive=v;hideWelcome();
+ let h='';
+ if(v.type==='project')h=`<div class="notice-small" style="margin-top:0">Ontvangen project: <strong>${esc(v.summary.name)}</strong> (${v.summary.modules} modules, ${v.summary.beams} losse balken). Het wordt als <strong>nieuw project</strong> toegevoegd; je huidige project blijft ongewijzigd.</div><div class="right-foot-actions" style="flex-direction:row;margin-top:14px"><button class="primary-btn" data-recv="project">＋ Toevoegen als nieuw project</button><button class="outline-btn" data-recv="cancel">Annuleren</button></div>`;
+ else{const s=v.summary;h=`<div class="notice-small" style="margin-top:0">Ontvangen aanlevering${s.name&&s.name!=='Aanlevering'?': <strong>'+esc(s.name)+'</strong>':''}: ${esc(SHARE.deliverySummaryText(s))}.${s.droppedPhotos?` ${s.droppedPhotos} bijlage(n) overgeslagen (geen geldige of te grote JPEG).`:''}${s.notes?`<br><br><em style="white-space:pre-wrap">${esc(s.notes)}</em>`:''}</div>${s.photos?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">${v.payload.photos.map((p,i)=>`<img src="${p}" alt="Foto ${i+1}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9">`).join('')}</div>`:''}<p class="mini-note">Maten gelden als ruimte (3D-ruimte wordt ingeschakeld); de eerste foto wordt ruimtefoto, waarna je de vier vloerhoeken markeert. Foto's en opmerkingen blijven als referentie bij het project.</p><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-recv="applyCurrent">Toepassen op huidig project</button><button class="outline-btn" data-recv="newProject">Nieuw project maken</button><button class="outline-btn" data-recv="cancel">Annuleren</button></div>`;}
+ openModal('ONTVANGEN',v.type==='project'?'Project ontvangen':'Aanlevering ontvangen',h);return true;
+}
+function receiveAction(act){
+ const v=pendingReceive;if(!v&&act!=='cancel')return;
+ if(act==='cancel'){pendingReceive=null;closeModal();return;}
+ if(act==='project'){const ok=openNewProject(v.payload.project,'Project ontvangen en toegevoegd');if(ok)pendingReceive=null;}
+ else if(act==='applyCurrent'){commit(()=>{project=normalize(SHARE.applyDelivery(project,v.payload));});pendingReceive=null;closeModal();toast('Aanlevering toegepast op '+project.name);}
+ else if(act==='newProject'){const ok=openNewProject(SHARE.applyDelivery({name:v.payload.name||'Aanlevering',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},v.payload),'Nieuw project met aanlevering gemaakt');if(ok)pendingReceive=null;}
+}
+async function checkShareHash(){
+ if(!SHARE)return;const data=SHARE.dataFromHash(location.hash);if(!data)return;
+ try{const parsed=await SHARE.decodeLinkData(data);try{window.history.replaceState(null,'',location.pathname+location.search);}catch(_){}receivePayload(parsed);}
+ catch(e){toast('Link kon niet worden gelezen: '+e.message);}
+}
 function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
+function safeName(){return (project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'douglas';}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 function exportProject(){download('douglas-designer-project.json',JSON.stringify(project,null,2));toast('Projectbestand aangemaakt');}
 function screenshot(){
@@ -512,21 +686,24 @@ function screenshot(){
   outCanvas.toBlob(b=>{if(!b){toast('Afbeelding maken mislukt');return;}const u=URL.createObjectURL(b),a=document.createElement('a');a.download='douglas-ontwerp.png';a.href=u;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);},'image/png');
 }
 function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSelected();if(!field||!obj)return;
-  const isNumeric=['width','x','y','z','length'].includes(field),val=isNumeric?Number(el.value):el.value;
+  const isNumeric=['width','x','y','z','length','app_w','app_d','app_h'].includes(field),val=isNumeric?Number(el.value):el.value;
   if(isNumeric&&!Number.isFinite(val)){toast('Ongeldige waarde');render();return;}
   commit(()=>{
-    if(selected.type==='frame'){if(['name','length','x','y','z'].includes(field))M.editFrameBeam(project,selected.id,{[field]:val});return;}
+    if(selected.type==='frame'){if(['name','length','x','y','z','profile'].includes(field))M.editFrameBeam(project,selected.id,{[field]:val});return;}
     if(field==='kind'&&selected.type==='module'&&M.TYPES[val]){obj.kind=val;obj.name=M.TYPES[val].label;obj.width=Math.max(M.TYPES[val].min,obj.width);}
+    else if(field.startsWith('app_')&&selected.type==='module'){obj.appliance=M.normalizeAppliance({...(obj.appliance||{}),[field.slice(4)]:val});}
     else if(field==='width')obj.width=M.clamp(Math.round(val),Math.max(200,M.TYPES[obj.kind].min),2400);
     else if(field==='length')obj.length=M.clamp(Math.round(val),50,6500);
     else if(isNumeric)obj[field]=Math.round(val);
     else if(field==='axis')obj.axis=['x','y','z'].includes(val)?val:obj.axis;
+    else if(field==='profile'){if(M.PROFILES[val])obj.profile=val;}
     else if(field==='name')obj.name=String(val).slice(0,60)||'Onderdeel';
   });
 }
-function updateSettings(e){const t=e.target,id=t.id;if(!['projectName','projectWidth','projectDepth','projectHeight','stockLength','kerf','beamPrice','countertopCheck'].includes(id))return;
+function updateSettings(e){const t=e.target,id=t.id;if(!['projectName','projectWidth','projectDepth','projectHeight','stockLength','kerf','beamPrice','countertopCheck','ctThickness','ctSide','ctFront','ctBack'].includes(id))return;
   const v=id==='countertopCheck'?t.checked:id==='projectName'?t.value:Number(t.value);
   if(typeof v==='number'&&!Number.isFinite(v)){render();return;}
+  if(id.startsWith('ct')&&id!=='countertopCheck'){const key={ctThickness:'thickness',ctSide:'overhangSide',ctFront:'overhangFront',ctBack:'overhangBack'}[id];commit(()=>{project.countertopSpec=M.normalizeCountertop({...project.countertopSpec,[key]:v});});render();return;}
   if(id==='projectWidth'){let ok=false;commit(()=>{ok=M.resizeProject(project,v);});if(!ok)toast('Breedte te klein voor gekozen modules');}
   else commit(()=>{const rule={projectName:'name',projectDepth:'depth',projectHeight:'height',stockLength:'stockLength',kerf:'kerf',beamPrice:'beamPrice',countertopCheck:'countertop'};const ranges={depth:[400,2000],height:[400,2500],stockLength:[1000,6500],kerf:[0,10],beamPrice:[0,1000]};const key=rule[id];project[key]=ranges[key]?M.clamp(v,...ranges[key]):v;});
   render();
@@ -537,6 +714,10 @@ document.addEventListener('click',e=>{
   const modCard=e.target.closest('[data-select-module]');
   const beamCard=e.target.closest('[data-select-beam]');
   const frameCard=e.target.closest('[data-select-frame]');
+  const pa=e.target.closest('[data-proj]');if(pa){projectAction(pa.dataset.proj);return;}
+  const sa=e.target.closest('[data-share]');if(sa){shareAction(sa.dataset.share);return;}
+  const da=e.target.closest('[data-deliver]');if(da){deliverAction(da.dataset.deliver);return;}
+  const ra=e.target.closest('[data-recv]');if(ra){receiveAction(ra.dataset.recv);return;}
   const b=e.target.closest('button');
   if(modCard && !b){setSelected('module',modCard.dataset.selectModule);return;}
   if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
@@ -551,17 +732,17 @@ document.addEventListener('click',e=>{
   if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if((selected?.type==='beam'||selected?.type==='frame')&&obj&&['x','y','z'].includes(axis))commit(()=>{if(selected.type==='frame')M.editFrameBeam(project,selected.id,{[axis]:obj[axis]+Number(delta)});else obj[axis]+=Number(delta);});return;}
   switch(b.id){
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
-    case 'homeBtn':showWelcome();break;
+    case 'homeBtn':showProjects();break;
+    case 'shareBtn':showShare();break;
     case 'continueProject':hideWelcome();break;
-    case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=normalize({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);toggleDrawMode(false);hideWelcome();switchMobile('design');toast('Nieuw basisontwerp gestart');}break;
-    case 'newFreeProject':if(window.confirm('Leeg tekenvlak openen? Exporteer je huidige ontwerp eerst als je het wilt bewaren.')){
-      commit(()=>{project=normalize(M.freeProject());selected=null;});setSelected(null,null);
-      hideWelcome();switchMobile('design');setView('front');toggleDrawMode(true);
-      toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');
-    }break;
+    case 'newProject':openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');break;
+    case 'newFreeProject':if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');}break;
     case 'drawTool':toggleDrawMode(true);break;
-    case 'selectTool':toggleDrawMode(false);break;
-    case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=normalize(M.demoProject());selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
+    case 'measureTool':toggleMeasureMode(!measureMode);break;
+    case 'selectTool':toggleDrawMode(false);toggleMeasureMode(false);break;
+    case 'arrayBeamBtn':{const src=getSelected();if(!src||selected?.type==='module')break;const r=M.arrayBeams(project,src,$('#arrAxis').value,$('#arrCount').value,$('#arrSpacing').value);
+      if(!r.ok){toast(r.error);break;}commit(()=>{project.beams.push(...r.beams);});toast(`${r.beams.length} kopie${r.beams.length===1?'':'ën'} geplaatst${r.skipped?` (${r.skipped} niet: maximum 100 losse balken)`:''}`);break;}
+    case 'demoProject':openNewProject(M.demoProject(),'Voorbeeld geopend');break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
     case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
@@ -575,10 +756,12 @@ document.addEventListener('click',e=>{
     case 'restoreSelectedFrame':if(selected?.type==='frame'){commit(()=>M.restoreFrameBeam(project,selected.id));toast('Framebalk hersteld naar standaardmaten');}break;
     case 'restoreAllFrames':commit(()=>{project.frameEdits={};selected=null;});toast('Automatische frameconstructie hersteld');break;
     case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
-    case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=normalize(M.demoProject());selected=null;});toast('Voorbeeldproject hersteld');}break;
+    case 'resetBtn':openNewProject(M.demoProject(),'Voorbeeldproject geopend als nieuw project');break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
+    case 'showDocument':showDocument();break;
+    case 'csvParts':if(DOCS){download(safeName()+'-onderdelenlijst.csv',DOCS.partsCSV(DOCS.partsList(project,M)),'text/csv;charset=utf-8');}break;
     case 'copyMaterials':if(MAT){const text=MAT.toText(MAT.build(project,M),project.name);(navigator.clipboard?.writeText?navigator.clipboard.writeText(text):Promise.reject()).then(()=>toast('Materiaallijst gekopieerd'),()=>toast('Kopiëren niet gelukt'));}break;
-    case 'csvMaterials':if(MAT){download((project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}break;
+    case 'csvMaterials':if(MAT){download(safeName()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
     case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
     case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
@@ -641,11 +824,17 @@ function updateDraftControls(){
   btn.setAttribute('aria-pressed',String(magnetEnabled));
   btn.classList.toggle('inactive',!magnetEnabled);
 }
-$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=normalize(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
-$('#modalContent').addEventListener('change',e=>{const t=e.target,key=t?.dataset?.mat;if(!key||!MAT)return;
+$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>(SHARE?SHARE.LIMITS.file:2*1024*1024))throw Error('Bestand te groot');const text=await file.text(),raw=JSON.parse(text);if(SHARE&&raw&&raw.format===SHARE.FORMAT){receivePayload(raw);e.target.value='';return;}if(raw&&raw.format===PRJ.BACKUP_FORMAT){const r=store.importAll(text);if(!r.ok)throw Error(r.error);toast(r.added+' project(en) toegevoegd'+(r.skipped?', '+r.skipped+' overgeslagen':''));showProjects();e.target.value='';return;}if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');if(!openNewProject(raw,'Project geïmporteerd als nieuw project'))return;}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
+$('#modalContent').addEventListener('change',e=>{const t=e.target;
+  if(t?.dataset?.projName){const id=t.dataset.projName,r=store.rename(id,t.value);if(r.ok===false||r.error){toast('Hernoemen mislukt');return;}if(id===project.id){project.name=store.load(id).name;render();}toast('Naam opgeslagen');return;}
+  const key=t?.dataset?.mat;if(!key||!MAT)return;
   const box=$('#modalContent'),top=box.scrollTop;
   commit(()=>{project.materials=MAT.applyInput(project.materials,key,t.value,M);});
   box.innerHTML=cutlistHTML();box.scrollTop=top;});
+$('#modalContent').addEventListener('input',e=>{const k=e.target?.dataset?.draft;if(k&&Object.hasOwn(deliveryDraft,k))deliveryDraft[k]=e.target.value;});
+$('#photoInput').addEventListener('change',async e=>{await addDeliveryPhotos(e.target.files||[]);e.target.value='';});
+$('#cameraInput').addEventListener('change',async e=>{await addDeliveryPhotos(e.target.files||[]);e.target.value='';});
+window.addEventListener('hashchange',checkShareHash);
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
@@ -656,13 +845,15 @@ window.addEventListener('keydown',e=>{
   if(key==='escape'){
     $('#shortcutHelp').classList.add('hidden');
     if(armedBeamType)disarmBeam();
+    if(measureMode)toggleMeasureMode(false);
     if(drawMode)toggleDrawMode(false);
     if(modalOpen)closeModal();
     if(!drawMode&&!armedBeamType)setSelected(null,null);
     return;
   }
   if(e.ctrlKey||e.metaKey||e.altKey)return;
-  if(key==='v'){toggleDrawMode(false);return;}
+  if(key==='v'){toggleDrawMode(false);toggleMeasureMode(false);return;}
+  if(key==='m'){toggleMeasureMode(!measureMode);return;}
   if(key==='b'){toggleDrawMode(true);return;}
   if(key==='?'){e.preventDefault();$('#shortcutHelp').classList.toggle('hidden');return;}
   const views={'1':'3d','2':'front','3':'side','4':'top','5':'bottom'};
@@ -683,6 +874,12 @@ canvas.addEventListener('pointerdown',e=>{
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
     dragging={mode:'move-kitchen',before:JSON.stringify(project),startPlacement:{...project.room.placement},startX:e.offsetX,startY:e.offsetY,moved:false};
     return;
+  }
+  if(measureMode){
+    const pt=drawPoint(e.offsetX,e.offsetY);if(!pt)return;
+    if(!measureData||measureData.fixed)measureData={a:pt,b:null,fixed:false};
+    else{measureData.b=pt;measureData.fixed=true;const r=D.measure(measureData.a,pt,viewAxes());if(r)$('#drawHelp').textContent=`Gemeten: ${fmt(r.dist)} mm · klik opnieuw voor een nieuwe meting · Esc om te stoppen`;}
+    draw();return;
   }
   if(drawMode){
     const start=drawPoint(e.offsetX,e.offsetY);if(!start)return;
@@ -717,6 +914,7 @@ canvas.addEventListener('pointerdown',e=>{
   }
   if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
 });
+canvas.addEventListener('pointermove',e=>{if(measureMode&&measureData&&measureData.a&&!measureData.fixed){const pt=drawPoint(e.offsetX,e.offsetY);if(pt){measureData.b=pt;draw();}}});
 canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
   if(dragging.mode==='pan-camera'){
@@ -807,5 +1005,6 @@ window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.7.4',{updateViaCache:'none'}).catch(()=>{});
+checkShareHash();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc1',{updateViaCache:'none'}).catch(()=>{});
 })();

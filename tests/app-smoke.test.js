@@ -4,18 +4,21 @@ const Draft=require('../drafting.js');
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const path=require('node:path');
 const M=require('../model.js');
 const Mat=require('../materials.js');
+const Docs=require('../documents.js');
+const Prj=require('../projects.js');
 function makeApp(){
- const nodes=new Map(),listeners=new Map();let stored='';
+ const nodes=new Map(),listeners=new Map();const mem=new Map();
  const ctx2d={beginPath(){},moveTo(){},lineTo(){},stroke(){},fill(){},arc(){},roundRect(){},clearRect(){},setTransform(){},fillText(){},save(){},restore(){},closePath(){},measureText(t){return {width:String(t).length*6};}};
  function el(id){if(!nodes.has(id)){
   const c={id,style:{},innerHTML:'',textContent:'',value:'',checked:false,firstChild:{textContent:''},width:0,height:0,dataset:{},classList:{add(){},remove(){},toggle(){}},getContext(){return ctx2d;},getBoundingClientRect(){return {width:800,height:520};},addEventListener(name,fn){listeners.set(id+':'+name,fn);},setPointerCapture(){},scrollIntoView(){},click(){},setAttribute(){},toBlob(fn){fn({});}};
   nodes.set(id,c);
  }return nodes.get(id);}
  const document={querySelector:s=>el(s),querySelectorAll:()=>[],addEventListener(name,fn){listeners.set('document:'+name,fn);},activeElement:{tagName:'BODY'},createElement:()=>el('created')};
- const window={DouglasModel:M,DouglasMaterials:Mat,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1500,devicePixelRatio:1,addEventListener(name,fn){listeners.set('window:'+name,fn);},print(){},confirm(){return true;}};
- const storage={getItem(){return stored||null;},setItem(k,v){stored=v;}};
+ const window={DouglasModel:M,DouglasMaterials:Mat,DouglasDocuments:Docs,DouglasProjects:Prj,DouglasShare:require('../share.js'),DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1500,devicePixelRatio:1,addEventListener(name,fn){listeners.set('window:'+name,fn);},print(){},confirm(){return true;}};
+ const storage={getItem:k=>mem.has(k)?mem.get(k):null,setItem(k,v){mem.set(k,String(v));},removeItem(k){mem.delete(k);},key:i=>[...mem.keys()][i]??null,get length(){return mem.size;}};
+ const activeJson=()=>{const ix=JSON.parse(mem.get(Prj.INDEX_KEY)||'null');return ix?mem.get(Prj.PROJECT_PREFIX+ix.activeId):'';};
  const sandbox={window,document,navigator:{},location:{protocol:'file:'},localStorage:storage,Intl,console,Map,Math,JSON,Date,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};
- vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),sandbox,{timeout:10000});return {nodes,listeners,stored:()=>stored};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),sandbox,{timeout:10000});return {nodes,listeners,stored:activeJson,mem};
 }
 test('app renders module list, stats, and inspector with zero dependencies',()=>{
  const a=makeApp();assert.match(a.nodes.get('#moduleList').innerHTML,/Ladekast/);assert.match(a.nodes.get('#statWidth').innerHTML,/1\.875/);assert.match(a.nodes.get('#statBeams').innerHTML,/28/);assert.match(a.nodes.get('#inspectorBody').innerHTML,/BENODIGDE DOUGLAS BALKEN/);assert.doesNotThrow(()=>JSON.parse(a.stored()));

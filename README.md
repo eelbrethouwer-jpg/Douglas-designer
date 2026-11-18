@@ -112,3 +112,9 @@ GitHub Actions draait de testset bij pull requests gericht op \`main\`. **Groene
 ## Roadmap
 
 Zie [ROADMAP.md](ROADMAP.md) voor werkblad-/renderkwaliteit, naadloze tekenervaring, houtverbindingen, apparaten, plaatzaagplan, volledige boodschappenlijst, technische tekeningen, multi-projectbeheer en een eerste stabiele productieversie.
+
+## Projecten, delen en tests (v1.0.0-rc1)
+- Projecten: knop *Projecten* (nieuw, dupliceren, hernoemen, prullenbak, back-up).
+- Delen (laptop → telefoon): link of `.douglas.json`. Aanleveren (telefoon → laptop): foto's en maten via een bestand of link.
+- Sneltoets **M**: afstand meten in een 2D-aanzicht. Inspector: *Reeks kopiëren*.
+- Tests: `node --test tests/*.test.js`; browsertest: start `python3 -m http.server 8765` en run `node tools/e2e.js` (Chrome nodig).
