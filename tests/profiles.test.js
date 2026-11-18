@@ -165,3 +165,14 @@ test('wanden, deur en bekleding: panelen, kozijn, geen conflicten, materiaallijs
  assert.equal(M.normalizePlan({zones:[{kind:'closed'}]}).zones[0].walls,'nesw');assert.equal(M.normalizePlan({zones:[{kind:'open'}]}).zones[0].walls,'');
  assert.equal(M.normalizePlan({zones:[{door:{edge:'q'}}]}).zones[0].door,null);
 });
+test('plan met lijnen: normalisatie haaks, minimale lengte, unieke ids en wand in 3D',()=>{
+ const n=M.normalizePlan({zones:[{id:'a'},{id:'a'}],lines:[{x1:0,z1:0,x2:3000,z2:200},{x1:0,z1:0,x2:100,z2:100},{x1:10,z1:10,x2:10,z2:2000,id:'a'}]});
+ assert.equal(n.zones.length,2);assert.notEqual(n.zones[0].id,n.zones[1].id);
+ assert.equal(n.lines.length,2);assert.deepEqual([n.lines[0].z1,n.lines[0].z2],[0,0]);assert.deepEqual([n.lines[1].x1,n.lines[1].x2],[10,10]);
+ const ids=[...n.zones,...n.lines].map(q=>q.id);assert.equal(new Set(ids).size,ids.length);
+ assert.equal(M.normalizePlan({zones:[],lines:[]}),null);
+ const r=M.planFrame({zones:[],lines:[{x1:0,z1:1000,x2:5000,z2:1000},{x1:5000,z1:1000,x2:5000,z2:4000}]});
+ assert.ok(r.beams.filter(b=>b.axis==='y').length>=5);assert.equal(r.panels.length,2);
+ const p=M.normalizeProject({...M.freeProject(),width:r.bounds.width,depth:r.bounds.depth,height:r.bounds.height,beams:r.beams,panels:r.panels});
+ assert.equal(M.conflicts(p).overlaps.length,0);assert.equal(M.conflicts(p).unsupported.length,0);
+});

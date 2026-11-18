@@ -122,3 +122,4 @@ Zie [ROADMAP.md](ROADMAP.md) voor werkblad-/renderkwaliteit, naadloze tekenervar
 - Foto als achtergrond: knop *🖼 Foto*, stel de schaal in met twee punten met bekende afstand en bouw erover.
 - 3D-scan: knop *🧊 Scan* (.glb/.gltf/.obj). Zet eerst de schaal goed met twee punten van bekende afstand. De scan is alleen referentie en blijft op dit apparaat.
 - Plattegrond-start: knop *📐 Plattegrond*, zones invullen, dan *Maak 3D-project*. Daarna bewerken met kaderselectie, verplaatsen en verlengen.
+- Fase 1 schetsen: knop *📐 Plattegrond*: blokken (B) en lijnen (L) tekenen, selecteren (V), grepen slepen voor groter/kleiner, daarna *Naar 3D*.

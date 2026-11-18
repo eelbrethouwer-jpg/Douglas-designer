@@ -1,3 +1,10 @@
+## Ongepubliceerd — Fase 1: plattegrond schetsen in 2D
+
+- Knop 📐 Plattegrond opent nu een schetsvenster in SketchUp-stijl: **Blok** (B) en **Lijn** (L) tekenen door te slepen, **Selecteren** (V) om te klikken, te verplaatsen en met de vierkante grepen groter/kleiner te maken. Raster (50–500 mm), magneet naar andere randen, live maten, scrollen = zoomen, Shift+slepen = verschuiven, pijltjes = verplaatsen, Delete = verwijderen, Ctrl+Z/Y.
+- Zijpaneel voor naam, soort, maten, hoogte, wanden en deur; de schets wordt automatisch bewaard als concept.
+- Fase 2: **Naar 3D →** maakt een nieuw project van de schets. Lijnen worden wanden (staanders, bovenligger, bekleding).
+- Nieuwe module `plan-editor.js` met pure, geteste logica (snappen, resize, hit-test).
+
 ## Ongepubliceerd — wanden, deur en bekleding (kapschuur)
 
 - Plattegrond-zones krijgen wanden (achter/voor/links/rechts) en een deur (900 × 2050 mm, positie instelbaar). Gevelbekleding wordt een wandpaneel rond het frame; de deuropening krijgt twee stijlen en een bovendorpel, regels worden vrijgehouden.

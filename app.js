@@ -17,6 +17,7 @@ const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'})
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
 const MESH=window.DouglasMesh||null;
+const PE=window.DouglasPlanEditor||null;
 const SHARE=window.DouglasShare||null; // optioneel: zonder share.js verdwijnen delen/aanleveren
 const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
 const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
@@ -863,14 +864,31 @@ function planHTML(){
  h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="primary-btn" data-plan="generate" ${pv.r.beams.length?'':'disabled'}>▦ Maak 3D-project van deze plattegrond</button></div><p class="mini-note">Er komt een nieuw project; je huidige project blijft bewaard. Leg je eigen plattegrondafbeelding eronder met 🖼 Foto in het Boven-aanzicht (PDF eerst als PNG/JPG opslaan).</p>`;
  return h;
 }
+function generatePlanProject(planObj,name){
+ const r=M.planFrame(planObj);if(!r.beams.length&&!r.panels.length){toast('Teken eerst een blok of lijn');return false;}
+ const b=r.bounds,raw={...M.freeProject(),name:name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:planObj,stockLength:6000,beams:r.beams,panels:r.panels};
+ if(r.truncated)toast(`Let op: ${r.truncated} balken passen niet (max. 100). Maak de schets kleiner of deel hem op.`);
+ if(openNewProject(raw,`Nieuw project met ${r.beams.length} balken · bewerk het in 3D`)){setView('3d');return true;}
+ return false;
+}
+const PLAN_DRAFT_KEY='douglas-designer-plan-draft-v1';
+let planEditor=null;
+function openPlanEditor(){
+ if(!PE){showPlan();return;}
+ if(!planEditor)planEditor=PE.create({M,presets:PLAN_PRESETS,
+  onChange:p=>{try{localStorage.setItem(PLAN_DRAFT_KEY,JSON.stringify(p));}catch(e){}},
+  onGenerate:p=>{if(generatePlanProject(p,'Plattegrond schets'))planEditor.close();}});
+ let initial=null;try{initial=JSON.parse(localStorage.getItem(PLAN_DRAFT_KEY)||'null');}catch(e){}
+ if(!initial||!((initial.zones&&initial.zones.length)||(initial.lines&&initial.lines.length)))initial={zones:[],lines:[]};
+ window.DouglasPlanEditorInstance=planEditor;
+ planEditor.open(initial);
+}
 function showPlan(){openModal('START','Start vanuit plattegrond',planHTML());}
 function planAction(act){
  if(act==='add'){if(planDraft.zones.length>=8){toast('Maximaal 8 zones');return;}planDraft.zones.push({name:'Zone '+(planDraft.zones.length+1),kind:'open',x:0,z:0,w:2000,d:2000,h:2500});showPlan();}
  else if(act.startsWith('del:')){planDraft.zones.splice(+act.slice(4),1);showPlan();}
  else if(act==='generate'){
-  const pv=planPreview();if(!pv.r.beams.length)return;
-  const b=pv.r.bounds,raw={...M.freeProject(),name:planDraft.name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:{zones:planDraft.zones},stockLength:6000,beams:pv.r.beams,panels:pv.r.panels};
-  if(openNewProject(raw,`Nieuw project met ${pv.r.beams.length} balken · bewerk het in 3D`)){setView('3d');}
+  generatePlanProject({zones:planDraft.zones,lines:[]},planDraft.name);
  }
 }
 function backdropHTML(){
@@ -1065,7 +1083,7 @@ $('#backdropInput')?.addEventListener('change',async e=>{await backdropFile(e.ta
 $('#backdropCamera')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
 $('#backdropTool')?.addEventListener('click',showBackdrop);
 $('#scanTool')?.addEventListener('click',showScan);
-$('#planTool')?.addEventListener('click',showPlan);
+$('#planTool')?.addEventListener('click',openPlanEditor);
 $('#modalContent').addEventListener('change',e=>{
   const pr=e.target.dataset?.pl;if(pr==='preset'){const p=PLAN_PRESETS[e.target.value];if(p){planKey=e.target.value;planDraft=clonePreset(e.target.value);showPlan();}return;}
   const pw=e.target.dataset?.pw;if(pw){const [i,c]=pw.split(':'),z=planDraft.zones[+i];if(z){const s=new Set((z.walls||'').split('').filter(Boolean));e.target.checked?s.add(c):s.delete(c);z.walls=[...s].join('');showPlan();}return;}
@@ -1106,6 +1124,7 @@ $('#cameraInput').addEventListener('change',async e=>{await addDeliveryPhotos(e.
 window.addEventListener('hashchange',checkShareHash);
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{
+  if(document.body?.classList?.contains?.('plan-editor-open'))return; // het plattegrond-schetsvenster regelt zijn eigen toetsen
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
   const key=e.key.toLowerCase();
   if((e.metaKey||e.ctrlKey)&&key==='z'&&!editing){e.preventDefault();history(e.shiftKey?'redo':'undo');return;}
