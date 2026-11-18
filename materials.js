@@ -53,9 +53,9 @@
     // 3. Platen en werkblad.
     const panels = [];
     if (p.countertop && p.modules.length) {
-      const area = (p.width + 16) * (p.depth + 28) / 1e6; // gelijk aan de 3D-weergave (overstek)
-      panels.push(line('werkblad', 'Werkblad (m², incl. overstek)', ceil1(area * waste), 'm²',
-        `${(p.width + 16)} × ${(p.depth + 28)} mm + ${m.wastePct}% verlies`));
+      const ct = M.countertopBox(p); // gelijk aan de 3D-weergave (overstek en dikte uit het project)
+      panels.push(line('werkblad', `Werkblad ${ct.h} mm dik (m², incl. overstek)`, ceil1(ct.w * ct.d / 1e6 * waste), 'm²',
+        `${ct.w} × ${ct.d} mm + ${m.wastePct}% verlies`));
     }
     const frontMods = p.modules.filter(x => x.kind === 'doors' || x.kind === 'drawers');
     const openingHeight = Math.max(0, p.height - 325); // tussen onder- en bovenligger

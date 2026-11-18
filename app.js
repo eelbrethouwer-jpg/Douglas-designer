@@ -227,7 +227,7 @@ function render(){
   $('#moduleList').innerHTML=modules.map((m,i)=>`<div class="module-card ${selected?.id===m.id?'active':''}" data-select-module="${esc(m.id)}"><div class="module-symbol">${icons[m.kind]}</div><div class="module-meta"><strong>${esc(m.name)}</strong><small>${fmt(m.width)} mm breed · ${M.TYPES[m.kind].label}</small></div><div class="reorder"><button data-move-module="${esc(m.id)}" data-direction="-1" title="Naar links" ${i===0?'disabled':''}>↑</button><button data-move-module="${esc(m.id)}" data-direction="1" title="Naar rechts" ${i===modules.length-1?'disabled':''}>↓</button></div></div>`).join('');
   $('#beamList').innerHTML=beams.length?beams.map(b=>`<div class="module-card ${selected?.id===b.id?'active':''}" data-select-beam="${esc(b.id)}"><div class="module-symbol">▥</div><div class="module-meta"><strong>${esc(b.name)}</strong><small>${fmt(b.length)} mm · as ${b.axis.toUpperCase()}</small></div><span style="color:#8e9890">›</span></div>`).join(''):'<p class="hint">Nog geen extra balken geplaatst.</p>';
   $('#presetGrid').innerHTML=Object.entries(M.TYPES).map(([key,v])=>`<button class="preset" data-add="${key}"><span class="preset-icon">${icons[key]}</span>${v.label} ＋</button>`).join('');
-  $('#projectName').value=project.name;$('#projectWidth').value=project.width;$('#projectDepth').value=project.depth;$('#projectHeight').value=project.height;$('#stockLength').value=project.stockLength;$('#kerf').value=project.kerf;$('#beamPrice').value=project.beamPrice;$('#countertopCheck').checked=project.countertop;
+  $('#projectName').value=project.name;$('#projectWidth').value=project.width;$('#projectDepth').value=project.depth;$('#projectHeight').value=project.height;$('#stockLength').value=project.stockLength;$('#kerf').value=project.kerf;$('#beamPrice').value=project.beamPrice;$('#countertopCheck').checked=project.countertop;{const c=project.countertopSpec||M.defaultCountertop();$('#ctThickness').value=c.thickness;$('#ctSide').value=c.overhangSide;$('#ctFront').value=c.overhangFront;$('#ctBack').value=c.overhangBack;}
   $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;
   renderInspector();draw();
   window.DouglasRoomStudio?.refresh?.();
@@ -244,7 +244,7 @@ function renderInspector(){
   if(selected.type==='module'){
     const spec=M.TYPES[obj.kind];const kindOptions=Object.entries(M.TYPES).map(([k,v])=>`<option value="${k}" ${obj.kind===k?'selected':''}>${v.label}</option>`).join('');
     $('#inspectorTitle').textContent=obj.name;
-    body.innerHTML=`<div class="preview-icon">${icons[obj.kind]}</div><p class="inspector-label">MODULE INSTELLINGEN</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}" maxlength="60"></label><label class="field">Type<select data-edit="kind">${kindOptions}</select></label><div class="field-grid"><label class="field">Opening breedte (mm)<input data-edit="width" type="number" min="200" max="2400" step="5" value="${obj.width}"></label></div><div class="divider"></div><p class="inspector-label">GEOMETRIE</p><div class="detail-label"><span>Modulebreedte</span><strong>${fmt(obj.width)} mm</strong></div><div class="detail-label"><span>Buitenhoogte</span><strong>${fmt(project.height)} mm</strong></div><div class="detail-label"><span>Constructiediepte</span><strong>${fmt(project.depth)} mm</strong></div><div class="divider"></div><div class="warning">Modulebeeld is indicatief, niet op basis van fabrikantmetingen. Controleer inbouwmaten, ventilatie en hittebescherming vóór de bouw.</div>`;
+    body.innerHTML=`<div class="preview-icon">${icons[obj.kind]}</div><p class="inspector-label">MODULE INSTELLINGEN</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}" maxlength="60"></label><label class="field">Type<select data-edit="kind">${kindOptions}</select></label><div class="field-grid"><label class="field">Opening breedte (mm)<input data-edit="width" type="number" min="200" max="2400" step="5" value="${obj.width}"></label></div>${(obj.kind==='fridge'||obj.kind==='kamado')?`<div class="divider"></div><p class="inspector-label">APPARAAT — EIGEN MATEN</p><p class="mini-note">Vul de maten uit de fabrikantgegevens in (0 = onbekend). De app controleert alleen of het apparaat in de opening past; ventilatie en hitteafstand blijven je eigen controle.</p><div class="field-grid"><label class="field">Breedte<input data-edit="app_w" type="number" min="0" max="2500" step="5" value="${obj.appliance?.w||0}"></label><label class="field">Diepte<input data-edit="app_d" type="number" min="0" max="2500" step="5" value="${obj.appliance?.d||0}"></label><label class="field">Hoogte<input data-edit="app_h" type="number" min="0" max="2500" step="5" value="${obj.appliance?.h||0}"></label></div>`:''}<div class="divider"></div><p class="inspector-label">GEOMETRIE</p><div class="detail-label"><span>Modulebreedte</span><strong>${fmt(obj.width)} mm</strong></div><div class="detail-label"><span>Buitenhoogte</span><strong>${fmt(project.height)} mm</strong></div><div class="detail-label"><span>Constructiediepte</span><strong>${fmt(project.depth)} mm</strong></div><div class="divider"></div><div class="warning">Modulebeeld is indicatief, niet op basis van fabrikantmetingen. Controleer inbouwmaten, ventilatie en hittebescherming vóór de bouw.</div>`;
     foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full delete-btn" id="deleteSelected">Verwijder deze module</button><button class="primary-btn full" id="openCutlist">▤ Zaaglijst openen</button></div>';
   }else{
     const isFrame=selected.type==='frame';
@@ -349,7 +349,7 @@ function objects(){shapes=[];hitShapes=[];
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
-  if(project.countertop){box(-8,project.height-24,-14,project.width+16,24,project.depth+28,RGB.top,null,gpu.ready?Infinity:110);}
+  if(project.countertop){const ct=M.countertopBox(project);box(ct.x,ct.y,ct.z,ct.w,ct.h,ct.d,RGB.top,null,gpu.ready?Infinity:110);}
  drawRoomGeometry();
  drawSketchGuides();
 }
@@ -512,11 +512,12 @@ function screenshot(){
   outCanvas.toBlob(b=>{if(!b){toast('Afbeelding maken mislukt');return;}const u=URL.createObjectURL(b),a=document.createElement('a');a.download='douglas-ontwerp.png';a.href=u;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);},'image/png');
 }
 function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSelected();if(!field||!obj)return;
-  const isNumeric=['width','x','y','z','length'].includes(field),val=isNumeric?Number(el.value):el.value;
+  const isNumeric=['width','x','y','z','length','app_w','app_d','app_h'].includes(field),val=isNumeric?Number(el.value):el.value;
   if(isNumeric&&!Number.isFinite(val)){toast('Ongeldige waarde');render();return;}
   commit(()=>{
     if(selected.type==='frame'){if(['name','length','x','y','z','profile'].includes(field))M.editFrameBeam(project,selected.id,{[field]:val});return;}
     if(field==='kind'&&selected.type==='module'&&M.TYPES[val]){obj.kind=val;obj.name=M.TYPES[val].label;obj.width=Math.max(M.TYPES[val].min,obj.width);}
+    else if(field.startsWith('app_')&&selected.type==='module'){obj.appliance=M.normalizeAppliance({...(obj.appliance||{}),[field.slice(4)]:val});}
     else if(field==='width')obj.width=M.clamp(Math.round(val),Math.max(200,M.TYPES[obj.kind].min),2400);
     else if(field==='length')obj.length=M.clamp(Math.round(val),50,6500);
     else if(isNumeric)obj[field]=Math.round(val);
@@ -525,9 +526,10 @@ function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSel
     else if(field==='name')obj.name=String(val).slice(0,60)||'Onderdeel';
   });
 }
-function updateSettings(e){const t=e.target,id=t.id;if(!['projectName','projectWidth','projectDepth','projectHeight','stockLength','kerf','beamPrice','countertopCheck'].includes(id))return;
+function updateSettings(e){const t=e.target,id=t.id;if(!['projectName','projectWidth','projectDepth','projectHeight','stockLength','kerf','beamPrice','countertopCheck','ctThickness','ctSide','ctFront','ctBack'].includes(id))return;
   const v=id==='countertopCheck'?t.checked:id==='projectName'?t.value:Number(t.value);
   if(typeof v==='number'&&!Number.isFinite(v)){render();return;}
+  if(id.startsWith('ct')&&id!=='countertopCheck'){const key={ctThickness:'thickness',ctSide:'overhangSide',ctFront:'overhangFront',ctBack:'overhangBack'}[id];commit(()=>{project.countertopSpec=M.normalizeCountertop({...project.countertopSpec,[key]:v});});render();return;}
   if(id==='projectWidth'){let ok=false;commit(()=>{ok=M.resizeProject(project,v);});if(!ok)toast('Breedte te klein voor gekozen modules');}
   else commit(()=>{const rule={projectName:'name',projectDepth:'depth',projectHeight:'height',stockLength:'stockLength',kerf:'kerf',beamPrice:'beamPrice',countertopCheck:'countertop'};const ranges={depth:[400,2000],height:[400,2500],stockLength:[1000,6500],kerf:[0,10],beamPrice:[0,1000]};const key=rule[id];project[key]=ranges[key]?M.clamp(v,...ranges[key]):v;});
   render();

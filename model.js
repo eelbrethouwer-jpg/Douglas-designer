@@ -45,11 +45,24 @@
     }
     return m;
   }
+  // Werkblad: afmetingen in mm. Standaard = de tot nu toe getoonde waarden (24 mm dik, 8 mm zij-, 14 mm voor-/achteroverstek).
+  const COUNTERTOP_LIMITS={thickness:[10,80],overhangSide:[0,200],overhangFront:[0,300],overhangBack:[0,300]};
+  // Eigen apparaatmaten (fabrikantgegevens die de gebruiker zelf invoert); 0 = onbekend.
+  function normalizeAppliance(a){const d=(v)=>clamp(round(number(v,0)),0,2500);return {w:d(a.w),d:d(a.d),h:d(a.h)};}
+  function defaultCountertop(){return {thickness:24,overhangSide:8,overhangFront:14,overhangBack:14};}
+  function normalizeCountertop(raw){
+    const c=defaultCountertop();if(!raw||typeof raw!=='object'||Array.isArray(raw))return c;
+    for(const [k,[lo,hi]] of Object.entries(COUNTERTOP_LIMITS))c[k]=clamp(round(number(raw[k],c[k])),lo,hi);return c;
+  }
+  function countertopBox(p){
+    const c=p.countertopSpec||defaultCountertop();
+    return {x:-c.overhangSide,y:p.height-c.thickness,z:-c.overhangFront,w:p.width+2*c.overhangSide,h:c.thickness,d:p.depth+c.overhangFront+c.overhangBack};
+  }
   function demoProject() {
     return {
       version:1, id:uid(), name:'Mijn buitenkeuken', width:1875, depth:870, height:950,
       section:50, sectionLong:100, stockLength:2800, kerf:3, beamPrice:16.95,
-      countertop:true, frameEdits:{}, materials:defaultMaterials(), modules:[
+      countertop:true, countertopSpec:defaultCountertop(), frameEdits:{}, materials:defaultMaterials(), modules:[
         {id:uid(),kind:'drawers',width:520,name:'Ladekast'},
         {id:uid(),kind:'fridge',width:600,name:'Koelkast'},
         {id:uid(),kind:'kamado',width:555,name:'Kamado'}
@@ -99,9 +112,11 @@
     p.beamPrice=clamp(number(raw.beamPrice,p.beamPrice),0,1000);
     p.countertop=raw.countertop!==false;
     p.materials=normalizeMaterials(raw.materials);
+    p.countertopSpec=normalizeCountertop(raw.countertopSpec);
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
-      name:String(m.name||TYPES[m.kind].label).slice(0,60)
+      name:String(m.name||TYPES[m.kind].label).slice(0,60),
+      ...(m.appliance&&typeof m.appliance==='object'?{appliance:normalizeAppliance(m.appliance)}:{})
     })) : p.modules;
     // An explicit empty module array is a valid FREE drawing document.
     p.beams=Array.isArray(raw.beams) ? raw.beams.slice(0,100).map(b=>({
@@ -305,6 +320,15 @@
       const min=TYPES[s.module.kind].min;
       if(s.module.width<min)result.push(`${s.module.name}: opening ${s.module.width} mm, richtwaarde ${min} mm.`);
     }
+    const openingH=p.height-325,interiorD=p.depth-200; // tussen onder- en bovenligger; tussen voor- en achterstaander
+    for(const m of p.modules){
+      const a=m.appliance;if(!a||!(m.kind==='fridge'||m.kind==='kamado'))continue;
+      const label=m.kind==='fridge'?'Koelkast':'Kamado',issues=[];
+      if(a.w>0&&a.w>m.width)issues.push(`breedte ${a.w} mm > opening ${m.width} mm`);
+      if(a.d>0&&a.d>interiorD)issues.push(`diepte ${a.d} mm > beschikbaar ${interiorD} mm`);
+      if(a.h>0&&a.h>openingH)issues.push(`hoogte ${a.h} mm > opening ${openingH} mm`);
+      if(issues.length)result.push(`${m.name||label}: apparaat past niet (${issues.join('; ')}).`);
+    }
     const fridge=p.modules.find(m=>m.kind==='fridge');
     if(fridge)result.push('Koelkast: ventilatie- en montageruimte afhankelijk van het apparaat; nog niet berekend.');
     if(p.modules.some(m=>m.kind==='kamado'))result.push('Kamado: hitteafstand, niet-brandbare afscherming en draagconstructie controleren volgens fabrikant.');
@@ -322,5 +346,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

@@ -46,3 +46,21 @@ test('conflictcontrole: demo heeft geen conflicten; overlap en zwevende balk wor
  p.beams=[{id:'a',name:'Ligger',axis:'x',x:0,y:500,z:0,length:1000},{id:'b',name:'Staander',axis:'y',x:300,y:0,z:0,length:500}];
  assert.equal(M.conflicts(p).unsupported.length,0);assert.equal(M.conflicts(p).overlaps.length,0);
 });
+test('werkblad is parametrisch: standaard gelijk aan vroegere vaste maten, aanpasbaar en genormaliseerd',()=>{
+ const p=M.demoProject(),b=M.countertopBox(p);
+ assert.deepEqual([b.x,b.y,b.z,b.w,b.h,b.d],[-8,p.height-24,-14,p.width+16,24,p.depth+28]);
+ p.countertopSpec=M.normalizeCountertop({thickness:40,overhangSide:20,overhangFront:50,overhangBack:5});
+ const c=M.countertopBox(p);assert.deepEqual([c.x,c.y,c.z,c.w,c.h,c.d],[-20,p.height-40,-50,p.width+40,40,p.depth+55]);
+ assert.deepEqual(M.normalizeCountertop({thickness:999,overhangSide:-5}),{thickness:80,overhangSide:0,overhangFront:14,overhangBack:14});
+ const l=X.build(p,M);assert.match(l.groups.flatMap(g=>g.lines).find(x=>x.id==='werkblad').label,/40 mm dik/);
+ const old=M.demoProject();delete old.countertopSpec;assert.deepEqual(M.normalizeProject(old).countertopSpec,M.defaultCountertop());
+});
+test('apparaatmaten: waarschuwing alleen als eigen maten niet passen; 0 = onbekend',()=>{
+ const p=M.demoProject(),fridge=p.modules.find(m=>m.kind==='fridge');
+ assert.ok(!M.warnings(p).some(w=>/past niet/.test(w)));
+ fridge.appliance=M.normalizeAppliance({w:600,d:650,h:600});assert.ok(!M.warnings(p).some(w=>/past niet/.test(w)));
+ fridge.appliance=M.normalizeAppliance({w:700,d:900,h:700});
+ const w=M.warnings(p).find(x=>/past niet/.test(x));assert.ok(w);assert.match(w,/breedte 700/);assert.match(w,/diepte 900/);assert.match(w,/hoogte 700/);
+ assert.deepEqual(M.normalizeProject(JSON.parse(JSON.stringify(p))).modules.find(m=>m.kind==='fridge').appliance,{w:700,d:900,h:700});
+ assert.deepEqual(M.normalizeAppliance({w:-5,d:'x',h:99999}),{w:0,d:0,h:2500});
+});
