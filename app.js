@@ -38,6 +38,9 @@ function syncSketchControls(){
  if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
 }
 let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
+let multi=[]; // meerdere geselecteerde balken [{type,id}] (kaderselectie); leeg = enkelvoudige selectie
+let marquee=null;
+const isSel=o=>!!o&&((selected&&o.id===selected.id)||multi.some(m=>m.type===o.type&&m.id===o.id));
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null,lastSaveOk=true;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
@@ -104,7 +107,7 @@ function persist(){
  else{lastSaveOk=false;$('#saveStatus').textContent='● Opslag niet beschikbaar';toast((r.error||'Opslag is vol of geblokkeerd')+'. Exporteer het project als JSON-back-up.');}
 }
 function commit(fn){const before=JSON.stringify(project);fn(project);project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
-function resetSession(){undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
+function resetSession(){multi=[];undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
 // Nieuw project aanmaken en openen; het huidige project blijft ongemoeid in de lijst staan.
 function openNewProject(raw,msg){
  const p=normalize(raw),r=store.create(p);
@@ -115,10 +118,10 @@ function switchProject(id){
  const raw=store.load(id);if(!raw){toast('Project niet gevonden');return;}
  project=normalize(raw);store.setActive(id);resetSession();render();closeModal();toast('Geopend: '+project.name);
 }
-function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
+function history(dir){multi=[];const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);return null;}
 function setSelected(type,id){
-  selected=id?{type,id}:null;beamMoveMode=false;render();
+  multi=[];selected=id?{type,id}:null;beamMoveMode=false;render();
   if(window.innerWidth<=800){
     if(id)switchMobile('design');
     $('#inspector').classList.remove('mobile-visible');
@@ -255,6 +258,12 @@ function render(){
 }
 function renderInspector(){
   const obj=getSelected();const body=$('#inspectorBody'),foot=$('#inspectorBottom');
+  if(multi.length){
+    $('#inspectorTitle').textContent=`${multi.length} balken geselecteerd`;
+    body.innerHTML=`<div class="preview-icon">▥▥</div><p class="inspector-label">GROEPSSELECTIE</p><p class="mini-note">Sleep een geselecteerde balk om alles samen te verplaatsen. Ctrl+slepen maakt een nieuw kader; Shift erbij voegt toe.</p><div class="field-grid"><label class="field">ΔX (mm)<input id="grpX" type="number" step="5" value="0"></label><label class="field">ΔY (mm)<input id="grpY" type="number" step="5" value="0"></label><label class="field">ΔZ (mm)<input id="grpZ" type="number" step="5" value="0"></label></div><button class="outline-btn full" id="groupMoveBtn">Verplaats met deze waarden</button><button class="outline-btn full" id="groupCopyBtn">⧉ Kopieer groep met deze waarden</button>`;
+    foot.innerHTML='<div class="right-foot-actions"><button class="outline-btn full" id="groupClearBtn">Selectie opheffen</button><button class="danger-btn full" id="groupDeleteBtn">Verwijder selectie</button></div>';
+    return;
+  }
   if(!obj){
     $('#inspectorTitle').textContent='Projectoverzicht';
     const plan=M.boardPlan(project),warn=M.warnings(project);
@@ -456,17 +465,19 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   hitShapes=shapes.filter(s=>s.owner);
   const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY,eye:cameraDistance,parallel:sketchSettings.parallel});
   if(!gpuRendered){
-    for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=2;ctx.stroke();}}
+    for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(isSel(s.owner)){ctx.strokeStyle=multi.length?'#d9822b':'#438f77';ctx.lineWidth=2;ctx.stroke();}}
   }else{
     // Solid surfaces are painted by WebGL with a real depth buffer.
     // Keep the editing handles, selected outlines and dimensions in the 2D overlay.
-    for(const s of shapes){if(selected&&s.owner?.id===selected.id){ctx.strokeStyle='#438f77';ctx.lineWidth=1.6;path(s.verts);ctx.stroke();}}
+    for(const s of shapes){if(isSel(s.owner)){ctx.strokeStyle=multi.length?'#d9822b':'#438f77';ctx.lineWidth=multi.length?2.2:1.6;path(s.verts);ctx.stroke();}}
   }
   drawDims();if(currentView==='3d')drawLabels();
   if(snapHint&&(drawMode||measureMode)){
     ctx.save();ctx.lineWidth=2;ctx.strokeStyle='#15826a';ctx.fillStyle='#fff';
     ctx.beginPath();ctx.arc(snapHint.x,snapHint.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
   }
+  if(marquee){const x=Math.min(marquee.x0,marquee.x1),y=Math.min(marquee.y0,marquee.y1),w=Math.abs(marquee.x1-marquee.x0),h=Math.abs(marquee.y1-marquee.y0),cross=marquee.x1<marquee.x0;
+    ctx.save();ctx.fillStyle=cross?'rgba(67,143,119,.14)':'rgba(217,130,43,.14)';ctx.strokeStyle=cross?'#438f77':'#d9822b';ctx.lineWidth=1.2;ctx.setLineDash(cross?[5,4]:[]);ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.restore();}
   if(measureData&&measureData.a){
     const plane=viewAxes(),b=measureData.b||measureData.a,A=toScreen([measureData.a.x,measureData.a.y,measureData.a.z]),B=toScreen([b.x,b.y,b.z]),r=D.measure(measureData.a,b,plane);
     ctx.save();ctx.strokeStyle='#d9822b';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();ctx.setLineDash([]);
@@ -740,6 +751,13 @@ document.addEventListener('click',e=>{
     case 'drawTool':toggleDrawMode(true);break;
     case 'measureTool':toggleMeasureMode(!measureMode);break;
     case 'selectTool':toggleDrawMode(false);toggleMeasureMode(false);break;
+    case 'groupClearBtn':setSelected(null,null);break;
+    case 'groupMoveBtn':{const d={x:+$('#grpX').value,y:+$('#grpY').value,z:+$('#grpZ').value};const keep=multi.slice();commit(()=>M.moveBeams(project,keep,d));multi=keep;render();break;}
+    case 'groupCopyBtn':{const d={x:+$('#grpX').value,y:+$('#grpY').value,z:+$('#grpZ').value};if(!d.x&&!d.y&&!d.z){toast('Geef een verplaatsing op, anders ligt de kopie precies op het origineel');break;}
+      const all=M.framePieces(project).concat(project.beams),src=multi.map(m=>all.find(b=>b.id===m.id)).filter(Boolean),room=Math.max(0,100-project.beams.length),made=src.slice(0,room);
+      const ids=[];commit(()=>{for(const b of made){const id=M.uid();ids.push({type:'beam',id});project.beams.push({id,name:String(b.name||'Balk').slice(0,52),axis:b.axis,length:b.length,x:b.x+Math.round(d.x),y:b.y+Math.round(d.y),z:b.z+Math.round(d.z),profile:M.profileOf(b).id});}});
+      multi=ids;render();toast(`${made.length} balken gekopieerd${made.length<src.length?` (${src.length-made.length} niet: maximum 100 losse balken)`:''}`);break;}
+    case 'groupDeleteBtn':{const keep=multi.slice();commit(()=>{for(const m of keep){if(m.type==='frame')M.editFrameBeam(project,m.id,{disabled:true});else project.beams=project.beams.filter(b=>b.id!==m.id);}});multi=[];selected=null;render();toast(`${keep.length} balken verwijderd`);break;}
     case 'arrayBeamBtn':{const src=getSelected();if(!src||selected?.type==='module')break;const r=M.arrayBeams(project,src,$('#arrAxis').value,$('#arrCount').value,$('#arrSpacing').value);
       if(!r.ok){toast(r.error);break;}commit(()=>{project.beams.push(...r.beams);});toast(`${r.beams.length} kopie${r.beams.length===1?'':'ën'} geplaatst${r.skipped?` (${r.skipped} niet: maximum 100 losse balken)`:''}`);break;}
     case 'demoProject':openNewProject(M.demoProject(),'Voorbeeld geopend');break;
@@ -845,6 +863,7 @@ window.addEventListener('keydown',e=>{
   if(key==='escape'){
     $('#shortcutHelp').classList.add('hidden');
     if(armedBeamType)disarmBeam();
+    if(multi.length){setSelected(null,null);}
     if(measureMode)toggleMeasureMode(false);
     if(drawMode)toggleDrawMode(false);
     if(modalOpen)closeModal();
@@ -858,6 +877,7 @@ window.addEventListener('keydown',e=>{
   if(key==='?'){e.preventDefault();$('#shortcutHelp').classList.toggle('hidden');return;}
   const views={'1':'3d','2':'front','3':'side','4':'top','5':'bottom'};
   if(views[key]){setView(views[key]);return;}
+  if((key==='delete'||key==='backspace')&&multi.length){e.preventDefault();$('#groupDeleteBtn')?.click();return;}
   if((key==='delete'||key==='backspace')&&selected){e.preventDefault();const b=$('#deleteSelected');if(b)b.click();}
 });
 window.addEventListener('keyup',e=>{if(e.key.toLowerCase()==='s'){magnetHeldOff=false;draw();}});
@@ -886,6 +906,17 @@ canvas.addEventListener('pointerdown',e=>{
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
     dragging={mode:'draw-beam',start,startX:e.offsetX,startY:e.offsetY,moved:false};
     return;
+  }
+  // Kaderselectie: Ctrl/Cmd+slepen (overal) of gewoon slepen op lege ruimte in een 2D-aanzicht.
+  if(!armedBeamType&&(e.ctrlKey||e.metaKey||viewAxes())){
+    const over=hit(e.offsetX,e.offsetY),inMulti=over&&multi.some(m=>m.id===over.id);
+    if(inMulti&&!(e.ctrlKey||e.metaKey)){pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+      const b=M.framePieces(project).concat(project.beams).find(x=>x.id===over.id);
+      dragging={mode:'move-group',before:JSON.stringify(project),startBeam:{x:b.x,y:b.y,z:b.z},startX:e.offsetX,startY:e.offsetY,moved:false,applied:{x:0,y:0,z:0}};return;}
+    if(!over||(e.ctrlKey||e.metaKey)){
+      pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+      dragging={mode:'marquee',x0:e.offsetX,y0:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false,additive:e.shiftKey};return;
+    }
   }
   const resize=(selected?.type==='beam'||selected?.type==='frame') && handleAt(e.offsetX,e.offsetY);
   if(resize){
@@ -931,6 +962,18 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
     }
     return;
   }
+  if(dragging.mode==='marquee'){
+    if(dragging.moved){marquee={x0:dragging.x0,y0:dragging.y0,x1:e.offsetX,y1:e.offsetY};draw();}
+    return;
+  }
+  if(dragging.mode==='move-group'){
+    if(!dragging.moved)return;
+    const delta=dragWorldDelta(e.offsetX-dragging.startX,e.offsetY-dragging.startY,dragging.startBeam);
+    const snap=v=>Math.round(v/5)*5,want={x:snap(delta.x),y:snap(delta.y),z:snap(delta.z)};
+    const step={x:want.x-dragging.applied.x,y:want.y-dragging.applied.y,z:want.z-dragging.applied.z};
+    if(step.x||step.y||step.z){M.moveBeams(project,multi,step);dragging.applied=want;}
+    draw();return;
+  }
   if(dragging.mode==='draw-beam'){
     const end=drawPoint(e.offsetX,e.offsetY);
     previewBeam=end?M.drawingBeam(dragging.start,end,viewAxes(),{step:gridSize}):null;
@@ -965,6 +1008,22 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';Array.from(document.querySelectorAll('.view-btn')).forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){
+  if(dragging?.mode==='marquee'){
+    const d=dragging;dragging=null;pointers.delete(e.pointerId);const r=marquee;marquee=null;
+    if(!d.moved||!r){if(multi.length||selected)setSelected(null,null);else draw();return;}
+    const found=D.rectSelect(shapes,r,r.x1<r.x0);
+    const keep=d.additive?multi.concat(selected&&!multi.length?[selected]:[]):[];
+    const all=[...keep];for(const o of found)if(!all.some(k=>k.type===o.type&&k.id===o.id))all.push(o);
+    if(all.length>1){selected=null;multi=all;beamMoveMode=false;render();toast(`${all.length} balken geselecteerd · sleep om te verplaatsen · Delete verwijdert`);}
+    else if(all.length===1)setSelected(all[0].type,all[0].id);
+    else setSelected(null,null);
+    return;
+  }
+  if(dragging?.mode==='move-group'){
+    const d=dragging;dragging=null;pointers.delete(e.pointerId);
+    if(JSON.stringify(project)!==d.before){undoStack.push(d.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+    else draw();return;
+  }
   if(dragging?.mode==='move-kitchen'){
     const before=dragging.before;dragging=null;pointers.delete(e.pointerId);
     if(JSON.stringify(project)!==before){undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}

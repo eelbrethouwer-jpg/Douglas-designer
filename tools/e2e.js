@@ -166,6 +166,27 @@ const scenarios=[
    t.ok('undo herstelt 28 stuks',await b.eval(`${activeProject}.beams.length===0&&document.querySelector('#statBeams').textContent.includes('28')`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
+ {name:'modelleren: kaderselectie en groep verplaatsen (met undo)',async run(b,t){
+   await demo(b);
+   await b.eval(`document.querySelector('.view-btn[data-view="front"]').click()`);await sleep(400);
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {l:c.left,t:c.top,w:c.width,h:c.height}})()`);
+   const before=await b.eval(`JSON.stringify(${activeProject}.frameEdits||{})`);
+   // kader van rechtsonder naar linksboven? nee: links→rechts (volledig binnen) over het hele werkvlak
+   await b.mouse('mouseMoved',r.l+10,r.t+120,{buttons:0});await b.mouse('mousePressed',r.l+10,r.t+120);
+   await b.mouse('mouseMoved',r.l+r.w/2,r.t+r.h/2,{buttons:1});await b.mouse('mouseMoved',r.l+r.w-10,r.t+r.h-10,{buttons:1});
+   await b.mouse('mouseReleased',r.l+r.w-10,r.t+r.h-10);await sleep(400);
+   const title=await b.eval(`document.querySelector('#inspectorTitle').textContent`);
+   t.ok('groepsselectie getoond',/\d+ balken geselecteerd/.test(title),title);
+   const n=+(/(\d+)/.exec(title)||[])[1];t.ok('meer dan 20 balken geselecteerd',n>20,String(n));
+   await b.shot(path.join(OUT,'kader.png'));
+   await set(b,'#grpX',100);await b.click('#groupMoveBtn');await sleep(400);
+   t.ok('groep numeriek verplaatst (frameEdits aangepast)',await b.eval(`JSON.stringify(${activeProject}.frameEdits||{})!==${JSON.stringify(before)}`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(400);
+   t.ok('undo herstelt',await b.eval(`JSON.stringify(${activeProject}.frameEdits||{})===${JSON.stringify(before)}`));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(200);
+   t.ok('Esc heft selectie op',await b.eval(`!/geselecteerd/.test(document.querySelector('#inspectorTitle').textContent)`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

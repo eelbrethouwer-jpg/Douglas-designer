@@ -76,3 +76,11 @@ test('reeks kopiëren: aantal, afstand, richting, vrije balken en begrenzing',()
  const lim=M.arrayBeams(p,p.beams[0],'z',5,50);assert.equal(lim.beams.length,2);assert.equal(lim.skipped,3);
  const fp=M.demoProject(),post=M.framePieces(fp)[0],fr=M.arrayBeams(fp,post,'x',1,100);assert.equal(fr.beams.length,1);assert.equal(fr.beams[0].group,undefined,'kopie van framebalk is een vrije balk');
 });
+test('moveBeams: vrije en framebalken samen verplaatsen, onbekende ids negeren',()=>{
+ const p=M.demoProject();p.beams=[{id:'a',name:'A',axis:'x',x:0,y:0,z:0,length:500},{id:'b',name:'B',axis:'z',x:10,y:20,z:30,length:300}];
+ const fr=M.framePieces(p)[0],before={x:fr.x,y:fr.y,z:fr.z};
+ const n=M.moveBeams(p,[{type:'beam',id:'a'},{type:'beam',id:'b'},{type:'frame',id:fr.id},{type:'beam',id:'nope'}],{x:100,y:-5,z:12.4});
+ assert.equal(n,3);assert.deepEqual([p.beams[0].x,p.beams[0].y,p.beams[0].z],[100,-5,12]);assert.deepEqual([p.beams[1].x,p.beams[1].z],[110,42]);
+ const after=M.framePieces(p).find(b=>b.id===fr.id);assert.deepEqual([after.x,after.y,after.z],[before.x+100,before.y-5,before.z+12]);
+ assert.equal(M.moveBeams(p,[],{x:1}),0);
+});

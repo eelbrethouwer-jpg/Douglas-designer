@@ -280,6 +280,17 @@
     return map;
   }
   // Geometrische controle (geen constructieve berekening): overlappende balken en balken zonder steunpunt.
+  // Verplaatst meerdere balken (vrij en frame) tegelijk met dezelfde delta (mm, afgerond op 5).
+  function moveBeams(p,items,delta){
+    const d={x:Math.round(number(delta&&delta.x,0)),y:Math.round(number(delta&&delta.y,0)),z:Math.round(number(delta&&delta.z,0))};
+    const frame=new Map(framePieces(p).map(b=>[b.id,b])),free=new Map(p.beams.map(b=>[b.id,b]));
+    let moved=0;
+    for(const it of items||[]){
+      if(it.type==='beam'&&free.has(it.id)){const b=free.get(it.id);b.x+=d.x;b.y+=d.y;b.z+=d.z;moved++;}
+      else if(it.type==='frame'&&frame.has(it.id)){const b=frame.get(it.id);editFrameBeam(p,it.id,{x:b.x+d.x,y:b.y+d.y,z:b.z+d.z});moved++;}
+    }
+    return moved;
+  }
   // Reeks: maakt `count` kopieën van een balk, telkens `spacing` mm verder langs `axis` (x/y/z).
   // Kopieën zijn vrije balken (ook als het origineel een framebalk is). Respecteert het maximum van 100 losse balken.
   function arrayBeams(p,source,axis,count,spacing){
@@ -369,5 +380,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,arrayBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });
