@@ -14,7 +14,7 @@ function makeApp(){
   nodes.set(id,c);
  }return nodes.get(id);}
  const document={querySelector:s=>el(s),querySelectorAll:()=>[],addEventListener(name,fn){listeners.set('document:'+name,fn);},activeElement:{tagName:'BODY'},createElement:()=>el('created')};
- const window={DouglasModel:M,DouglasMaterials:Mat,DouglasDocuments:Docs,DouglasProjects:Prj,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1500,devicePixelRatio:1,addEventListener(name,fn){listeners.set('window:'+name,fn);},print(){},confirm(){return true;}};
+ const window={DouglasModel:M,DouglasMaterials:Mat,DouglasDocuments:Docs,DouglasProjects:Prj,DouglasShare:require('../share.js'),DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1500,devicePixelRatio:1,addEventListener(name,fn){listeners.set('window:'+name,fn);},print(){},confirm(){return true;}};
  const storage={getItem:k=>mem.has(k)?mem.get(k):null,setItem(k,v){mem.set(k,String(v));},removeItem(k){mem.delete(k);},key:i=>[...mem.keys()][i]??null,get length(){return mem.size;}};
  const activeJson=()=>{const ix=JSON.parse(mem.get(Prj.INDEX_KEY)||'null');return ix?mem.get(Prj.PROJECT_PREFIX+ix.activeId):'';};
  const sandbox={window,document,navigator:{},location:{protocol:'file:'},localStorage:storage,Intl,console,Map,Math,JSON,Date,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};

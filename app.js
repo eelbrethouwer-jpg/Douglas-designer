@@ -16,6 +16,7 @@ const fmt=(n)=>new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(n
 const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n);
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
+const SHARE=window.DouglasShare||null; // optioneel: zonder share.js verdwijnen delen/aanleveren
 const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
 const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
 let storageProblem=false;
@@ -539,6 +540,118 @@ function projectAction(spec){
  else if(act==='restore'){const r=store.restore(id);if(r.ok){toast('Teruggezet');switchProject(r.id);showProjects();}else toast('Terugzetten mislukt: '+r.error);}
  else if(act==='exportAll'){download('douglas-designer-alle-projecten.json',store.exportAll());toast('Back-up van alle projecten opgeslagen');}
 }
+
+/* ---------- delen en aanleveren (zonder server) ---------- */
+let shareLink='',deliveryDraft={name:'',width:'',depth:'',height:'',notes:'',photos:[]},pendingReceive=null;
+const canNativeShare=()=>typeof navigator!=='undefined'&&typeof navigator.share==='function';
+function openModal(eyebrow,title,html){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent=eyebrow;$('#modalTitle').textContent=title;$('#modalContent').innerHTML=html;$('#modalContent').scrollTop=0;}
+async function copyText(text,okMsg){try{await navigator.clipboard.writeText(text);toast(okMsg||'Gekopieerd');return true;}catch(_){toast('Kopiëren niet gelukt; selecteer de tekst en kopieer handmatig');return false;}}
+function fileFor(name,text,type='application/json'){return new File([text],name,{type});}
+async function shareOrDownload(file,title,text){
+ try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title,text});return;}}
+ catch(e){if(e&&e.name==='AbortError')return;}
+ download(file.name,await file.text(),file.type);toast('Bestand opgeslagen; stuur het zelf door (mail, WhatsApp, AirDrop)');
+}
+function showShare(){
+ if(!SHARE)return;
+ const ref=project.reference;
+ let h=`<div class="notice-small" style="margin-top:0">Deze app heeft geen server: delen gaat via een <strong>link</strong> of een <strong>bestand</strong>. Foto's gaan alleen mee als bestand. De gegevens in een link blijven in de link zelf en worden niet naar een server gestuurd.</div>`;
+ h+=`<h4 class="cut-section">LINK NAAR DIT PROJECT (ZONDER FOTO'S)</h4><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="shareLinkInput" readonly value="Link wordt gemaakt…" style="flex:1;min-width:220px;border:1px solid #dce1d9;border-radius:8px;padding:9px;font:inherit" aria-label="Deellink"><button class="outline-btn" data-share="copyLink">⧉ Kopieer link</button>${canNativeShare()?'<button class="outline-btn" data-share="nativeLink">⇪ Delen…</button>':''}</div><p class="mini-note" id="shareLinkNote"></p>`;
+ h+=`<h4 class="cut-section">MATERIAALLIJST</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-share="copyList">⧉ Kopieer als tekst</button>${canNativeShare()?'<button class="outline-btn" data-share="nativeList">⇪ Delen…</button>':''}<button class="outline-btn" data-share="csvList">↓ CSV</button></div>`;
+ h+=`<h4 class="cut-section">PROJECTBESTAND</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-share="nativeFile">⇪ ${canNativeShare()?'Bestand delen…':'Bestand opslaan'}</button><button class="outline-btn" data-share="download">↓ Download (.json)</button></div><p class="mini-note">Een ontvangen bestand open je via <em>Project importeren</em>; het wordt altijd als nieuw project toegevoegd.</p>`;
+ h+=`<h4 class="cut-section">AANLEVEREN VANAF JE TELEFOON</h4><p class="mini-note">Open deze app op je telefoon en kies <em>Delen → Aanleveren</em>. Vul maten in, voeg foto's toe en stuur het naar jezelf. Op je laptop importeer je het bestand of open je de link.</p><button class="primary-btn" data-share="deliver">📷 Aanleveren…</button>`;
+ if(ref){h+=`<h4 class="cut-section">ONTVANGEN REFERENTIES IN DIT PROJECT</h4>${ref.notes?`<div class="notice-small" style="margin-top:0;white-space:pre-wrap">${esc(ref.notes)}</div>`:''}<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">${ref.photos.map((p,i)=>`<div style="width:150px"><img src="${p}" alt="Referentiefoto ${i+1}" style="width:150px;height:110px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9"><div style="display:flex;gap:4px;margin-top:4px"><button class="outline-btn" style="flex:1;min-height:30px;padding:0 6px;font-size:11px" data-share="usePhoto:${i}">Als ruimtefoto</button><button class="outline-btn delete-btn" style="min-height:30px;padding:0 8px" data-share="delPhoto:${i}" aria-label="Foto verwijderen">✕</button></div></div>`).join('')}</div>`;}
+ openModal('DELEN','Delen & aanleveren',h);
+ shareLink='';
+ SHARE.encodeLinkData(SHARE.buildProjectPayload(project)).then(data=>{
+  const el=$('#shareLinkInput');if(!el)return;
+  shareLink=SHARE.linkFor(location.href,data);el.value=shareLink;
+  const note=$('#shareLinkNote');if(note)note.textContent=shareLink.length>8000?'Deze link is lang ('+Math.round(shareLink.length/1000)+' kB); sommige apps knippen lange links af. Gebruik dan het projectbestand.':'';
+ }).catch(()=>{const el=$('#shareLinkInput');if(el)el.value='Link maken is niet gelukt; gebruik het projectbestand.';});
+}
+async function shareAction(spec){
+ const [act,...rest]=spec.split(':'),arg=rest.join(':');
+ if(act==='copyLink'){if(shareLink)await copyText(shareLink,'Link gekopieerd');}
+ else if(act==='nativeLink'){if(shareLink)try{await navigator.share({title:project.name,url:shareLink});}catch(e){if(e&&e.name!=='AbortError')await copyText(shareLink,'Delen niet mogelijk; link gekopieerd');}}
+ else if(act==='copyList'||act==='nativeList'){
+  if(!MAT){toast('Materiaallijst niet beschikbaar');return;}
+  const text=MAT.toText(MAT.build(project,M),project.name);
+  if(act==='copyList')await copyText(text,'Materiaallijst gekopieerd');
+  else try{await navigator.share({title:'Materiaallijst '+project.name,text});}catch(e){if(e&&e.name!=='AbortError')await copyText(text,'Delen niet mogelijk; tekst gekopieerd');}
+ }
+ else if(act==='csvList'){if(MAT)download(safeName()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}
+ else if(act==='nativeFile')await shareOrDownload(fileFor(safeName()+'.douglas.json',JSON.stringify(SHARE.buildProjectPayload(project))),project.name);
+ else if(act==='download')exportProject();
+ else if(act==='deliver')showDeliver();
+ else if(act==='usePhoto'){const ph=project.reference?.photos?.[+arg];if(!ph)return;commit(()=>{project.room=R.normalizeRoom({...project.room,photo:ph,corners:[],enabled:project.room?.enabled},project);});toast('Ruimtefoto ingesteld. Markeer de vier vloerhoeken via Ruimte.');showShare();}
+ else if(act==='delPhoto'){commit(()=>{const r=project.reference;if(!r)return;r.photos.splice(+arg,1);if(!r.photos.length&&!r.notes)delete project.reference;});showShare();}
+}
+function deliveryFormHTML(){
+ const d=deliveryDraft,f=(k,l,ph)=>`<label class="field">${l}<input data-draft="${k}" type="number" min="1200" max="20000" step="10" inputmode="numeric" placeholder="${ph}" value="${esc(d[k])}"></label>`;
+ return `<div class="notice-small" style="margin-top:0">Vul in wat je weet; alles is optioneel. Je verstuurt het daarna naar jezelf (WhatsApp, Mail, AirDrop). Maten in <strong>millimeter</strong>. Foto's worden verkleind (max. ${SHARE.LIMITS.photos}).</div>
+ <label class="field" style="margin-top:12px">Omschrijving<input data-draft="name" maxlength="${SHARE.LIMITS.name}" placeholder="bijv. Terras achter" value="${esc(d.name)}"></label>
+ <div class="field-grid">${f('width','Ruimte breedte (mm)','4500')}${f('depth','Ruimte diepte (mm)','3200')}${f('height','Ruimte hoogte (mm)','2700')}</div>
+ <label class="field">Opmerkingen<textarea data-draft="notes" rows="3" maxlength="${SHARE.LIMITS.notes}" placeholder="bijv. afstand tot de schuur, stopcontact links" style="border:1px solid #dce1d9;border-radius:8px;padding:9px;font:inherit;resize:vertical">${esc(d.notes)}</textarea></label>
+ <div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-deliver="addPhoto">🖼️ Foto's kiezen</button><button class="outline-btn" data-deliver="takePhoto">📷 Foto maken</button></div>
+ <div id="deliverPhotos" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">${deliveryPhotosHTML()}</div>
+ <div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-deliver="send">⇪ ${canNativeShare()?'Versturen…':'Bestand opslaan'}</button><button class="outline-btn" data-deliver="link">⧉ Link kopiëren (zonder foto's)</button></div><p class="mini-note">Bestand = inclusief foto's. Link = alleen maten en opmerkingen.</p>`;
+}
+const deliveryPhotosHTML=()=>deliveryDraft.photos.map((p,i)=>`<div style="position:relative"><img src="${p}" alt="Foto ${i+1}" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9"><button class="outline-btn delete-btn" style="position:absolute;top:2px;right:2px;min-height:24px;width:24px;padding:0" data-deliver="rm:${i}" aria-label="Foto verwijderen">✕</button></div>`).join('')||'<span class="mini-note">Nog geen foto\'s</span>';
+function showDeliver(){if(SHARE)openModal('AANLEVEREN','Aanleveren (maten & foto\'s)',deliveryFormHTML());}
+function compressImageFile(file){return new Promise((res,rej)=>{
+ if(!(/^image\//.test(file.type)||/\.(jpe?g|png|webp)$/i.test(file.name)))return rej(new Error('Geen afbeelding'));
+ const url=URL.createObjectURL(file),img=new Image();
+ img.onload=()=>{URL.revokeObjectURL(url);let maxDim=1280,q=.72;
+  for(let i=0;i<7;i++){const s=Math.min(1,maxDim/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');
+   c.width=Math.max(1,Math.round(img.naturalWidth*s));c.height=Math.max(1,Math.round(img.naturalHeight*s));
+   c.getContext('2d').drawImage(img,0,0,c.width,c.height);const out=c.toDataURL('image/jpeg',q);
+   if(out.length<=SHARE.LIMITS.photoChars&&SHARE.JPEG.test(out))return res(out);maxDim=Math.round(maxDim*.8);q=Math.max(.45,q-.06);}
+  rej(new Error('Foto te groot'));};
+ img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Foto kon niet gelezen worden (formaat niet ondersteund)'));};img.src=url;});}
+async function addDeliveryPhotos(files){
+ let added=0;
+ for(const f of [...files]){
+  if(deliveryDraft.photos.length>=SHARE.LIMITS.photos){toast('Maximaal '+SHARE.LIMITS.photos+' foto\'s');break;}
+  try{deliveryDraft.photos.push(await compressImageFile(f));added++;}catch(e){toast(f.name+': '+e.message);}
+ }
+ const box=$('#deliverPhotos');if(box)box.innerHTML=deliveryPhotosHTML();
+ if(added)toast(added+' foto'+(added===1?'':"'s")+' toegevoegd');
+}
+function deliveryPayload(withPhotos){return SHARE.buildDeliveryPayload({...deliveryDraft,room:{width:deliveryDraft.width,depth:deliveryDraft.depth,height:deliveryDraft.height},photos:withPhotos?deliveryDraft.photos:[]});}
+async function deliverAction(spec){
+ const [act,...rest]=spec.split(':'),arg=rest.join(':');
+ if(act==='addPhoto')$('#photoInput').click();
+ else if(act==='takePhoto')$('#cameraInput').click();
+ else if(act==='rm'){deliveryDraft.photos.splice(+arg,1);$('#deliverPhotos').innerHTML=deliveryPhotosHTML();}
+ else if(act==='send'||act==='link'){
+  const payload=deliveryPayload(act==='send'),v=SHARE.validate(payload);
+  if(!v.ok){toast(v.error==='De aanlevering bevat geen maten, opmerkingen of foto\'s'?'Vul minstens iets in: maten, opmerking of een foto':v.error);return;}
+  if(act==='send')await shareOrDownload(fileFor('aanlevering-'+((deliveryDraft.name||'ruimte').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'ruimte')+'.douglas.json',JSON.stringify(payload)),'Aanlevering '+(deliveryDraft.name||'ruimte'),SHARE.deliverySummaryText(v.summary));
+  else{const data=await SHARE.encodeLinkData(payload),url=SHARE.linkFor(location.href,data);await copyText(url,'Link gekopieerd'+(url.length>8000?' (lang: gebruik liever het bestand)':''));}
+ }
+}
+// Ontvangen bestand of link: eerst tonen wat erin zit; pas toepassen na bevestiging.
+function receivePayload(parsed){
+ const v=SHARE?SHARE.validate(parsed):{ok:false,error:'Delen is niet beschikbaar'};
+ if(!v.ok){toast('Niet gelukt: '+v.error);return false;}
+ pendingReceive=v;hideWelcome();
+ let h='';
+ if(v.type==='project')h=`<div class="notice-small" style="margin-top:0">Ontvangen project: <strong>${esc(v.summary.name)}</strong> (${v.summary.modules} modules, ${v.summary.beams} losse balken). Het wordt als <strong>nieuw project</strong> toegevoegd; je huidige project blijft ongewijzigd.</div><div class="right-foot-actions" style="flex-direction:row;margin-top:14px"><button class="primary-btn" data-recv="project">＋ Toevoegen als nieuw project</button><button class="outline-btn" data-recv="cancel">Annuleren</button></div>`;
+ else{const s=v.summary;h=`<div class="notice-small" style="margin-top:0">Ontvangen aanlevering${s.name&&s.name!=='Aanlevering'?': <strong>'+esc(s.name)+'</strong>':''}: ${esc(SHARE.deliverySummaryText(s))}.${s.droppedPhotos?` ${s.droppedPhotos} bijlage(n) overgeslagen (geen geldige of te grote JPEG).`:''}${s.notes?`<br><br><em style="white-space:pre-wrap">${esc(s.notes)}</em>`:''}</div>${s.photos?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">${v.payload.photos.map((p,i)=>`<img src="${p}" alt="Foto ${i+1}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9">`).join('')}</div>`:''}<p class="mini-note">Maten gelden als ruimte (3D-ruimte wordt ingeschakeld); de eerste foto wordt ruimtefoto, waarna je de vier vloerhoeken markeert. Foto's en opmerkingen blijven als referentie bij het project.</p><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-recv="applyCurrent">Toepassen op huidig project</button><button class="outline-btn" data-recv="newProject">Nieuw project maken</button><button class="outline-btn" data-recv="cancel">Annuleren</button></div>`;}
+ openModal('ONTVANGEN',v.type==='project'?'Project ontvangen':'Aanlevering ontvangen',h);return true;
+}
+function receiveAction(act){
+ const v=pendingReceive;if(!v&&act!=='cancel')return;
+ if(act==='cancel'){pendingReceive=null;closeModal();return;}
+ if(act==='project'){const ok=openNewProject(v.payload.project,'Project ontvangen en toegevoegd');if(ok)pendingReceive=null;}
+ else if(act==='applyCurrent'){commit(()=>{project=normalize(SHARE.applyDelivery(project,v.payload));});pendingReceive=null;closeModal();toast('Aanlevering toegepast op '+project.name);}
+ else if(act==='newProject'){const ok=openNewProject(SHARE.applyDelivery({name:v.payload.name||'Aanlevering',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},v.payload),'Nieuw project met aanlevering gemaakt');if(ok)pendingReceive=null;}
+}
+async function checkShareHash(){
+ if(!SHARE)return;const data=SHARE.dataFromHash(location.hash);if(!data)return;
+ try{const parsed=await SHARE.decodeLinkData(data);try{window.history.replaceState(null,'',location.pathname+location.search);}catch(_){}receivePayload(parsed);}
+ catch(e){toast('Link kon niet worden gelezen: '+e.message);}
+}
 function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
 function safeName(){return (project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'douglas';}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
@@ -583,6 +696,9 @@ document.addEventListener('click',e=>{
   const beamCard=e.target.closest('[data-select-beam]');
   const frameCard=e.target.closest('[data-select-frame]');
   const pa=e.target.closest('[data-proj]');if(pa){projectAction(pa.dataset.proj);return;}
+  const sa=e.target.closest('[data-share]');if(sa){shareAction(sa.dataset.share);return;}
+  const da=e.target.closest('[data-deliver]');if(da){deliverAction(da.dataset.deliver);return;}
+  const ra=e.target.closest('[data-recv]');if(ra){receiveAction(ra.dataset.recv);return;}
   const b=e.target.closest('button');
   if(modCard && !b){setSelected('module',modCard.dataset.selectModule);return;}
   if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
@@ -598,6 +714,7 @@ document.addEventListener('click',e=>{
   switch(b.id){
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
     case 'homeBtn':showProjects();break;
+    case 'shareBtn':showShare();break;
     case 'continueProject':hideWelcome();break;
     case 'newProject':openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');break;
     case 'newFreeProject':if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');}break;
@@ -685,13 +802,17 @@ function updateDraftControls(){
   btn.setAttribute('aria-pressed',String(magnetEnabled));
   btn.classList.toggle('inactive',!magnetEnabled);
 }
-$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const text=await file.text(),raw=JSON.parse(text);if(raw&&raw.format===PRJ.BACKUP_FORMAT){const r=store.importAll(text);if(!r.ok)throw Error(r.error);toast(r.added+' project(en) toegevoegd'+(r.skipped?', '+r.skipped+' overgeslagen':''));showProjects();e.target.value='';return;}if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');if(!openNewProject(raw,'Project geïmporteerd als nieuw project'))return;}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
+$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>(SHARE?SHARE.LIMITS.file:2*1024*1024))throw Error('Bestand te groot');const text=await file.text(),raw=JSON.parse(text);if(SHARE&&raw&&raw.format===SHARE.FORMAT){receivePayload(raw);e.target.value='';return;}if(raw&&raw.format===PRJ.BACKUP_FORMAT){const r=store.importAll(text);if(!r.ok)throw Error(r.error);toast(r.added+' project(en) toegevoegd'+(r.skipped?', '+r.skipped+' overgeslagen':''));showProjects();e.target.value='';return;}if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');if(!openNewProject(raw,'Project geïmporteerd als nieuw project'))return;}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
 $('#modalContent').addEventListener('change',e=>{const t=e.target;
   if(t?.dataset?.projName){const id=t.dataset.projName,r=store.rename(id,t.value);if(r.ok===false||r.error){toast('Hernoemen mislukt');return;}if(id===project.id){project.name=store.load(id).name;render();}toast('Naam opgeslagen');return;}
   const key=t?.dataset?.mat;if(!key||!MAT)return;
   const box=$('#modalContent'),top=box.scrollTop;
   commit(()=>{project.materials=MAT.applyInput(project.materials,key,t.value,M);});
   box.innerHTML=cutlistHTML();box.scrollTop=top;});
+$('#modalContent').addEventListener('input',e=>{const k=e.target?.dataset?.draft;if(k&&Object.hasOwn(deliveryDraft,k))deliveryDraft[k]=e.target.value;});
+$('#photoInput').addEventListener('change',async e=>{await addDeliveryPhotos(e.target.files||[]);e.target.value='';});
+$('#cameraInput').addEventListener('change',async e=>{await addDeliveryPhotos(e.target.files||[]);e.target.value='';});
+window.addEventListener('hashchange',checkShareHash);
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
@@ -853,5 +974,6 @@ window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,
 function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
+checkShareHash();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.7.4',{updateViaCache:'none'}).catch(()=>{});
 })();

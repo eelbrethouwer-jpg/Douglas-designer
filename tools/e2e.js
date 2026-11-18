@@ -19,6 +19,11 @@ async function fresh(b){await b.goto(URL_);await b.eval(`localStorage.clear()`);
 async function demo(b){await fresh(b);await b.click('#demoProject');await sleep(500);}
 const set=(b,sel,v)=>b.eval(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});e.value=${JSON.stringify(String(v))};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
 
+const fs=require('node:fs');
+const Share=require('../share.js');
+const tmp=(n)=>path.join(os.tmpdir(),'douglas-e2e-files',n);
+const waitFor=async(fn,ms=6000)=>{const t0=Date.now();while(Date.now()-t0<ms){try{if(await fn())return true;}catch(_){}await sleep(150);}return false;};
+
 const scenarios=[
  {name:'start: welkomstscherm, voorbeeld openen, drie camerastanden zonder fouten',async run(b,t){
    await fresh(b);t.ok('welkomstscherm zichtbaar',await b.eval(`!document.querySelector('#welcomeLayer').classList.contains('hidden')`));
@@ -81,7 +86,60 @@ const scenarios=[
    await set(b,'#inspectorBody [data-edit="app_w"]',900);await sleep(300);
    await b.click('#openCutlist');await sleep(400);
    t.ok('waarschuwing: apparaat past niet',await b.eval(`document.querySelector('#modalContent').innerHTML.includes('past niet')`));
-   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}}
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+ {name:'delen: link naar project en terug als nieuw project (zonder foto)',async run(b,t){
+   await demo(b);await set(b,'#projectName','Link-test');await sleep(300);
+   await b.click('#shareBtn');await sleep(300);
+   t.ok('deelvenster open',await b.eval(`document.querySelector('#modalContent').innerHTML.includes('LINK NAAR DIT PROJECT')`));
+   t.ok('link wordt gemaakt',await waitFor(()=>b.eval(`document.querySelector('#shareLinkInput').value.includes('#share=z.')`)));
+   const link=await b.eval(`document.querySelector('#shareLinkInput').value`);
+   t.ok('link bevat geen foto-data en blijft kort',link.length<6000&&!link.includes('/9j/'),'lengte '+link.length);
+   await b.shot(path.join(OUT,'delen.png'));
+   await b.eval(`localStorage.clear()`);await b.goto('about:blank');await b.goto(link);await sleep(800);
+   t.ok('ontvangstscherm toont project',await b.eval(`document.querySelector('#modalContent').innerHTML.includes('Link-test')`));
+   t.ok('nog niets toegepast zonder bevestiging',await b.eval(`!(${indexNames}).includes('Link-test')`));
+   t.ok('hash is opgeschoond',await b.eval(`location.hash===''`));
+   await b.click('[data-recv="project"]');await sleep(500);
+   t.ok('project als nieuw project toegevoegd',await b.eval(`${activeProject}.name==='Link-test'&&document.querySelector('#statBeams').textContent.includes('28')`));
+   t.ok('kapotte link: duidelijke melding, geen crash',await (async()=>{await b.goto(URL_.split('#')[0]+'#share=z.AAAA');await sleep(700);return b.eval(`document.querySelector('#toast').textContent.includes('Link kon niet worden gelezen')`);})());
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+ {name:'aanleveren (telefoon → laptop): foto + maten → bestand → import → toegepast',async run(b,t){
+   const dl=await b.downloadsTo(tmp('dl-'+Date.now()));
+   await demo(b);
+   // 1. een echte foto maken (groot, ruisachtig) met een canvas in de browser
+   const jpgB64=await b.eval(`(()=>{const c=document.createElement('canvas');c.width=3000;c.height=2000;const x=c.getContext('2d');for(let i=0;i<4000;i++){x.fillStyle='hsl('+(i*7%360)+',60%,'+(30+i%40)+'%)';x.fillRect((i*97)%3000,(i*53)%2000,60+(i%90),40+(i%70));}return c.toDataURL('image/jpeg',0.95).split(',')[1];})()`);
+   const photo=tmp('grote-foto.jpg');fs.mkdirSync(path.dirname(photo),{recursive:true});fs.writeFileSync(photo,Buffer.from(jpgB64,'base64'));
+   t.ok('testfoto is groot (>400 kB)',fs.statSync(photo).size>400000,String(fs.statSync(photo).size));
+   // 2. formulier invullen
+   await b.click('#shareBtn');await sleep(300);await b.eval(`document.querySelector('[data-share="deliver"]').click()`);await sleep(300);
+   const type=(k,v)=>b.eval(`(()=>{const e=document.querySelector('[data-draft="${k}"]');e.value=${JSON.stringify(String(v))};e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+   await type('name','Terras achter');await type('width',5200);await type('depth',3400);await type('height',2500);await type('notes','Stopcontact links, let op de goot');
+   await b.uploadFile('#photoInput',[photo]);
+   t.ok('foto verschijnt, verkleind tot geldige JPEG ≤ 450k tekens',await waitFor(()=>b.eval(`(()=>{const i=document.querySelector('#deliverPhotos img');return !!i&&i.src.startsWith('data:image/jpeg;base64,')&&i.src.length<=450000&&i.src.length>5000})()`)));
+   await b.shot(path.join(OUT,'aanleveren.png'));
+   t.ok('invoer blijft staan na foto toevoegen',await b.eval(`document.querySelector('[data-draft="width"]').value==='5200'&&document.querySelector('[data-draft="notes"]').value.includes('goot')`));
+   // 3. versturen = bestand opslaan (geen Web Share in desktop-Chrome)
+   await b.eval(`document.querySelector('[data-deliver="send"]').click()`);
+   t.ok('bestand opgeslagen',await waitFor(()=>fs.readdirSync(dl).some(f=>f.endsWith('.douglas.json')&&!f.endsWith('.crdownload'))));
+   const file=path.join(dl,fs.readdirSync(dl).find(f=>f.endsWith('.douglas.json')));
+   const parsed=JSON.parse(fs.readFileSync(file,'utf8')),v=Share.validate(parsed);
+   t.ok('bestand is een geldige aanlevering met 1 foto en maten',v.ok&&v.type==='aanlevering'&&v.summary.photos===1&&v.summary.room.width===5200,JSON.stringify(v.summary||v));
+   // 4. "laptop": importeren via Project importeren
+   await b.eval(`document.querySelector('#modalBackdrop [id="closeModal"]')?.click()`);await sleep(200);
+   await b.uploadFile('#fileInput',[file]);await sleep(600);
+   t.ok('ontvangstscherm toont maten en foto',await b.eval(`(()=>{const h=document.querySelector('#modalContent').innerHTML;return h.includes('5200')&&h.includes('1 foto')&&h.includes('goot')})()`));
+   await b.shot(path.join(OUT,'ontvangen.png'));
+   t.ok('nog niet toegepast',await b.eval(`${activeProject}.room.width!==5200`));
+   await b.click('[data-recv="applyCurrent"]');await sleep(500);
+   t.ok('ruimtematen en 3D-ruimte toegepast',await b.eval(`(()=>{const r=${activeProject}.room;return r.width===5200&&r.depth===3400&&r.height===2500&&r.enabled===true})()`));
+   t.ok('foto is ruimtefoto en staat bij referenties',await b.eval(`(()=>{const p=${activeProject};return p.room.photo.startsWith('data:image/jpeg')&&p.reference.photos.length===1&&p.reference.notes.includes('goot')})()`));
+   t.ok('zaaglijst ongewijzigd door aanlevering (28 stuks)',await b.eval(`document.querySelector('#statBeams').textContent.includes('28')`));
+   // 5. kwaadaardig/kapot bestand wordt geweigerd
+   const bad=tmp('kwaad.json');fs.writeFileSync(bad,JSON.stringify({format:Share.FORMAT,v:1,t:'aanlevering',photos:['data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='],room:{width:'x'}}));
+   await b.uploadFile('#fileInput',[bad]);await sleep(500);
+   t.ok('ongeldige aanlevering geweigerd met melding',await b.eval(`document.querySelector('#toast').textContent.includes('Niet gelukt')`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

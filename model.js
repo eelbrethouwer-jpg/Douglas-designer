@@ -49,6 +49,14 @@
   const COUNTERTOP_LIMITS={thickness:[10,80],overhangSide:[0,200],overhangFront:[0,300],overhangBack:[0,300]};
   // Eigen apparaatmaten (fabrikantgegevens die de gebruiker zelf invoert); 0 = onbekend.
   function normalizeAppliance(a){const d=(v)=>clamp(round(number(v,0)),0,2500);return {w:d(a.w),d:d(a.d),h:d(a.h)};}
+  // Referentiemateriaal uit aanleveringen (opmerkingen + foto's); alleen JPEG-data-URI's, begrensd.
+  const JPEG_RE=/^data:image\/jpeg;base64,[a-z0-9+/=]+$/i;
+  function normalizeReference(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+    const notes=String(raw.notes==null?'':raw.notes).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim().slice(0,2000);
+    const photos=(Array.isArray(raw.photos)?raw.photos:[]).filter(p=>typeof p==='string'&&p.length<=450000&&JPEG_RE.test(p)).slice(0,4);
+    return notes||photos.length?{notes,photos}:null;
+  }
   function defaultCountertop(){return {thickness:24,overhangSide:8,overhangFront:14,overhangBack:14};}
   function normalizeCountertop(raw){
     const c=defaultCountertop();if(!raw||typeof raw!=='object'||Array.isArray(raw))return c;
@@ -113,6 +121,7 @@
     p.countertop=raw.countertop!==false;
     p.materials=normalizeMaterials(raw.materials);
     p.countertopSpec=normalizeCountertop(raw.countertopSpec);
+    {const ref=normalizeReference(raw.reference);if(ref)p.reference=ref;}
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
       name:String(m.name||TYPES[m.kind].label).slice(0,60),
@@ -346,5 +355,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

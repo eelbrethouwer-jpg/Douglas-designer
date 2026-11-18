@@ -38,6 +38,11 @@ async function launch(opts={}){
     async eval(expr){const r=await send('Runtime.evaluate',{expression:expr,returnByValue:true,awaitPromise:true});
       if(r.exceptionDetails)throw new Error('JS-fout: '+(r.exceptionDetails.exception?.description||r.exceptionDetails.text));return r.result.value;},
     async shot(file){const r=await send('Page.captureScreenshot',{format:'png'});fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,Buffer.from(r.data,'base64'));return file;},
+    // Bestanden in een <input type=file> zetten (activeert het change-event).
+    async uploadFile(sel,files){const doc=await send('DOM.getDocument',{depth:0});const n=await send('DOM.querySelector',{nodeId:doc.root.nodeId,selector:sel});
+      if(!n.nodeId)throw new Error('input niet gevonden: '+sel);await send('DOM.setFileInputFiles',{nodeId:n.nodeId,files});},
+    // Downloads (bijv. <a download>) naar een map laten schrijven; geeft de map terug.
+    async downloadsTo(dirPath){fs.mkdirSync(dirPath,{recursive:true});await send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:dirPath});return dirPath;},
     async click(sel){return api.eval(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)return false;e.click();return true})()`);},
     async mouse(type,x,y,extra={}){return send('Input.dispatchMouseEvent',{type,x,y,button:'left',clickCount:1,buttons:type==='mouseReleased'?0:1,...extra});},
     async drag(x1,y1,x2,y2,steps=8){await api.mouse('mouseMoved',x1,y1,{buttons:0});await api.mouse('mousePressed',x1,y1);
