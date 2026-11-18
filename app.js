@@ -16,7 +16,9 @@ const fmt=(n)=>new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(n
 const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n);
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
-const STORAGE='douglas-designer-v1'; // Stable key: never discard v0.1 projects
+const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
+const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
+let storageProblem=false;
 const WELCOME_KEY='douglas-designer-welcome-v2';
 const SKETCH_KEY='douglas-designer-sketch-grid-v1';
 let sketchSettings;
@@ -34,7 +36,7 @@ function syncSketchControls(){
  if(step)step.value=String(sketchSettings.step);
  if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
 }
-let project; try{project=normalize(JSON.parse(localStorage.getItem(STORAGE)||'null'));}catch(e){project=normalize(M.demoProject());}
+let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null,lastSaveOk=true;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
@@ -86,16 +88,22 @@ function handleAt(px,py){
 
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
 function persist(){
- try{
-  localStorage.setItem(STORAGE,JSON.stringify(project));lastSaveOk=true;
-  $('#saveStatus').textContent='● Lokaal opgeslagen';
- }catch(e){
-  lastSaveOk=false;
-  $('#saveStatus').textContent='● Opslag niet beschikbaar';
-  toast('Opslag is vol of geblokkeerd. Exporteer het project als JSON-back-up.');
- }
+ const r=store.save(project.id,project);
+ if(r.ok){lastSaveOk=true;storageProblem=false;const t=new Date(r.savedAt);$('#saveStatus').textContent='● Lokaal opgeslagen · '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');}
+ else{lastSaveOk=false;$('#saveStatus').textContent='● Opslag niet beschikbaar';toast((r.error||'Opslag is vol of geblokkeerd')+'. Exporteer het project als JSON-back-up.');}
 }
 function commit(fn){const before=JSON.stringify(project);fn(project);project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
+function resetSession(){undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
+// Nieuw project aanmaken en openen; het huidige project blijft ongemoeid in de lijst staan.
+function openNewProject(raw,msg){
+ const p=normalize(raw),r=store.create(p);
+ if(!r.ok){toast('Niet gelukt: '+r.error+'. Het huidige project blijft actief.');return false;}
+ project=p;resetSession();render();hideWelcome();switchMobile('design');closeModal();if(msg)toast(msg);return true;
+}
+function switchProject(id){
+ const raw=store.load(id);if(!raw){toast('Project niet gevonden');return;}
+ project=normalize(raw);store.setActive(id);resetSession();render();closeModal();toast('Geopend: '+project.name);
+}
 function history(dir){const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);return null;}
 function setSelected(type,id){
@@ -502,6 +510,35 @@ function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project)
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
 function showDocument(){if(!DOCS)return;modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='BOUWDOCUMENT / ONTWERPRAMING';$('#modalTitle').textContent='Bouwdocument';
   $('#modalContent').innerHTML=`<div class="right-foot-actions" style="flex-direction:row;margin-bottom:12px"><button class="outline-btn" id="openCutlist">← Terug naar zaaglijst</button></div>`+DOCS.documentHTML(project,M,MAT,{version:APP_VERSION});$('#modalContent').scrollTop=0;}
+function projectsHTML(){
+ const items=store.list(),trash=store.trashList(),when=(t)=>new Date(t).toLocaleString('nl-NL',{dateStyle:'short',timeStyle:'short'});
+ const kb=(n)=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB';
+ let h=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:14px"><button class="primary-btn" data-proj="new">＋ Nieuw (met vak)</button><button class="outline-btn" data-proj="free">✎ Vrij tekenen</button><button class="outline-btn" data-proj="demo">◈ Voorbeeld</button><button class="outline-btn" data-proj="import">↥ Project importeren</button></div>`;
+ h+=`<table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
+ for(const it of items)h+=`<tr${it.active?' style="background:#f2f7f1"':''}><td><input data-proj-name="${esc(it.id)}" value="${esc(it.name)}" maxlength="80" aria-label="Projectnaam" style="width:100%;min-width:140px;border:1px solid #dce1d9;border-radius:7px;padding:7px 9px;font:inherit">${it.active?'<small style="color:#2f7059;font-weight:700"> ● actief</small>':''}</td><td>${esc(when(it.updatedAt))}</td><td>${kb(it.bytes)}</td><td style="white-space:nowrap;text-align:right">${it.active?'':`<button class="outline-btn" data-proj="open:${esc(it.id)}">Openen</button> `}<button class="outline-btn" data-proj="dup:${esc(it.id)}" title="Dupliceren">⧉</button> <button class="outline-btn delete-btn" data-proj="del:${esc(it.id)}" title="Verwijderen (naar prullenbak)">✕</button></td></tr>`;
+ h+=`</tbody></table>`;
+ if(trash.length){h+=`<h4 class="cut-section">PRULLENBAK (LAATSTE ${trash.length})</h4><table class="cuttable"><tbody>`;for(const t of trash)h+=`<tr><td>${esc(t.name)}</td><td>${esc(when(t.deletedAt))}</td><td style="text-align:right"><button class="outline-btn" data-proj="restore:${esc(t.trashId)}">↺ Terugzetten</button></td></tr>`;h+=`</tbody></table>`;}
+ h+=`<h4 class="cut-section">BACK-UP</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-proj="exportAll">↓ Alle projecten exporteren</button></div><div class="notice-small">Je projecten staan alleen in deze browser. Opslag in gebruik: ca. ${kb(store.usage()*2)} (browsers staan meestal ca. 5 MB toe; foto's nemen de meeste ruimte in). Maak regelmatig een back-up. Importeren voegt altijd <strong>nieuwe</strong> projecten toe en overschrijft nooit iets.</div>`;
+ return h;
+}
+function showProjects(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='PROJECTEN';$('#modalTitle').textContent='Mijn projecten';$('#modalContent').innerHTML=projectsHTML();}
+function projectAction(spec){
+ const [act,...rest]=spec.split(':'),id=rest.join(':');
+ if(act==='new')openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');
+ else if(act==='free'){if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);}}
+ else if(act==='demo')openNewProject(M.demoProject(),'Voorbeeld geopend');
+ else if(act==='import')$('#fileInput').click();
+ else if(act==='open')switchProject(id);
+ else if(act==='dup'){const r=store.duplicate(id);if(r.ok){toast('Gedupliceerd');showProjects();}else toast('Dupliceren mislukt: '+r.error);}
+ else if(act==='del'){
+  const was=id===project.id,r=store.trash(id);
+  if(!r.ok){toast('Verwijderen mislukt: '+r.error);return;}
+  if(was){if(r.activeId)switchProject(r.activeId);else openNewProject(M.demoProject());}
+  toast('Naar prullenbak verplaatst; terug te zetten in dit overzicht');showProjects();
+ }
+ else if(act==='restore'){const r=store.restore(id);if(r.ok){toast('Teruggezet');switchProject(r.id);showProjects();}else toast('Terugzetten mislukt: '+r.error);}
+ else if(act==='exportAll'){download('douglas-designer-alle-projecten.json',store.exportAll());toast('Back-up van alle projecten opgeslagen');}
+}
 function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
 function safeName(){return (project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'douglas';}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
@@ -545,6 +582,7 @@ document.addEventListener('click',e=>{
   const modCard=e.target.closest('[data-select-module]');
   const beamCard=e.target.closest('[data-select-beam]');
   const frameCard=e.target.closest('[data-select-frame]');
+  const pa=e.target.closest('[data-proj]');if(pa){projectAction(pa.dataset.proj);return;}
   const b=e.target.closest('button');
   if(modCard && !b){setSelected('module',modCard.dataset.selectModule);return;}
   if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
@@ -559,17 +597,13 @@ document.addEventListener('click',e=>{
   if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if((selected?.type==='beam'||selected?.type==='frame')&&obj&&['x','y','z'].includes(axis))commit(()=>{if(selected.type==='frame')M.editFrameBeam(project,selected.id,{[axis]:obj[axis]+Number(delta)});else obj[axis]+=Number(delta);});return;}
   switch(b.id){
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
-    case 'homeBtn':showWelcome();break;
+    case 'homeBtn':showProjects();break;
     case 'continueProject':hideWelcome();break;
-    case 'newProject':if(window.confirm('Nieuw ontwerp beginnen? Exporteer eerst je huidige ontwerp als je het wilt bewaren.')){commit(()=>{project=normalize({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]});selected=null;});setSelected(null,null);toggleDrawMode(false);hideWelcome();switchMobile('design');toast('Nieuw basisontwerp gestart');}break;
-    case 'newFreeProject':if(window.confirm('Leeg tekenvlak openen? Exporteer je huidige ontwerp eerst als je het wilt bewaren.')){
-      commit(()=>{project=normalize(M.freeProject());selected=null;});setSelected(null,null);
-      hideWelcome();switchMobile('design');setView('front');toggleDrawMode(true);
-      toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');
-    }break;
+    case 'newProject':openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');break;
+    case 'newFreeProject':if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');}break;
     case 'drawTool':toggleDrawMode(true);break;
     case 'selectTool':toggleDrawMode(false);break;
-    case 'demoProject':if(window.confirm('Voorbeeld openen? Je huidige ontwerp wordt vervangen. Exporteer eventueel eerst een kopie.')){commit(()=>{project=normalize(M.demoProject());selected=null;});setSelected(null,null);hideWelcome();switchMobile('design');toast('Voorbeeld geopend');}break;
+    case 'demoProject':openNewProject(M.demoProject(),'Voorbeeld geopend');break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
     case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
@@ -583,7 +617,7 @@ document.addEventListener('click',e=>{
     case 'restoreSelectedFrame':if(selected?.type==='frame'){commit(()=>M.restoreFrameBeam(project,selected.id));toast('Framebalk hersteld naar standaardmaten');}break;
     case 'restoreAllFrames':commit(()=>{project.frameEdits={};selected=null;});toast('Automatische frameconstructie hersteld');break;
     case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
-    case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=normalize(M.demoProject());selected=null;});toast('Voorbeeldproject hersteld');}break;
+    case 'resetBtn':openNewProject(M.demoProject(),'Voorbeeldproject geopend als nieuw project');break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
     case 'showDocument':showDocument();break;
     case 'csvParts':if(DOCS){download(safeName()+'-onderdelenlijst.csv',DOCS.partsCSV(DOCS.partsList(project,M)),'text/csv;charset=utf-8');}break;
@@ -651,8 +685,10 @@ function updateDraftControls(){
   btn.setAttribute('aria-pressed',String(magnetEnabled));
   btn.classList.toggle('inactive',!magnetEnabled);
 }
-$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=normalize(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
-$('#modalContent').addEventListener('change',e=>{const t=e.target,key=t?.dataset?.mat;if(!key||!MAT)return;
+$('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const text=await file.text(),raw=JSON.parse(text);if(raw&&raw.format===PRJ.BACKUP_FORMAT){const r=store.importAll(text);if(!r.ok)throw Error(r.error);toast(r.added+' project(en) toegevoegd'+(r.skipped?', '+r.skipped+' overgeslagen':''));showProjects();e.target.value='';return;}if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');if(!openNewProject(raw,'Project geïmporteerd als nieuw project'))return;}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
+$('#modalContent').addEventListener('change',e=>{const t=e.target;
+  if(t?.dataset?.projName){const id=t.dataset.projName,r=store.rename(id,t.value);if(r.ok===false||r.error){toast('Hernoemen mislukt');return;}if(id===project.id){project.name=store.load(id).name;render();}toast('Naam opgeslagen');return;}
+  const key=t?.dataset?.mat;if(!key||!MAT)return;
   const box=$('#modalContent'),top=box.scrollTop;
   commit(()=>{project.materials=MAT.applyInput(project.materials,key,t.value,M);});
   box.innerHTML=cutlistHTML();box.scrollTop=top;});

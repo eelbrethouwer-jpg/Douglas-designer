@@ -16,7 +16,7 @@ function editor(){
     addEventListener(name,fn){events.set(id+':'+name,fn)}
   });return nodes.get(id)}
   const document={querySelector:el,querySelectorAll(){return []},addEventListener(n,fn){events.set('document:'+n,fn)},activeElement:{tagName:'BODY'},body:{classList:{add(){},remove(){}}},createElement(){return el('created')}};
-  const window={DouglasModel:Model,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1400,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},confirm(){return true},print(){}};
+  const window={DouglasModel:Model,DouglasProjects:require('../projects.js'),DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1400,devicePixelRatio:1,addEventListener(n,f){events.set('window:'+n,f)},confirm(){return true},print(){}};
   const sandbox={window,document,confirm(){return true},navigator:{},location:{protocol:'file:'},localStorage:{getItem(k){return storage.get(k)||null},setItem(k,v){storage.set(k,v)}},Intl,console,Map,Math,JSON,Date,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};
   // Production app stays encapsulated; test-only hook exposes coordinates and scene geometry.
   const src=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
@@ -26,7 +26,7 @@ function editor(){
   };})();`);
   assert.notEqual(src,augmented);
   vm.runInNewContext(augmented,sandbox,{timeout:10000});
-  return {api:window.__probe,events,stored:()=>JSON.parse(storage.get('douglas-designer-v1'))};
+  return {api:window.__probe,events,stored:()=>require('./helpers/active-project.js')(storage)};
 }
 
 function move(editor,from,to){
