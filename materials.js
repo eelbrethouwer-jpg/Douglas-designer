@@ -8,31 +8,14 @@
   root.DouglasMaterials = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
-  const AXES = {x: ['x', 'w'], y: ['y', 'h'], z: ['z', 'd']};
   const ceil1 = (v) => Math.ceil(v * 10 - 1e-9) / 10; // naar boven op 0,1
   const parseNumber = (v) => Number(String(v).replace(',', '.'));
 
-  // Een verbinding = twee niet-parallelle balken waarvan minstens één kopse kant de ander raakt
-  // (tolerantie 1 mm, dwarsoverlap > 5 mm). Elke balkenpaar telt één keer.
+  // Een verbinding = een paar balken dat elkaar raakt (zie model.beamContacts); elk paar telt één keer.
   function connections(p, M) {
-    const items = M.allBeams(p).map(b => ({b, box: M.beamBox(b)}));
-    const pairs = new Set();
-    for (const a of items) {
-      const axis = a.b.axis, [k, l] = AXES[axis];
-      const ends = [a.box[k], a.box[k] + a.box[l]];
-      const others = ['x', 'y', 'z'].filter(o => o !== axis);
-      for (const o of items) {
-        if (o === a || o.b.axis === axis) continue;
-        const lo = o.box[k] - 1, hi = o.box[k] + o.box[l] + 1;
-        if (!ends.some(e => e >= lo && e <= hi)) continue;
-        const touching = others.every(t => {
-          const [tk, tl] = AXES[t];
-          return Math.min(a.box[tk] + a.box[tl], o.box[tk] + o.box[tl]) - Math.max(a.box[tk], o.box[tk]) > 5;
-        });
-        if (touching) pairs.add([a.b.id, o.b.id].sort().join('|'));
-      }
-    }
-    return pairs.size;
+    let n = 0;
+    for (const set of M.beamContacts(p).values()) n += set.size;
+    return n / 2;
   }
 
   function build(p, M) {
@@ -49,11 +32,15 @@
       total: qty * (fixedPrice !== undefined ? fixedPrice : (m.prices[id] ?? 0))
     });
 
-    // 1. Douglas balken — uit het zaagplan; prijs komt uit de zaaginstellingen.
-    groups.push({title: 'Douglas balken', lines: [
-      line('balken', `Douglas 50 × 100 mm × ${p.stockLength} mm`, plan.boards.length, 'st',
-        `${plan.pieces} zaagstukken, zaagsnede ${p.kerf} mm`, p.beamPrice)
-    ]});
+    // 1. Douglas balken — uit het zaagplan, één regel per profiel. Standaardprofiel: prijs uit de
+    //    zaaginstellingen; andere profielen: eigen prijsinvoer.
+    groups.push({title: 'Douglas balken', lines: plan.byProfile.map(x => {
+      const isDefault = x.profile === M.DEFAULT_PROFILE;
+      return line(isDefault ? 'balken-' + x.profile : 'balk-' + x.profile,
+        `Douglas ${x.label.replace(' (standaard)', '').replace(' (rachel)', '')} × ${p.stockLength} mm`, x.count, 'st',
+        `${plan.boards.filter(b => b.profile === x.profile).reduce((n, b) => n + b.cuts.length, 0)} zaagstukken, zaagsnede ${p.kerf} mm`,
+        isDefault ? p.beamPrice : undefined);
+    })});
 
     // 2. Bevestiging — uit het aantal verbindingen in het ontwerp.
     const screws = Math.ceil(joints * m.screwsPerJoint * waste);

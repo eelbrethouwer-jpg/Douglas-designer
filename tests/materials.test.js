@@ -3,7 +3,7 @@ const M=require('../model.js');const X=require('../materials.js');
 const lines=(l)=>l.groups.flatMap(g=>g.lines);const find=(l,id)=>lines(l).find(x=>x.id===id);
 
 test('demo project: balken komen uit het zaagplan en prijs uit de zaaginstellingen',()=>{
- const p=M.demoProject(),l=X.build(p,M),plan=M.boardPlan(p),b=find(l,'balken');
+ const p=M.demoProject(),l=X.build(p,M),plan=M.boardPlan(p),b=find(l,'balken-50x100');
  assert.equal(b.qty,plan.boards.length);assert.equal(b.price,p.beamPrice);assert.equal(b.priceEditable,false);
  assert.equal(b.total,plan.boards.length*p.beamPrice);
 });
@@ -33,10 +33,10 @@ test('werkblad en fronten alleen als ze in het ontwerp zitten',()=>{
 });
 test('totaal telt alleen regels met ingevulde prijs; geen verzonnen prijzen',()=>{
  const p=M.demoProject();let l=X.build(p,M);
- assert.equal(l.total,find(l,'balken').total);assert.equal(find(l,'schroeven').price,0);
+ assert.equal(l.total,find(l,'balken-50x100').total);assert.equal(find(l,'schroeven').price,0);
  p.materials=X.applyInput(p.materials,'price:schroeven','12,50',M);
- l=X.build(p,M);assert.equal(find(l,'schroeven').price,12.5);assert.equal(l.total,find(l,'balken').total+find(l,'schroeven').qty*12.5);
- p.materials=X.applyInput(p.materials,'price:schroeven','',M);assert.equal(X.build(p,M).total,find(l,'balken').total);
+ l=X.build(p,M);assert.equal(find(l,'schroeven').price,12.5);assert.equal(l.total,find(l,'balken-50x100').total+find(l,'schroeven').qty*12.5);
+ p.materials=X.applyInput(p.materials,'price:schroeven','',M);assert.equal(X.build(p,M).total,find(l,'balken-50x100').total);
 });
 test('applyInput en normalizeMaterials begrenzen ongeldige invoer',()=>{
  let m=M.normalizeMaterials({screwsPerJoint:999,wastePct:-5,prices:{'ok-1':'3',bad_id:5,x:'abc'},junk:1});
