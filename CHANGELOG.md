@@ -1,3 +1,12 @@
+## Ongepubliceerd — materiaallijst (voorstel voor roadmap fase 6)
+
+- Nieuw `materials.js`: berekent uit het model een materiaallijst naast het zaagplan: RVS-schroeven (uit het aantal verbindingen/contactpunten tussen balken), werkblad en frontpanelen (m²), scharnieren en ladegeleiders, apparatuur (alleen telbaar) en olie/beits.
+- Aantallen die niet uit de geometrie komen (schroeven per verbinding, scharnieren per deurenkast, dekking olie, reserve) zijn zichtbare, instelbare aannames in het project (`project.materials`).
+- Prijzen zijn uitsluitend eigen invoer per regel; geen live prijzen. Totaal telt alleen regels met ingevulde prijs. Balkprijs blijft uit de zaaginstellingen komen.
+- Export: lijst kopiëren en CSV (puntkomma, decimale komma) voor Excel.
+- Oude projectbestanden zonder `materials` laden met standaardwaarden. Service worker-cache `rc2`.
+- 11 nieuwe tests (108 totaal). Nog niet gecontroleerd op iPhone Safari/PWA of met een echte handmatige narekening van een bouwproject.
+
 ## v0.3.0 — 3D camera, balkenpalet en passend maken
 
 - Vrij orbitten boven en onder, onderaanzicht.

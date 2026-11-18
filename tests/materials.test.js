@@ -1,0 +1,63 @@
+const test=require('node:test');const assert=require('node:assert/strict');
+const M=require('../model.js');const X=require('../materials.js');
+const lines=(l)=>l.groups.flatMap(g=>g.lines);const find=(l,id)=>lines(l).find(x=>x.id===id);
+
+test('demo project: balken komen uit het zaagplan en prijs uit de zaaginstellingen',()=>{
+ const p=M.demoProject(),l=X.build(p,M),plan=M.boardPlan(p),b=find(l,'balken');
+ assert.equal(b.qty,plan.boards.length);assert.equal(b.price,p.beamPrice);assert.equal(b.priceEditable,false);
+ assert.equal(b.total,plan.boards.length*p.beamPrice);
+});
+test('verbindingen worden geteld uit contactpunten en schalen mee met het ontwerp',()=>{
+ const p=M.demoProject(),n=X.connections(p,M);assert.ok(n>=40&&n<=60,'verwacht ±52, kreeg '+n);
+ const wide=M.demoProject();wide.modules.push({id:'m4',kind:'open',width:400,name:'Open vak'});wide.width=M.expectedWidth(wide);
+ assert.ok(X.connections(wide,M)>n);
+ const free=M.freeProject();assert.equal(X.connections(free,M),0);
+});
+test('losse balken: een staander op een regel telt als één verbinding',()=>{
+ const p=M.freeProject();
+ p.beams=[{id:'a',name:'regel',axis:'x',x:0,y:500,z:0,length:1000},{id:'b',name:'staander',axis:'y',x:0,y:0,z:0,length:500}];
+ assert.equal(X.connections(p,M),1);
+ p.beams[1].x=1500; // niet meer in contact
+ assert.equal(X.connections(p,M),0);
+});
+test('schroeven: verbindingen × schroeven per verbinding + reserve, in dozen',()=>{
+ const p=M.demoProject();p.materials=M.normalizeMaterials({screwsPerJoint:3,screwBox:100,wastePct:0});
+ const l=X.build(p,M);assert.equal(l.screws,l.joints*3);assert.equal(find(l,'schroeven').qty,Math.ceil(l.joints*3/100));
+});
+test('werkblad en fronten alleen als ze in het ontwerp zitten',()=>{
+ const p=M.demoProject();let l=X.build(p,M);
+ assert.ok(find(l,'werkblad'));assert.ok(find(l,'fronten'));assert.ok(find(l,'koelkast'));assert.ok(find(l,'kamado'));
+ assert.equal(find(l,'scharnieren'),undefined,'demo heeft geen deurenkast');
+ p.countertop=false;p.modules.push({id:'d',kind:'doors',width:500,name:'Deurenkast'});p.width=M.expectedWidth(p);
+ l=X.build(p,M);assert.equal(find(l,'werkblad'),undefined);assert.equal(find(l,'scharnieren').qty,p.materials.hingesPerDoorModule);
+});
+test('totaal telt alleen regels met ingevulde prijs; geen verzonnen prijzen',()=>{
+ const p=M.demoProject();let l=X.build(p,M);
+ assert.equal(l.total,find(l,'balken').total);assert.equal(find(l,'schroeven').price,0);
+ p.materials=X.applyInput(p.materials,'price:schroeven','12,50',M);
+ l=X.build(p,M);assert.equal(find(l,'schroeven').price,12.5);assert.equal(l.total,find(l,'balken').total+find(l,'schroeven').qty*12.5);
+ p.materials=X.applyInput(p.materials,'price:schroeven','',M);assert.equal(X.build(p,M).total,find(l,'balken').total);
+});
+test('applyInput en normalizeMaterials begrenzen ongeldige invoer',()=>{
+ let m=M.normalizeMaterials({screwsPerJoint:999,wastePct:-5,prices:{'ok-1':'3',bad_id:5,x:'abc'},junk:1});
+ assert.equal(m.screwsPerJoint,20);assert.equal(m.wastePct,0);assert.deepEqual(m.prices,{'ok-1':3});assert.equal(m.junk,undefined);
+ m=X.applyInput(m,'setting:oilCoats','3',M);assert.equal(m.oilCoats,3);
+ m=X.applyInput(m,'setting:prices','1',M);assert.deepEqual(m.prices,{'ok-1':3});
+ m=X.applyInput(m,'setting:screwBox','abc',M);assert.equal(m.screwBox,200);
+ assert.deepEqual(M.normalizeMaterials(null),M.defaultMaterials());
+});
+test('oud projectbestand zonder materials laadt met standaardwaarden',()=>{
+ const raw=M.demoProject();delete raw.materials;const p=M.normalizeProject(raw);assert.deepEqual(p.materials,M.defaultMaterials());
+ assert.equal(M.normalizeProject(JSON.parse(JSON.stringify(M.normalizeProject({...raw,materials:{screwsPerJoint:4,prices:{olie:9.5}}})))).materials.prices.olie,9.5);
+});
+test('CSV en tekstexport gebruiken Nederlandse notatie en bevatten alle regels',()=>{
+ const p=M.demoProject();p.materials=X.applyInput(p.materials,'price:olie','9,5',M);const l=X.build(p,M);
+ const csv=X.toCSV(l),txt=X.toText(l,'Test');
+ assert.ok(csv.startsWith('﻿"Groep";'));assert.equal(csv.split('\r\n').length,lines(l).length+2);assert.match(csv,/;9,50;/);
+ assert.match(txt,/Materiaallijst — Test/);assert.match(txt,/Totaal: € /);
+ for(const x of lines(l))assert.ok(txt.includes(x.label));
+});
+test('formules in CSV-cellen: aanhalingstekens worden ontsnapt',()=>{
+ const l={groups:[{title:'G',lines:[{label:'a "b"',qty:1,unit:'st',price:0,total:0,detail:''}]}],total:0};
+ assert.match(X.toCSV(l),/"a ""b"""/);
+});

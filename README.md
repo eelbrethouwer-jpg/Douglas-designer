@@ -57,6 +57,7 @@ Ook lokaal te draaien door de map op een statische webserver te hosten. Je kunt 
 - **In 2D pannen**, in 3D om het ontwerp draaien; extra camerastanden van boven en onder.
 - WebGL-renderer met wereldcoördinaten, een echte dieptebuffer en Canvas2D-fallback.
 - Projecten lokaal bewaren, JSON import/export, undo/redo en een indicatief zaagplan voor het Douglas balkhout.
+- **Materiaallijst** (voorstel): schroeven uit het aantal verbindingen, werkblad/frontpanelen in m², beslag, apparatuur en olie, met eigen prijsinvoer en CSV-export. Zie CHANGELOG.
 - Modulebreedtes en automatische framegeneratie; handmatige frameoverrides zijn afzonderlijk herstelbaar.
 
 De screenshot-, iPhone- en WebGL-weergave zijn **nog niet volledig end-to-end gevalideerd**. Met name het werkblad moet vanuit alle hoeken nog gecontroleerd worden voordat de versie stabiel genoemd kan worden.

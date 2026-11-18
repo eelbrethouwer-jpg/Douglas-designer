@@ -2,6 +2,7 @@
 (function(){
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
+const MAT=window.DouglasMaterials||null; // optioneel: zonder materials.js blijft de zaaglijst werken
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
 const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
 function normalize(raw){const p=M.normalizeProject(raw);p.room=R.normalizeRoom(raw?.room,p);p.style=R.normalizeStyle(raw?.style);return p;}
@@ -468,13 +469,32 @@ function faceContains(pts,x,y){let inside=false;for(let a=0,b=pts.length-1;a<pts
   }return inside;}
 function hit(x,y){if(gpu.ready)return gpu.pick(shapes,x,y);for(let i=hitShapes.length-1;i>=0;i--)if(faceContains(hitShapes[i].verts,x,y))return hitShapes[i].owner;return null;}
 function setView(v){if(v==='iso')v='3d';if(v==='right')v='side';currentView=v;camera.panX=0;camera.panY=0;snapHint=null;const views={ '3d':[-.62,.32],front:[0,0],side:[-Math.PI/2,0],top:[-.01,-Math.PI/2+.012],bottom:[-.01,Math.PI/2-.012]};[camera.yaw,camera.pitch]=views[v]||views['3d'];$$('.view-btn').forEach(b=>b.classList.toggle('selected',b.dataset.view===v));draw();}
+function materialsHTML(){
+ if(!MAT)return '';
+ const list=MAT.build(project,M),s=list.settings;
+ const fmtQty=(q)=>Number.isInteger(q)?fmt(q):q.toFixed(1).replace('.',',');
+ const num=(key,label,v,min,max,step)=>`<label class="field">${label}<input type="number" data-mat="setting:${key}" value="${v}" min="${min}" max="${max}" step="${step}"></label>`;
+ let h=`<h4 class="cut-section">MATERIAALLIJST — BEVESTIGING, PLATEN, BESLAG & AFWERKING</h4><div class="notice-small" style="margin-top:0">Aantallen volgen uit je ontwerp (verbindingen, oppervlakken) en de aannames hieronder. Prijzen zijn je <strong>eigen invoer</strong>: er worden geen actuele prijzen opgehaald.</div>`;
+ h+=`<div class="field-grid mat-settings" style="margin-top:14px">${num('screwsPerJoint','Schroeven per verbinding',s.screwsPerJoint,0,20,1)}${num('screwBox','Schroeven per doos',s.screwBox,1,5000,50)}${num('wastePct','Reserve / verlies (%)',s.wastePct,0,50,1)}${num('hingesPerDoorModule','Scharnieren per deurenkast',s.hingesPerDoorModule,0,12,1)}${num('drawerSetsPerModule','Ladegeleiders per ladekast',s.drawerSetsPerModule,0,12,1)}${num('oilCoverage','Dekking olie (m²/L)',s.oilCoverage,1,30,1)}${num('oilCoats','Aantal lagen olie',s.oilCoats,1,5,1)}</div>`;
+ h+=`<table class="cuttable mat-table"><thead><tr><th>Materiaal</th><th>Aantal</th><th>Prijs p/e. (€)</th><th>Totaal</th></tr></thead><tbody>`;
+ for(const g of list.groups){
+  h+=`<tr class="mat-group"><td colspan="4"><strong>${esc(g.title)}</strong></td></tr>`;
+  for(const l of g.lines){
+   const priceCell=l.priceEditable?`<input type="text" inputmode="decimal" data-mat="price:${l.id}" value="${project.materials?.prices?.[l.id]!==undefined?String(project.materials.prices[l.id]).replace('.',','):''}" placeholder="0,00" aria-label="Prijs ${esc(l.label)}" style="width:84px">`:euro(l.price);
+   h+=`<tr><td>${esc(l.label)}<br><small style="color:#8a968d">${esc(l.detail||'')}</small></td><td style="white-space:nowrap">${fmtQty(l.qty)} ${esc(l.unit)}</td><td>${priceCell}</td><td>${l.total?euro(l.total):'—'}</td></tr>`;
+  }
+ }
+ h+=`</tbody></table><div class="cut-kpis" style="grid-template-columns:1fr;margin-top:14px"><div class="cut-kpi"><small>Totaal ontwerpraming (regels met prijs)</small><strong>${euro(list.total)}</strong></div></div><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" id="copyMaterials">⧉ Lijst kopiëren</button><button class="outline-btn" id="csvMaterials">↓ CSV voor Excel</button></div><div class="notice-small">Verbindingen = contactpunten tussen balken in het model. Platen, beslag en afwerking zijn indicatief: kies verbindingsmiddelen, ventilatie en draagkracht altijd volgens fabrikant of constructeur.</div>`;
+ return h;
+}
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
  let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS 50 × 100 MM</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
  for(const g of p.groups)h+=`<tr><td>${esc(g.name)}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
  h+=`</tbody></table><h4 class="cut-section">GEOPTIMALISEERD ZAAGPLAN — HANDELSLENGTE ${fmt(project.stockLength)} MM</h4>`;
  p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
  if(p.impossible.length)h+=`<div class="warning">${p.impossible.length} zaagstukken overschrijden de balklengte van ${fmt(project.stockLength)} mm en zijn NIET opgenomen in het zaagplan.</div>`;
- h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">Materiaalraming is exclusief werkbladen, deuren, lades, schroeven, apparatuur, verbindingsmateriaal en afwerking. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
+ h+=materialsHTML();
+ h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">De balkenraming hierboven omvat alleen Douglas balken; platen, schroeven, beslag en afwerking staan in de materiaallijst. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
  return h;
 }
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
@@ -557,6 +577,8 @@ document.addEventListener('click',e=>{
     case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
     case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=normalize(M.demoProject());selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
+    case 'copyMaterials':if(MAT){const text=MAT.toText(MAT.build(project,M),project.name);(navigator.clipboard?.writeText?navigator.clipboard.writeText(text):Promise.reject()).then(()=>toast('Materiaallijst gekopieerd'),()=>toast('Kopiëren niet gelukt'));}break;
+    case 'csvMaterials':if(MAT){download((project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
     case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
     case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
@@ -620,6 +642,10 @@ function updateDraftControls(){
   btn.classList.toggle('inactive',!magnetEnabled);
 }
 $('#fileInput').addEventListener('change',async(e)=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw Error('Bestand te groot');const raw=JSON.parse(await file.text());if(!raw||!Array.isArray(raw.modules))throw Error('Geen geldig Douglas projectbestand');commit(()=>{project=normalize(raw);selected=null;});toast('Project geïmporteerd');}catch(error){toast('Import mislukt: '+error.message);}e.target.value='';});
+$('#modalContent').addEventListener('change',e=>{const t=e.target,key=t?.dataset?.mat;if(!key||!MAT)return;
+  const box=$('#modalContent'),top=box.scrollTop;
+  commit(()=>{project.materials=MAT.applyInput(project.materials,key,t.value,M);});
+  box.innerHTML=cutlistHTML();box.scrollTop=top;});
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
