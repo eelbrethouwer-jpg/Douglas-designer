@@ -35,10 +35,10 @@ test('hotkeys activate 2D drawing, select and orthographic views',()=>{
  down({key:'4',ctrlKey:false,metaKey:false,altKey:false});
  assert.ok(h.api.camera.pitch < -1.5);
 });
-test('2D dragging empty surface pans the drawing rather than orbiting',()=>{
+test('2D Shift+drag pans the drawing rather than orbiting; plain drag on empty space is a selection frame',()=>{
  const h=start();h.click('newFreeProject');h.click('selectTool');
  const before=h.api.toScreen([250,250,0]),yaw=h.api.camera.yaw;
- h.events.get('#scene:pointerdown')(h.pt(150,270));
+ h.events.get('#scene:pointerdown')({...h.pt(150,270),shiftKey:true});
  h.events.get('#scene:pointermove')(h.pt(195,305));
  h.events.get('#scene:pointerup')(h.pt(195,305));
  const after=h.api.toScreen([250,250,0]);

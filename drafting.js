@@ -44,6 +44,25 @@ function measure(a,b,plane){
  const [h,v]=plane,dx=Math.abs((b[h]||0)-(a[h]||0)),dy=Math.abs((b[v]||0)-(a[v]||0));
  return {h,v,dx:Math.round(dx),dy:Math.round(dy),dist:Math.round(Math.hypot(dx,dy))};
 }
+// Kaderselectie. shapes: [{owner:{type,id}, verts:[{x,y}]}]; rect: {x0,y0,x1,y1} in schermpixels.
+// crossing=false: alleen objecten die helemaal in het kader liggen; crossing=true: ook objecten die het raken.
+function rectSelect(shapes,rect,crossing){
+ const x0=Math.min(rect.x0,rect.x1),x1=Math.max(rect.x0,rect.x1),y0=Math.min(rect.y0,rect.y1),y1=Math.max(rect.y0,rect.y1);
+ const box=new Map();
+ for(const s of shapes||[]){
+  const o=s.owner;if(!o||!(o.type==='beam'||o.type==='frame')||!s.verts||!s.verts.length)continue;
+  const k=o.type+':'+o.id,b=box.get(k)||{o:{type:o.type,id:o.id},minx:Infinity,miny:Infinity,maxx:-Infinity,maxy:-Infinity};
+  for(const v of s.verts){b.minx=Math.min(b.minx,v.x);b.maxx=Math.max(b.maxx,v.x);b.miny=Math.min(b.miny,v.y);b.maxy=Math.max(b.maxy,v.y);}
+  box.set(k,b);
+ }
+ const out=[];
+ for(const b of box.values()){
+  const inside=b.minx>=x0&&b.maxx<=x1&&b.miny>=y0&&b.maxy<=y1;
+  const touch=b.maxx>=x0&&b.minx<=x1&&b.maxy>=y0&&b.miny<=y1;
+  if(crossing?touch:inside)out.push(b.o);
+ }
+ return out;
+}
 function dimensionLabel(mm){return new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(mm)+' mm';}
-return {snap,anchors,nearestAnchor,snapDrawingPoint,measure,dimensionLabel};
+return {snap,anchors,nearestAnchor,snapDrawingPoint,measure,rectSelect,dimensionLabel};
 });

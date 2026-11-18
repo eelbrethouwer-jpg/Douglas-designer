@@ -76,3 +76,92 @@ test('reeks kopiëren: aantal, afstand, richting, vrije balken en begrenzing',()
  const lim=M.arrayBeams(p,p.beams[0],'z',5,50);assert.equal(lim.beams.length,2);assert.equal(lim.skipped,3);
  const fp=M.demoProject(),post=M.framePieces(fp)[0],fr=M.arrayBeams(fp,post,'x',1,100);assert.equal(fr.beams.length,1);assert.equal(fr.beams[0].group,undefined,'kopie van framebalk is een vrije balk');
 });
+test('moveBeams: vrije en framebalken samen verplaatsen, onbekende ids negeren',()=>{
+ const p=M.demoProject();p.beams=[{id:'a',name:'A',axis:'x',x:0,y:0,z:0,length:500},{id:'b',name:'B',axis:'z',x:10,y:20,z:30,length:300}];
+ const fr=M.framePieces(p)[0],before={x:fr.x,y:fr.y,z:fr.z};
+ const n=M.moveBeams(p,[{type:'beam',id:'a'},{type:'beam',id:'b'},{type:'frame',id:fr.id},{type:'beam',id:'nope'}],{x:100,y:-5,z:12.4});
+ assert.equal(n,3);assert.deepEqual([p.beams[0].x,p.beams[0].y,p.beams[0].z],[100,-5,12]);assert.deepEqual([p.beams[1].x,p.beams[1].z],[110,42]);
+ const after=M.framePieces(p).find(b=>b.id===fr.id);assert.deepEqual([after.x,after.y,after.z],[before.x+100,before.y-5,before.z+12]);
+ assert.equal(M.moveBeams(p,[],{x:1}),0);
+});
+test('foto-achtergrond: normalisatie en schaal met twee punten',()=>{
+ const jpg='data:image/jpeg;base64,/9j/4AAQ';
+ assert.equal(M.normalizeBackdrop(null),null);assert.equal(M.normalizeBackdrop({photo:'data:image/png;base64,AAAA'}),null);
+ assert.equal(M.normalizeBackdrop({photo:'x'.repeat(10)}),null);
+ const bd=M.normalizeBackdrop({photo:jpg,opacity:5,widthMm:10,x:'q',view:'bad'});
+ assert.deepEqual([bd.opacity,bd.widthMm,bd.x,bd.view,bd.on],[1,200,0,'front',true]);
+ const p=M.normalizeProject({...M.freeProject(),backdrop:{photo:jpg}});assert.ok(p.backdrop&&p.backdrop.photo===jpg);
+ assert.equal(M.normalizeProject({...M.freeProject(),backdrop:{photo:'<script>'}}).backdrop,undefined);
+ const s=M.backdropScale({photo:jpg,widthMm:1000,x:0,y:0,opacity:.5,on:true,view:'front'},{x:100,y:100},{x:300,y:100},['x','y'],400);
+ assert.equal(s.widthMm,2000);assert.equal(s.x,-100);assert.equal(s.y,-100);
+ assert.equal(M.backdropScale(bd,{x:1},{x:1},['x','y'],100),null);assert.equal(M.backdropScale(bd,{x:0},{x:50},['x','y'],0),null);
+});
+test('scan-instellingen: normalisatie en schaal om punt a',()=>{
+ assert.equal(M.normalizeScan(null),null);assert.equal(M.normalizeScan({name:'  '}),null);
+ const s=M.normalizeScan({name:'Tuin<b>.glb',scale:'x',opacity:9,rotY:1000,x:5.4});
+ assert.deepEqual([s.name,s.scale,s.opacity,s.rotY,s.x,s.on,s.zUp],['Tuinb.glb',1,1,360,5,true,false]);
+ const p=M.normalizeProject({...M.freeProject(),scan:{name:'a.glb',scale:1000}});assert.equal(p.scan.scale,1000);
+ assert.equal(M.normalizeProject({...M.freeProject(),scan:{name:''}}).scan,undefined);
+ const sc=M.scanScale({name:'a',on:true,opacity:1,scale:1000,rotY:0,zUp:false,x:100,y:0,z:50},{x:100,y:0},{x:300,y:0},['x','y'],400);
+ assert.equal(sc.scale,2000);assert.equal(sc.x,100);assert.equal(sc.y,0);assert.equal(sc.z,50);
+ const sc2=M.scanScale({name:'a',on:true,opacity:1,scale:1,rotY:0,zUp:false,x:0,y:0,z:0},{x:10,y:10},{x:20,y:10},['x','y'],5);
+ assert.equal(sc2.scale,.5);assert.equal(sc2.x,5);assert.equal(sc2.y,5);
+ assert.equal(M.scanScale(s,{x:1},{x:1},['x','y'],10),null);assert.equal(M.scanScale(s,{x:0},{x:9},['x','y'],0),null);
+});
+test('plattegrond-start: zones geven een conflictvrije constructie met juiste buitenmaten',()=>{
+ const zit={name:'Zit',kind:'open',x:0,z:0,w:4000,d:3300,h:2700},ber={name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300},perg={name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500};
+ const r=M.planFrame({zones:[zit,ber,perg]});
+ assert.ok(r.beams.length>=35&&r.beams.length<=60,String(r.beams.length));assert.equal(r.truncated,0);
+ assert.deepEqual(r.bounds,{width:9000,depth:6500,height:2700});
+ const p=M.normalizeProject({...M.freeProject(),width:9000,depth:6500,height:2700,plan:{zones:[zit,ber,perg]},beams:r.beams});
+ assert.equal(p.width,9000);assert.equal(p.depth,6500);assert.equal(p.height,2700);assert.equal(p.beams.length,r.beams.length);
+ const c=M.conflicts(p);assert.equal(c.overlaps.length,0,c.overlaps.map(([a,b])=>a.name+'/'+b.name).join());assert.equal(c.unsupported.length,0);
+ // buitencontour klopt: kleinste/grootste coördinaat van de staanders
+ const posts=r.beams.filter(b=>b.axis==='y'),minX=Math.min(...posts.map(b=>b.x)),maxX=Math.max(...posts.map(b=>b.x+100));
+ assert.equal(minX,0);assert.equal(maxX,9000);
+ assert.ok(r.beams.every(b=>b.length>=50&&b.length<=6500));
+ // gedeelde wand tussen zit en berging: geen dubbele staanders op x=4000 hartlijn
+ const mid=posts.filter(b=>b.x===3950);assert.equal(new Set(mid.map(b=>b.z)).size,mid.length);
+ // houthok-variant (tegels) blijft conflictvrij
+ const hh=M.planFrame({zones:[zit,{...ber,w:3500},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},{name:'Voor',kind:'closed',x:7500,z:1000,w:1500,d:1450,h:2300},perg]});
+ const p2=M.normalizeProject({...M.freeProject(),width:9000,depth:6500,height:2700,plan:{zones:[zit,perg]},beams:hh.beams});
+ assert.equal(M.conflicts(p2).overlaps.length,0);
+});
+test('plattegrond: ongeldige invoer en grenzen',()=>{
+ assert.equal(M.normalizePlan(null),null);assert.equal(M.normalizePlan({zones:[]}),null);assert.equal(M.normalizePlan({zones:'x'}),null);
+ const n=M.normalizePlan({zones:[{name:'<b>X</b>',kind:'bad',x:-5,z:'q',w:1,d:99999,h:10}]}).zones[0];
+ assert.deepEqual([n.name,n.kind,n.x,n.z,n.w,n.d,n.h],['bX/b','open',0,0,600,12000,1200]);
+ assert.equal(M.normalizePlan({zones:new Array(20).fill({})}).zones.length,8);
+ assert.equal(M.normalizeProject({...M.freeProject(),width:9000}).width,7000,'zonder plan blijven de oude grenzen');
+ const many={zones:Array.from({length:8},(_,i)=>({name:'Z'+i,kind:'closed',x:i*2400,z:0,w:2400,d:4800,h:2400}))};
+ const r=M.planFrame(many);assert.equal(r.beams.length,100);assert.ok(r.truncated>0);
+ assert.deepEqual(M.planFrame(null).beams,[]);
+});
+test('wanden, deur en bekleding: panelen, kozijn, geen conflicten, materiaallijst',()=>{
+ const Mat=require('../materials.js');
+ const zones=[{name:'Zit',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}];
+ const r=M.planFrame({zones});
+ const door=r.panels.filter(q=>q.kind==='door'),clad=r.panels.filter(q=>q.kind==='cladding');
+ assert.equal(door.length,1);assert.equal(door[0].w,900);assert.equal(door[0].h,2030);
+ assert.ok(clad.length>=6);assert.ok(r.panels.every(q=>q.w>=1&&q.h>=1&&q.d>=1));
+ // voorwand berging: opening laat deur vrij, geen paneel overlapt het deurvlak
+ const front=clad.filter(q=>q.d===20&&q.z===4050);
+ assert.ok(front.every(q=>q.x+q.w<=door[0].x-100+1||q.x>=door[0].x+door[0].w+100-1||q.y>=2050),'bekleding laat de opening vrij');
+ assert.ok(r.beams.some(b=>/Deurstijl/.test(b.name))&&r.beams.some(b=>/Bovendorpel/.test(b.name)));
+ // buitencontour: geen paneel steekt buiten 9000 × 6500
+ assert.ok(r.panels.every(q=>q.x>=0&&q.x+q.w<=9000&&q.z>=0&&q.z+q.d<=6500));
+ // geen twee bekledingspanelen vlak op elkaar (z-fighting)
+ for(let i=0;i<clad.length;i++)for(let j=i+1;j<clad.length;j++){const a=clad[i],b=clad[j];
+  const ov=(k,l)=>Math.min(a[k]+a[l],b[k]+b[l])-Math.max(a[k],b[k]);assert.ok(!(ov('x','w')>1&&ov('y','h')>1&&ov('z','d')>1),a.name+' x '+b.name);}
+ const p=M.normalizeProject({...M.freeProject(),width:9000,depth:6500,height:2700,plan:{zones},beams:r.beams,panels:r.panels});
+ assert.equal(p.panels.length,r.panels.length);
+ const c=M.conflicts(p);assert.equal(c.overlaps.length,0,c.overlaps.map(([a,b])=>a.name+'/'+b.name).join());assert.equal(c.unsupported.length,0,c.unsupported.map(b=>b.name).join());
+ const g=Mat.build(p,M).groups.flatMap(x=>x.lines),bek=g.find(l=>l.id==='bekleding'),dr=g.find(l=>l.id==='deuren');
+ assert.ok(bek&&bek.qty>10&&bek.qty<80,JSON.stringify(bek));assert.equal(dr.qty,1);
+ // panelen normaliseren
+ assert.deepEqual(M.normalizePanels('x'),[]);const q=M.normalizePanels([{name:'<i>',kind:'x',w:-1,h:99999,d:'a',color:'red'}])[0];
+ assert.deepEqual([q.name,q.kind,q.w,q.h,q.d,q.color],['i','cladding',1,10000,20,'#1d2124']);
+ assert.equal(M.normalizePanels(new Array(80).fill({})).length,60);
+ assert.equal(M.normalizePlan({zones:[{kind:'closed'}]}).zones[0].walls,'nesw');assert.equal(M.normalizePlan({zones:[{kind:'open'}]}).zones[0].walls,'');
+ assert.equal(M.normalizePlan({zones:[{door:{edge:'q'}}]}).zones[0].door,null);
+});

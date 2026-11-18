@@ -1,3 +1,26 @@
+## Ongepubliceerd — wanden, deur en bekleding (kapschuur)
+
+- Plattegrond-zones krijgen wanden (achter/voor/links/rechts) en een deur (900 × 2050 mm, positie instelbaar). Gevelbekleding wordt een wandpaneel rond het frame; de deuropening krijgt twee stijlen en een bovendorpel, regels worden vrijgehouden.
+- Nieuw: panelen (`project.panels`): dunne platen zonder constructiefunctie; selecteerbaar, aanpasbaar en te verwijderen. Materiaallijst telt gevelbekleding (m², met verlies) en buitendeuren.
+- In het plan ligt de achterzijde op Z=0; het model spiegelt dat zodat de voorzijde bij de 3D-weergave klopt (pergola voor, berging met deur rechts naast het zitgedeelte).
+
+## Ongepubliceerd — start vanuit plattegrond
+
+- Knop 📐 Plattegrond: definieer zones (open overkapping, gesloten ruimte, pergola) met buitenmaten en hoogte, en maak er een nieuw 3D-project van losse balken van (staanders 100×100, bovenliggers 50×150, regels, pergola-latten). Gedeelde wanden tussen zones, geen overlappende balken (getest), buitencontour klopt. Voorbeelden: kapschuur uit de PDF en variant met houthok.
+- Projecten met een plattegrond mogen groter zijn (tot 12 × 12 m, 4 m hoog). Dak niet inbegrepen (balken zijn recht).
+
+## Ongepubliceerd — 3D-scan importeren
+
+- Knop 🧊 Scan: importeer een 3D-scan van de ruimte (.glb, .gltf met ingebedde data, .obj) als referentiemodel; kleuren en texturen worden overgenomen, zware modellen vereenvoudigd tot max. 45.000 driehoeken. Zichtbaar in 3D en alle 2D-aanzichten achter het ontwerp.
+- Schaal instellen met twee punten (2D-aanzicht) of numeriek, draaien, Z-omhoog, op de vloer zetten, midden op de keuken, zichtbaarheid.
+- Scan telt niet mee in zaaglijst/materiaal; blijft lokaal (IndexedDB), niet in deel-links of exportbestanden. Niet ondersteund: Draco/meshopt-compressie, extern .bin, sparse accessors.
+- Nieuwe module `mesh-import.js` met 9 tests.
+
+## Ongepubliceerd — kaderselectie en foto-achtergrond
+
+- Kaderselectie: sleep op lege ruimte in een 2D-aanzicht (of Ctrl/Cmd+slepen in elk aanzicht) om meerdere balken te selecteren; links→rechts = volledig binnen, rechts→links = ook rakend; Shift voegt toe. Groep samen verslepen, numeriek verplaatsen, kopiëren, verwijderen (undo-stap per actie). In 2D pan je nu met Shift+slepen of de middelste muisknop.
+- Foto-achtergrond (knop 🖼 Foto): foto kiezen/maken als achtergrond in Voor/Zij/Boven-aanzicht, schaal instellen met twee punten en een bekende afstand, verslepen, zichtbaarheid. Geen perspectiefcorrectie; foto blijft lokaal en gaat niet mee in deel-links.
+
 ## v1.0.0-rc1 — release candidate
 
 - Meerdere projecten (aanmaken, dupliceren, hernoemen, prullenbak, back-up/herstel); oude opslag blijft ongemoeid als back-up.

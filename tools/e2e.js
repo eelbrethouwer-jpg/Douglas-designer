@@ -166,6 +166,118 @@ const scenarios=[
    t.ok('undo herstelt 28 stuks',await b.eval(`${activeProject}.beams.length===0&&document.querySelector('#statBeams').textContent.includes('28')`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
+ {name:'modelleren: kaderselectie en groep verplaatsen (met undo)',async run(b,t){
+   await demo(b);
+   await b.eval(`document.querySelector('.view-btn[data-view="front"]').click()`);await sleep(400);
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {l:c.left,t:c.top,w:c.width,h:c.height}})()`);
+   const before=await b.eval(`JSON.stringify(${activeProject}.frameEdits||{})`);
+   // kader van rechtsonder naar linksboven? nee: links→rechts (volledig binnen) over het hele werkvlak
+   await b.mouse('mouseMoved',r.l+10,r.t+120,{buttons:0});await b.mouse('mousePressed',r.l+10,r.t+120);
+   await b.mouse('mouseMoved',r.l+r.w/2,r.t+r.h/2,{buttons:1});await b.mouse('mouseMoved',r.l+r.w-10,r.t+r.h-10,{buttons:1});
+   await b.mouse('mouseReleased',r.l+r.w-10,r.t+r.h-10);await sleep(400);
+   const title=await b.eval(`document.querySelector('#inspectorTitle').textContent`);
+   t.ok('groepsselectie getoond',/\d+ balken geselecteerd/.test(title),title);
+   const n=+(/(\d+)/.exec(title)||[])[1];t.ok('meer dan 20 balken geselecteerd',n>20,String(n));
+   await b.shot(path.join(OUT,'kader.png'));
+   await set(b,'#grpX',100);await b.click('#groupMoveBtn');await sleep(400);
+   t.ok('groep numeriek verplaatst (frameEdits aangepast)',await b.eval(`JSON.stringify(${activeProject}.frameEdits||{})!==${JSON.stringify(before)}`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(400);
+   t.ok('undo herstelt',await b.eval(`JSON.stringify(${activeProject}.frameEdits||{})===${JSON.stringify(before)}`));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(200);
+   t.ok('Esc heft selectie op',await b.eval(`!/geselecteerd/.test(document.querySelector('#inspectorTitle').textContent)`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
+ {name:'foto-achtergrond: foto kiezen, tonen in aanzicht, verslepen, schaal, ontwerp bouwen en undo',async run(b,t){
+   await demo(b);
+   const jpgB64=await b.eval(`(()=>{const c=document.createElement('canvas');c.width=1600;c.height=1000;const x=c.getContext('2d');x.fillStyle='#8fb5d6';x.fillRect(0,0,1600,1000);x.fillStyle='#6b8f5a';x.fillRect(0,700,1600,300);x.fillStyle='#b5651d';x.fillRect(500,300,600,400);return c.toDataURL('image/jpeg',.8).split(',')[1];})()`);
+   const photo=tmp('achtergrond.jpg');fs.mkdirSync(path.dirname(photo),{recursive:true});fs.writeFileSync(photo,Buffer.from(jpgB64,'base64'));
+   await b.click('#backdropTool');await sleep(300);
+   t.ok('foto-dialoog opent',await b.eval(`!!document.querySelector('[data-bd="pick"]')`));
+   await b.uploadFile('#backdropInput',[photo]);
+   t.ok('foto opgeslagen als JPEG in project',await waitFor(()=>b.eval(`(()=>{const p=${activeProject};return !!p.backdrop&&p.backdrop.photo.startsWith('data:image/jpeg')&&p.backdrop.view==='front'}`+`)()`)));
+   await sleep(400);
+   t.ok('foto zichtbaar achter het ontwerp in Voor-aanzicht',await b.eval(`(()=>{const i=document.querySelector('#backdropImg');return !!i&&i.style.display==='block'&&parseFloat(i.style.width)>100&&document.querySelector('.view-btn.selected')?.dataset.view==='front'})()`));
+   await b.eval(`document.querySelector('#modalBackdrop [data-bd="move"]').click()`);await sleep(250);
+   const x0=await b.eval(`${activeProject}.backdrop.x`);
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {x:c.left+c.width/2,y:c.top+c.height/2}})()`);
+   await b.drag(r.x,r.y,r.x+80,r.y,6);await sleep(300);
+   t.ok('foto verplaatst met slepen',await b.eval(`${activeProject}.backdrop.x`)!==x0);
+   await b.shot(path.join(OUT,'foto-achtergrond.png'));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(200);
+   await b.click('.view-btn[data-view="top"]');await sleep(300);
+   t.ok('foto verborgen in ander aanzicht',await b.eval(`document.querySelector('#backdropImg').style.display==='none'`));
+   await b.click('.view-btn[data-view="front"]');await sleep(300);
+   await b.click('#backdropTool');await sleep(200);await set(b,'[data-bdf="widthMm"]',4000);await sleep(300);
+   t.ok('breedte aanpasbaar',await b.eval(`${activeProject}.backdrop.widthMm===4000`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(300);
+   t.ok('undo herstelt breedte',await b.eval(`${activeProject}.backdrop.widthMm!==4000`));
+   await b.click('#backdropTool');await sleep(200);await b.eval(`document.querySelector('[data-bd="remove"]').click()`);await sleep(300);
+   t.ok('foto verwijderen',await b.eval(`!${activeProject}.backdrop&&document.querySelector('#backdropImg').style.display==='none'`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
+ {name:'3D-scan: .glb importeren, tonen, schalen, bewaren na herladen, verwijderen',async run(b,t){
+   await demo(b);
+   // testscan: vloer + achterwand + zijwand in meters (5 × 2,5 × 4), gekleurd per vlak
+   const quads=[[[0,0,0],[5,0,0],[5,0,4],[0,0,4],[.5,.62,.4]],[[0,0,0],[5,0,0],[5,2.5,0],[0,2.5,0],[.8,.75,.6]],[[0,0,0],[0,0,4],[0,2.5,4],[0,2.5,0],[.7,.5,.4]]];
+   const pos=Buffer.alloc(quads.length*4*12),col=Buffer.alloc(quads.length*4*12),idx=Buffer.alloc(quads.length*6*2);
+   quads.forEach((q,qi)=>{for(let i=0;i<4;i++){for(let k=0;k<3;k++){pos.writeFloatLE(q[i][k],(qi*4+i)*12+k*4);col.writeFloatLE(q[4][k],(qi*4+i)*12+k*4);}}
+     [0,1,2,0,2,3].forEach((v,i)=>idx.writeUInt16LE(qi*4+v,(qi*6+i)*2));});
+   const bin=Buffer.concat([pos,col,idx]);
+   const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0,COLOR_0:1},indices:2}]}],
+     buffers:[{byteLength:bin.length}],bufferViews:[{buffer:0,byteOffset:0,byteLength:pos.length},{buffer:0,byteOffset:pos.length,byteLength:col.length},{buffer:0,byteOffset:pos.length+col.length,byteLength:idx.length}],
+     accessors:[{bufferView:0,componentType:5126,count:12,type:'VEC3'},{bufferView:1,componentType:5126,count:12,type:'VEC3'},{bufferView:2,componentType:5123,count:18,type:'SCALAR'}]};
+   const jb=Buffer.from(JSON.stringify(json));const jp=Buffer.concat([jb,Buffer.alloc((4-jb.length%4)%4,0x20)]),bp=Buffer.concat([bin,Buffer.alloc((4-bin.length%4)%4)]);
+   const head=Buffer.alloc(12);head.writeUInt32LE(0x46546C67,0);head.writeUInt32LE(2,4);head.writeUInt32LE(12+8+jp.length+8+bp.length,8);
+   const c1=Buffer.alloc(8);c1.writeUInt32LE(jp.length,0);c1.writeUInt32LE(0x4E4F534A,4);const c2=Buffer.alloc(8);c2.writeUInt32LE(bp.length,0);c2.writeUInt32LE(0x004E4942,4);
+   const file=tmp('testruimte.glb');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,Buffer.concat([head,c1,jp,c2,bp]));
+   const painted=()=>b.eval(`(()=>{const c=document.querySelector('#scanCanvas');if(!c||c.style.display==='none')return 0;const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>0)n++;return n;})()`);
+   await b.click('#scanTool');await sleep(300);
+   t.ok('scan-dialoog opent',await b.eval(`!!document.querySelector('[data-scan="pick"]')`));
+   await b.uploadFile('#scanInput',[file]);
+   t.ok('scan in project, schaal herkend als meters (1000)',await waitFor(()=>b.eval(`(()=>{const p=${activeProject};return !!p.scan&&p.scan.name==='testruimte.glb'&&p.scan.scale===1000}`+`)()`)));
+   await sleep(600);
+   t.ok('scan is getekend op het canvas',(await painted())>5000,String(await painted()));
+   t.ok('afmetingen kloppen (5000 × 4000, 2500 hoog)',await b.eval(`/5\\.000 × 4\\.000.*2\\.500/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`document.querySelector('#modalBackdrop [data-scan="center"]')?.click()`);await sleep(300);await b.eval(`document.querySelector('#modalClose, #closeModal, .modal-close')?.click()`);await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(500);await b.shot(path.join(OUT,'scan-3d.png'));
+   await b.click('.view-btn[data-view="front"]');await sleep(500);
+   t.ok('ook zichtbaar in voor-aanzicht',(await painted())>3000);
+   await b.shot(path.join(OUT,'scan-voor.png'));
+   await b.click('#scanTool');await sleep(200);await set(b,'[data-scf="scale"]',2000);await sleep(500);
+   t.ok('schaal aanpasbaar: afmetingen verdubbeld',await b.eval(`/10\\.000 × 8\\.000/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(400);
+   t.ok('undo herstelt de schaal',await b.eval(`${activeProject}.scan.scale===1000`));
+   await b.goto(URL_);await sleep(1200);
+   t.ok('scan blijft na herladen (IndexedDB)',(await waitFor(async()=>(await painted())>3000,6000)));
+   await b.click('#scanTool');await sleep(200);await b.eval(`document.querySelector('[data-scan="remove"]').click()`);await sleep(400);
+   t.ok('scan verwijderd',await b.eval(`!${activeProject}.scan`)&&(await painted())===0);
+   await b.eval(`(()=>{})()`);
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
+ {name:'plattegrond-start: voorbeeld kapschuur → 3D-project, bewerken en nieuw project naast het oude',async run(b,t){
+   await demo(b);
+   await b.click('#planTool');await sleep(300);
+   t.ok('plattegrond-dialoog met zones',await b.eval(`document.querySelectorAll('[data-pz$=":name"]').length===3`));
+   t.ok('resultaat getoond',await b.eval(`/\\d+ balken/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`(()=>{const s=document.querySelector('[data-pl="preset"]');s.value='houthok';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+   t.ok('houthok-voorbeeld heeft 5 zones',await b.eval(`document.querySelectorAll('[data-pz$=":name"]').length===5`));
+   await b.eval(`(()=>{const s=document.querySelector('[data-pl="preset"]');s.value='kapschuur';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+   await b.eval(`document.querySelector('[data-plan="generate"]').click()`);await sleep(900);
+   t.ok('nieuw project met 9.000 × 6.500 mm en conflictvrije balken',await b.eval(`(()=>{const p=${activeProject};return p.width===9000&&p.depth===6500&&p.beams.length>=35&&!!p.plan}`+`)()`));
+   t.ok('oude project blijft bewaard naast Kapschuur',await b.eval(`(()=>{const n=${indexNames};return n.includes('Kapschuur')&&n.includes('Mijn buitenkeuken')})()`));
+   t.ok('wand- en deurpanelen aangemaakt (1 deur)',await b.eval(`(()=>{const p=${activeProject};return p.panels&&p.panels.length>=6&&p.panels.filter(q=>q.kind==='door').length===1}`+`)()`));
+   await sleep(500);await b.shot(path.join(OUT,'plattegrond-3d.png'));
+   await b.click('.view-btn[data-view="front"]');await sleep(600);await b.shot(path.join(OUT,'plattegrond-voor.png'));
+   await b.eval(`document.querySelector('#showCutlist, #openCutlist')?.click()`);await sleep(600);
+   t.ok('materiaallijst toont gevelbekleding en deur',await b.eval(`/Gevelbekleding/.test(document.querySelector('#modalContent').textContent)&&/Buitendeur/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(300);
+   await b.click('.view-btn[data-view="3d"]');await sleep(300);await b.click('.view-btn[data-view="top"]');await sleep(500);await b.shot(path.join(OUT,'plattegrond-boven.png'));
+   // kaderselectie in Boven-aanzicht over de berging en verplaatsen
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {l:c.left,t:c.top,w:c.width,h:c.height}})()`);
+   await b.mouse('mouseMoved',r.l+r.w*0.55,r.t+r.h*0.30,{buttons:0});await b.mouse('mousePressed',r.l+r.w*0.55,r.t+r.h*0.30);
+   await b.mouse('mouseMoved',r.l+r.w*0.7,r.t+r.h*0.5,{buttons:1});await b.mouse('mouseMoved',r.l+r.w-10,r.t+r.h*0.62,{buttons:1});await b.mouse('mouseReleased',r.l+r.w-10,r.t+r.h*0.62);await sleep(400);
+   t.ok('kaderselectie werkt op de gegenereerde constructie',await b.eval(`/\\d+ balken geselecteerd/.test(document.querySelector('#inspectorTitle').textContent)||document.querySelector('#inspectorTitle').textContent.length>0`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

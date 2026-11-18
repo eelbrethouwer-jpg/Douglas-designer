@@ -44,3 +44,14 @@ test('measure: afstand en delta in het tekenvlak, afgerond op hele mm',()=>{
  assert.equal(D2.measure(null,{x:1},['x','y']),null);assert.equal(D2.measure({x:0},{x:1},['x']),null);
  assert.equal(D2.measure({x:0.4,y:0},{x:0.6,y:0},['x','y']).dist,0);
 });
+test('rectSelect: volledig binnen versus kruisend, alleen balken, geen dubbelen',()=>{
+ const sq=(x,y,w,h)=>[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];
+ const shapes=[{owner:{type:'beam',id:'a'},verts:sq(10,10,20,20)},{owner:{type:'beam',id:'a'},verts:sq(40,10,10,10)},
+  {owner:{type:'frame',id:'f'},verts:sq(100,100,50,50)},{owner:{type:'module',id:'m'},verts:sq(0,0,10,10)},{owner:null,verts:sq(0,0,5,5)}];
+ const D2=require('../drafting.js');
+ assert.deepEqual(D2.rectSelect(shapes,{x0:0,y0:0,x1:60,y1:60},false),[{type:'beam',id:'a'}]);
+ assert.deepEqual(D2.rectSelect(shapes,{x0:0,y0:0,x1:160,y1:160},false).map(o=>o.id).sort(),['a','f']);
+ assert.deepEqual(D2.rectSelect(shapes,{x0:60,y0:60,x1:110,y1:110},true),[{type:'frame',id:'f'}]);
+ assert.deepEqual(D2.rectSelect(shapes,{x0:60,y0:60,x1:110,y1:110},false),[]);
+ assert.deepEqual(D2.rectSelect(shapes,{x0:45,y0:5,x1:0,y1:35},true),[{type:'beam',id:'a'}]);
+});
