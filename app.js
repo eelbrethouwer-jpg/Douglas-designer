@@ -2,6 +2,8 @@
 (function(){
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
+const DOCS=window.DouglasDocuments||null;
+const APP_VERSION='1.0.0-rc1';
 const MAT=window.DouglasMaterials||null; // optioneel: zonder materials.js blijft de zaaglijst werken
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
 const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
@@ -488,7 +490,7 @@ function materialsHTML(){
  return h;
 }
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
- let h=`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
+ let h=(DOCS?`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:16px"><button class="primary-btn" id="showDocument">▤ Bouwdocument (tekeningen + lijsten)</button><button class="outline-btn" id="csvParts">↓ Onderdelenlijst CSV</button></div>`:'')+`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
  for(const g of p.groups)h+=`<tr><td>${esc(g.name)}${g.profile!==M.DEFAULT_PROFILE?` <small style="color:#8a968d">${esc(M.PROFILES[g.profile].label)}</small>`:''}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
  h+=`</tbody></table><h4 class="cut-section">GEOPTIMALISEERD ZAAGPLAN — HANDELSLENGTE ${fmt(project.stockLength)} MM</h4>`;
  p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}${b.profile!==M.DEFAULT_PROFILE?`<br><small>${esc(b.profile)}</small>`:''}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
@@ -498,7 +500,10 @@ function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project)
  return h;
 }
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
+function showDocument(){if(!DOCS)return;modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='BOUWDOCUMENT / ONTWERPRAMING';$('#modalTitle').textContent='Bouwdocument';
+  $('#modalContent').innerHTML=`<div class="right-foot-actions" style="flex-direction:row;margin-bottom:12px"><button class="outline-btn" id="openCutlist">← Terug naar zaaglijst</button></div>`+DOCS.documentHTML(project,M,MAT,{version:APP_VERSION});$('#modalContent').scrollTop=0;}
 function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
+function safeName(){return (project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'douglas';}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 function exportProject(){download('douglas-designer-project.json',JSON.stringify(project,null,2));toast('Projectbestand aangemaakt');}
 function screenshot(){
@@ -580,8 +585,10 @@ document.addEventListener('click',e=>{
     case 'fitSelectedBeam':{const obj=getSelected();if(selected?.type!=='beam'||!obj)break;const fit=M.fitBeamBetween(project,obj);if(!fit){toast('Geen twee passende steunvlakken rondom de balk gevonden');break;}commit(()=>{obj[obj.axis]=fit.start;obj.length=fit.length;});toast(`Balk passend gemaakt: ${fit.length} mm`);break;}
     case 'resetBtn':if(confirm('Het huidige lokale ontwerp vervangen door het voorbeeldproject? Exporteer eerst een kopie als je het wilt bewaren.')){commit(()=>{project=normalize(M.demoProject());selected=null;});toast('Voorbeeldproject hersteld');}break;
     case 'openCutlist':showCutlist();break;case 'closeModal':closeModal();break;
+    case 'showDocument':showDocument();break;
+    case 'csvParts':if(DOCS){download(safeName()+'-onderdelenlijst.csv',DOCS.partsCSV(DOCS.partsList(project,M)),'text/csv;charset=utf-8');}break;
     case 'copyMaterials':if(MAT){const text=MAT.toText(MAT.build(project,M),project.name);(navigator.clipboard?.writeText?navigator.clipboard.writeText(text):Promise.reject()).then(()=>toast('Materiaallijst gekopieerd'),()=>toast('Kopiëren niet gelukt'));}break;
-    case 'csvMaterials':if(MAT){download((project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}break;
+    case 'csvMaterials':if(MAT){download(safeName()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
     case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
     case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
