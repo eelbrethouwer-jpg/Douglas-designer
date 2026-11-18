@@ -16,11 +16,28 @@
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
   const round=(v)=>Math.round(v);
   const uid=()=>`item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  // Material-list settings (bevestiging, beslag, afwerking). Every value is an editable ASSUMPTION;
+  // prices are the user's own input and are never presented as live prices.
+  const MATERIAL_LIMITS={screwsPerJoint:[0,20],screwBox:[1,5000],wastePct:[0,50],hingesPerDoorModule:[0,12],drawerSetsPerModule:[0,12],oilCoverage:[1,30],oilCoats:[1,5]};
+  function defaultMaterials(){return {screwsPerJoint:2,screwBox:200,wastePct:10,hingesPerDoorModule:4,drawerSetsPerModule:2,oilCoverage:10,oilCoats:2,prices:{}};}
+  function normalizeMaterials(raw){
+    const m=defaultMaterials();
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return m;
+    for(const [key,[lo,hi]] of Object.entries(MATERIAL_LIMITS))m[key]=clamp(number(raw[key],m[key]),lo,hi);
+    for(const key of ['screwsPerJoint','screwBox','hingesPerDoorModule','drawerSetsPerModule','oilCoats'])m[key]=round(m[key]);
+    if(raw.prices&&typeof raw.prices==='object'&&!Array.isArray(raw.prices)){
+      for(const [id,v] of Object.entries(raw.prices).slice(0,50)){
+        if(!/^[a-z0-9-]{1,40}$/.test(id))continue;
+        const price=Number(v);if(Number.isFinite(price))m.prices[id]=clamp(price,0,100000);
+      }
+    }
+    return m;
+  }
   function demoProject() {
     return {
       version:1, id:uid(), name:'Mijn buitenkeuken', width:1875, depth:870, height:950,
       section:50, sectionLong:100, stockLength:2800, kerf:3, beamPrice:16.95,
-      countertop:true, frameEdits:{}, modules:[
+      countertop:true, frameEdits:{}, materials:defaultMaterials(), modules:[
         {id:uid(),kind:'drawers',width:520,name:'Ladekast'},
         {id:uid(),kind:'fridge',width:600,name:'Koelkast'},
         {id:uid(),kind:'kamado',width:555,name:'Kamado'}
@@ -69,6 +86,7 @@
     p.kerf=clamp(round(number(raw.kerf,3)),0,10);
     p.beamPrice=clamp(number(raw.beamPrice,p.beamPrice),0,1000);
     p.countertop=raw.countertop!==false;
+    p.materials=normalizeMaterials(raw.materials);
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
       name:String(m.name||TYPES[m.kind].label).slice(0,60)
@@ -244,5 +262,5 @@
     if(boardPlan(p).impossible.length)result.push('Minstens één balk is langer dan de gekozen handelslengte.');
     return result;
   }
-  return {TYPES,uid,clamp,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

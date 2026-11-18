@@ -142,6 +142,8 @@ De productprioriteit is op 25 oktober gewijzigd: foto-ondersteund ontwerpen in e
 
 ### Fase 6 — Materiaallijst en bouwen (v0.9.0)
 
+> **Voorlopige implementatie (branch `feature/materiaallijst`):** `materials.js` dekt de punten *beslag en bevestiging apart*, *eigen prijsinvoer* en *CSV* in basisvorm. Nog open: PDF/maattekeningen, echte verbindingstypen (nu één schroeftelling per contactpunt) en narekening van meerdere voorbeeldconstructies.
+
 - Onderdelenlijst met uniek ID, naam, profiel, lengte, aantallen en plaats in ontwerp.
 - Zaagplan per handelslengte met instelbare zaagsnede, aantallen, reststukken en controle op te lange delen.
 - Douglas balken, panelen/platen, werkblad, beslag en bevestiging **apart** opgenomen.

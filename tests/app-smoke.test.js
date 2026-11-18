@@ -3,6 +3,7 @@ const Room=require('../room-space.js');
 const Draft=require('../drafting.js');
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const path=require('node:path');
 const M=require('../model.js');
+const Mat=require('../materials.js');
 function makeApp(){
  const nodes=new Map(),listeners=new Map();let stored='';
  const ctx2d={beginPath(){},moveTo(){},lineTo(){},stroke(){},fill(){},arc(){},roundRect(){},clearRect(){},setTransform(){},fillText(){},save(){},restore(){},closePath(){},measureText(t){return {width:String(t).length*6};}};
@@ -11,7 +12,7 @@ function makeApp(){
   nodes.set(id,c);
  }return nodes.get(id);}
  const document={querySelector:s=>el(s),querySelectorAll:()=>[],addEventListener(name,fn){listeners.set('document:'+name,fn);},activeElement:{tagName:'BODY'},createElement:()=>el('created')};
- const window={DouglasModel:M,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1500,devicePixelRatio:1,addEventListener(name,fn){listeners.set('window:'+name,fn);},print(){},confirm(){return true;}};
+ const window={DouglasModel:M,DouglasMaterials:Mat,DouglasRoom:Room,DouglasSketchGrid:SketchGrid,DouglasDrafting:Draft,innerWidth:1500,devicePixelRatio:1,addEventListener(name,fn){listeners.set('window:'+name,fn);},print(){},confirm(){return true;}};
  const storage={getItem(){return stored||null;},setItem(k,v){stored=v;}};
  const sandbox={window,document,navigator:{},location:{protocol:'file:'},localStorage:storage,Intl,console,Map,Math,JSON,Date,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),sandbox,{timeout:10000});return {nodes,listeners,stored:()=>stored};
@@ -35,4 +36,14 @@ test('tapping a palette type arms placement and does not insert a centered beam'
  const p=JSON.parse(a.stored());assert.equal(p.beams.length,1);
  assert.equal(p.beams[0].axis,'x');assert(p.beams[0].length>=50);
  assert(p.beams[0].x>=0 && p.beams[0].x<p.width);
+});test('zaaglijst toont materiaallijst en prijsinvoer wordt opgeslagen in het project',()=>{
+ const a=makeApp(),click=a.listeners.get('document:click');
+ click({target:{dataset:{},id:'openCutlist',closest(sel){return sel==='button'?this:null;}}});
+ const modal=a.nodes.get('#modalContent');
+ assert.match(modal.innerHTML,/MATERIAALLIJST/);assert.match(modal.innerHTML,/RVS constructieschroeven/);assert.match(modal.innerHTML,/data-mat="price:schroeven"/);
+ a.listeners.get('#modalContent:change')({target:{dataset:{mat:'price:schroeven'},value:'12,50'}});
+ assert.equal(JSON.parse(a.stored()).materials.prices.schroeven,12.5);
+ assert.match(a.nodes.get('#modalContent').innerHTML,/value="12,5"/);
+ a.listeners.get('#modalContent:change')({target:{dataset:{mat:'setting:screwsPerJoint'},value:'4'}});
+ assert.equal(JSON.parse(a.stored()).materials.screwsPerJoint,4);
 });
