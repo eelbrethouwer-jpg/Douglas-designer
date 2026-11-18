@@ -108,3 +108,32 @@ test('scan-instellingen: normalisatie en schaal om punt a',()=>{
  assert.equal(sc2.scale,.5);assert.equal(sc2.x,5);assert.equal(sc2.y,5);
  assert.equal(M.scanScale(s,{x:1},{x:1},['x','y'],10),null);assert.equal(M.scanScale(s,{x:0},{x:9},['x','y'],0),null);
 });
+test('plattegrond-start: zones geven een conflictvrije constructie met juiste buitenmaten',()=>{
+ const zit={name:'Zit',kind:'open',x:0,z:0,w:4000,d:3300,h:2700},ber={name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300},perg={name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500};
+ const r=M.planFrame({zones:[zit,ber,perg]});
+ assert.ok(r.beams.length>=35&&r.beams.length<=60,String(r.beams.length));assert.equal(r.truncated,0);
+ assert.deepEqual(r.bounds,{width:9000,depth:6500,height:2700});
+ const p=M.normalizeProject({...M.freeProject(),width:9000,depth:6500,height:2700,plan:{zones:[zit,ber,perg]},beams:r.beams});
+ assert.equal(p.width,9000);assert.equal(p.depth,6500);assert.equal(p.height,2700);assert.equal(p.beams.length,r.beams.length);
+ const c=M.conflicts(p);assert.equal(c.overlaps.length,0,c.overlaps.map(([a,b])=>a.name+'/'+b.name).join());assert.equal(c.unsupported.length,0);
+ // buitencontour klopt: kleinste/grootste coördinaat van de staanders
+ const posts=r.beams.filter(b=>b.axis==='y'),minX=Math.min(...posts.map(b=>b.x)),maxX=Math.max(...posts.map(b=>b.x+100));
+ assert.equal(minX,0);assert.equal(maxX,9000);
+ assert.ok(r.beams.every(b=>b.length>=50&&b.length<=6500));
+ // gedeelde wand tussen zit en berging: geen dubbele staanders op x=4000 hartlijn
+ const mid=posts.filter(b=>b.x===3950);assert.equal(new Set(mid.map(b=>b.z)).size,mid.length);
+ // houthok-variant (tegels) blijft conflictvrij
+ const hh=M.planFrame({zones:[zit,{...ber,w:3500},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},{name:'Voor',kind:'closed',x:7500,z:1000,w:1500,d:1450,h:2300},perg]});
+ const p2=M.normalizeProject({...M.freeProject(),width:9000,depth:6500,height:2700,plan:{zones:[zit,perg]},beams:hh.beams});
+ assert.equal(M.conflicts(p2).overlaps.length,0);
+});
+test('plattegrond: ongeldige invoer en grenzen',()=>{
+ assert.equal(M.normalizePlan(null),null);assert.equal(M.normalizePlan({zones:[]}),null);assert.equal(M.normalizePlan({zones:'x'}),null);
+ const n=M.normalizePlan({zones:[{name:'<b>X</b>',kind:'bad',x:-5,z:'q',w:1,d:99999,h:10}]}).zones[0];
+ assert.deepEqual([n.name,n.kind,n.x,n.z,n.w,n.d,n.h],['bX/b','open',0,0,600,12000,1200]);
+ assert.equal(M.normalizePlan({zones:new Array(20).fill({})}).zones.length,8);
+ assert.equal(M.normalizeProject({...M.freeProject(),width:9000}).width,7000,'zonder plan blijven de oude grenzen');
+ const many={zones:Array.from({length:8},(_,i)=>({name:'Z'+i,kind:'closed',x:i*2400,z:0,w:2400,d:4800,h:2400}))};
+ const r=M.planFrame(many);assert.equal(r.beams.length,100);assert.ok(r.truncated>0);
+ assert.deepEqual(M.planFrame(null).beams,[]);
+});

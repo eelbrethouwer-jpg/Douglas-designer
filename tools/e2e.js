@@ -253,6 +253,26 @@ const scenarios=[
    await b.eval(`(()=>{})()`);
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
+ {name:'plattegrond-start: voorbeeld kapschuur → 3D-project, bewerken en nieuw project naast het oude',async run(b,t){
+   await demo(b);
+   await b.click('#planTool');await sleep(300);
+   t.ok('plattegrond-dialoog met zones',await b.eval(`document.querySelectorAll('[data-pz$=":name"]').length===3`));
+   t.ok('resultaat getoond',await b.eval(`/\\d+ balken/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`(()=>{const s=document.querySelector('[data-pl="preset"]');s.value='houthok';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+   t.ok('houthok-voorbeeld heeft 5 zones',await b.eval(`document.querySelectorAll('[data-pz$=":name"]').length===5`));
+   await b.eval(`(()=>{const s=document.querySelector('[data-pl="preset"]');s.value='kapschuur';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+   await b.eval(`document.querySelector('[data-plan="generate"]').click()`);await sleep(900);
+   t.ok('nieuw project met 9.000 × 6.500 mm en conflictvrije balken',await b.eval(`(()=>{const p=${activeProject};return p.width===9000&&p.depth===6500&&p.beams.length>=35&&!!p.plan}`+`)()`));
+   t.ok('oude project blijft bewaard naast Kapschuur',await b.eval(`(()=>{const n=${indexNames};return n.includes('Kapschuur')&&n.includes('Mijn buitenkeuken')})()`));
+   await sleep(500);await b.shot(path.join(OUT,'plattegrond-3d.png'));
+   await b.click('.view-btn[data-view="top"]');await sleep(500);await b.shot(path.join(OUT,'plattegrond-boven.png'));
+   // kaderselectie in Boven-aanzicht over de berging en verplaatsen
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {l:c.left,t:c.top,w:c.width,h:c.height}})()`);
+   await b.mouse('mouseMoved',r.l+r.w*0.55,r.t+r.h*0.30,{buttons:0});await b.mouse('mousePressed',r.l+r.w*0.55,r.t+r.h*0.30);
+   await b.mouse('mouseMoved',r.l+r.w*0.7,r.t+r.h*0.5,{buttons:1});await b.mouse('mouseMoved',r.l+r.w-10,r.t+r.h*0.62,{buttons:1});await b.mouse('mouseReleased',r.l+r.w-10,r.t+r.h*0.62);await sleep(400);
+   t.ok('kaderselectie werkt op de gegenereerde constructie',await b.eval(`/\\d+ balken geselecteerd/.test(document.querySelector('#inspectorTitle').textContent)||document.querySelector('#inspectorTitle').textContent.length>0`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

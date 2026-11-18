@@ -1,3 +1,8 @@
+## Ongepubliceerd — start vanuit plattegrond
+
+- Knop 📐 Plattegrond: definieer zones (open overkapping, gesloten ruimte, pergola) met buitenmaten en hoogte, en maak er een nieuw 3D-project van losse balken van (staanders 100×100, bovenliggers 50×150, regels, pergola-latten). Gedeelde wanden tussen zones, geen overlappende balken (getest), buitencontour klopt. Voorbeelden: kapschuur uit de PDF en variant met houthok.
+- Projecten met een plattegrond mogen groter zijn (tot 12 × 12 m, 4 m hoog). Dak niet inbegrepen (balken zijn recht).
+
 ## Ongepubliceerd — 3D-scan importeren
 
 - Knop 🧊 Scan: importeer een 3D-scan van de ruimte (.glb, .gltf met ingebedde data, .obj) als referentiemodel; kleuren en texturen worden overgenomen, zware modellen vereenvoudigd tot max. 45.000 driehoeken. Zichtbaar in 3D en alle 2D-aanzichten achter het ontwerp.

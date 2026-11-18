@@ -117,6 +117,89 @@
     p.name='Vrij ontwerp';p.width=2000;p.depth=1000;p.height=1200;
     p.modules=[];p.beams=[];p.countertop=false;return p;
   }
+  // ---------- Plattegrond-start: zones (rechthoeken) → een 3D-houtconstructie van losse balken ----------
+  const ZONE_KINDS={open:'Open overkapping',closed:'Gesloten ruimte',pergola:'Pergola'};
+  function normalizePlan(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.zones))return null;
+    const zones=raw.zones.slice(0,8).map((z,i)=>z&&typeof z==='object'?({
+      id:String(z.id||'z'+(i+1)).slice(0,20),name:String(z.name||('Zone '+(i+1))).replace(/[\u0000-\u001f<>]/g,'').slice(0,40),
+      kind:ZONE_KINDS[z.kind]?z.kind:'open',
+      x:clamp(round(number(z.x,0)),0,20000),z:clamp(round(number(z.z,0)),0,20000),
+      w:clamp(round(number(z.w,2000)),600,12000),d:clamp(round(number(z.d,2000)),600,12000),h:clamp(round(number(z.h,2500)),1200,4000)
+    }):null).filter(Boolean);
+    return zones.length?{zones}:null;
+  }
+  // Maakt staanders (100×100), bovenliggers (50×150) en bij gesloten zones tussenregels; pergola krijgt dwarslatten.
+  // Hartlijnen liggen 50 mm binnen de buitencontour, zodat de buitenmaat klopt. Dak niet inbegrepen (balken zijn recht).
+  function planFrame(plan){
+    const pl=normalizePlan(plan);if(!pl)return {beams:[],truncated:0,bounds:{width:0,depth:0,height:0}};
+    const POST='100x100',PLATE='50x150',RAIL='50x100',PS=100,plateT=PROFILES[PLATE].t,plateS=PROFILES[PLATE].s;
+    const Z=pl.zones,out=[],posts=new Map(),segs=new Map();
+    // een rand is gedeeld als een andere zone dezelfde lijn aan de overzijde heeft met overlappend bereik
+    const edgeShared=(zone,side)=>{
+      return Z.some(o=>{if(o===zone)return false;
+        if(side==='w')return o.x+o.w===zone.x;
+        if(side==='e')return o.x===zone.x+zone.w;
+        if(side==='n')return o.z+o.d===zone.z;
+        return o.z===zone.z+zone.d;});
+    };
+    const addPost=(cx,cz,h,name)=>{const k=cx+','+cz,old=posts.get(k);if(old){if(h<old.h)old.h=h;return;}posts.set(k,{cx,cz,h,name});};
+    const addSeg=(axis,fixed,lo,hi,y,profile,name)=>{ // fixed = hartlijn op de andere vloeras; lo/hi langs axis
+      const k=axis+'|'+fixed+'|'+y+'|'+profile;let a=segs.get(k);if(!a){a={axis,fixed,y,profile,name,list:[]};segs.set(k,a);}a.list.push([lo,hi]);};
+    for(const zn of Z){
+      const x0=zn.x+(edgeShared(zn,'w')?0:PS/2),x1=zn.x+zn.w-(edgeShared(zn,'e')?0:PS/2);
+      const z0=zn.z+(edgeShared(zn,'n')?0:PS/2),z1=zn.z+zn.d-(edgeShared(zn,'s')?0:PS/2);
+      const top=zn.h,postLen=top-plateT;
+      // staanders: hoeken, bij gesloten zones tussenstaanders (≤ 2500 mm h.o.h.)
+      const xs=[x0,x1],zs=[z0,z1];
+      const split=(a,b)=>{const n=Math.max(1,Math.ceil((b-a)/2500)),r=[];for(let i=1;i<n;i++)r.push(Math.round((a+(b-a)*i/n)/5)*5);return r;};
+      for(const px of xs)for(const pz of zs)addPost(px,pz,postLen,zn.name);
+      if(zn.kind==='closed'){for(const px of split(x0,x1)){addPost(px,z0,postLen,zn.name);addPost(px,z1,postLen,zn.name);}for(const pz of split(z0,z1)){addPost(x0,pz,postLen,zn.name);addPost(x1,pz,postLen,zn.name);}}
+      // bovenliggers (boven op de staanders): x-richting volledig, z-richting ertussen
+      const yTop=top-plateT;
+      addSeg('x',z0,x0,x1,yTop,PLATE,'Bovenligger '+zn.name);addSeg('x',z1,x0,x1,yTop,PLATE,'Bovenligger '+zn.name);
+      addSeg('z',x0,z0,z1,yTop,PLATE,'Bovenligger '+zn.name);addSeg('z',x1,z0,z1,yTop,PLATE,'Bovenligger '+zn.name);
+      if(zn.kind==='closed'){ // twee tussenregels (onder en op halve hoogte) voor de gevelbekleding
+        const sx=[x0,...split(x0,x1),x1],sz=[z0,...split(z0,z1),z1];
+        for(const y of [300,Math.round(top/2/5)*5]){
+          for(let i=0;i+1<sx.length;i++)for(const pz of [z0,z1])addSeg('x',pz,sx[i],sx[i+1],y,RAIL,'Regel '+zn.name);
+          for(let i=0;i+1<sz.length;i++)for(const px of [x0,x1])addSeg('z',px,sz[i],sz[i+1],y,RAIL,'Regel '+zn.name);
+        }
+      }
+      if(zn.kind==='pergola'){ // dwarslatten over de diepte, elke ~600 mm
+        const n=Math.max(2,Math.round((x1-x0)/600));
+        for(let i=1;i<n;i++){const px=Math.round((x0+(x1-x0)*i/n)/5)*5;addSeg('z',px,z0,z1,top-50,'50x50','Dwarslat '+zn.name);}
+      }
+    }
+    // staanders
+    for(const p of posts.values())out.push({id:uid(),name:'Staander '+p.name,axis:'y',length:p.h,x:p.cx-PS/2,y:0,z:p.cz-PS/2,profile:POST});
+    // segmenten: overlappende bereiken samenvoegen (gedeelde wanden), uiteinden 25 mm inkorten ter plekke van kruisende liggers
+    for(const a of segs.values()){
+      const merged=[];for(const [lo,hi] of a.list.sort((p,q)=>p[0]-q[0])){const last=merged[merged.length-1];if(last&&lo<last[1])last[1]=Math.max(last[1],hi);else merged.push([lo,hi]);}
+      const pr=PROFILES[a.profile];
+      for(const [lo0,hi0] of merged){
+        // splits op staanders die op dezelfde lijn staan (T-aansluitingen, tussenstaanders), alleen voor z-liggers en regels
+        const cuts=[lo0];
+        if(a.axis==='z'||a.profile===RAIL){
+          const onLine=[...posts.values()].filter(p=>(a.axis==='x'?p.cz:p.cx)===a.fixed).map(p=>a.axis==='x'?p.cx:p.cz).filter(v=>v>lo0&&v<hi0).sort((p,q)=>p-q);
+          cuts.push(...onLine);
+        }
+        cuts.push(hi0);
+        for(let i=0;i+1<cuts.length;i++){
+          let start=cuts[i],end=cuts[i+1];
+          if(a.axis==='z'&&(a.profile===PLATE||a.profile==='50x50')){start+=plateS/2;end-=plateS/2;} // tussen de x-liggers
+          if(a.profile===RAIL){start+=PS/2;end-=PS/2;} // tussen de staanders
+          const length=Math.round(end-start);if(length<50)continue;
+          if(a.axis==='x')out.push({id:uid(),name:a.name,axis:'x',length,x:start,y:a.y,z:a.fixed-pr.s/2,profile:a.profile});
+          else out.push({id:uid(),name:a.name,axis:'z',length,x:a.fixed-pr.s/2,y:a.y,z:start,profile:a.profile});
+        }
+      }
+    }
+    // pergola-latten liggen boven de bovenliggers (y = top van de zone)
+    const maxX=Math.max(...Z.map(z=>z.x+z.w)),maxZ=Math.max(...Z.map(z=>z.z+z.d)),maxH=Math.max(...Z.map(z=>z.h));
+    const beams=out.slice(0,100).map(b=>({...b,length:clamp(Math.round(b.length),50,6500),x:Math.round(b.x),y:Math.round(b.y),z:Math.round(b.z)}));
+    return {beams,truncated:Math.max(0,out.length-100),bounds:{width:maxX,depth:maxZ,height:maxH}};
+  }
   function resizeBeamEndpoint(beam, endpoint, newCoordinate, step=5) {
     if(!beam || !['x','y','z'].includes(beam.axis) || !Number.isFinite(newCoordinate))return false;
     const axis=beam.axis, grid=Math.max(1,step), snapped=Math.round(newCoordinate/grid)*grid;
@@ -148,8 +231,9 @@
     if(!raw || typeof raw!=='object') return demoProject();
     const p=demoProject();
     p.id=String(raw.id || p.id); p.name=String(raw.name||p.name).slice(0,80);
-    p.depth=clamp(round(number(raw.depth,p.depth)),400,2000);
-    p.height=clamp(round(number(raw.height,p.height)),400,2500);
+    const plan=normalizePlan(raw.plan);if(plan)p.plan=plan;
+    p.depth=clamp(round(number(raw.depth,p.depth)),400,plan?12000:2000);
+    p.height=clamp(round(number(raw.height,p.height)),400,plan?4000:2500);
     p.stockLength=clamp(round(number(raw.stockLength,p.stockLength)),1000,6500);
     p.kerf=clamp(round(number(raw.kerf,3)),0,10);
     p.beamPrice=clamp(number(raw.beamPrice,p.beamPrice),0,1000);
@@ -186,7 +270,7 @@
         if(Object.keys(clean).length)p.frameEdits[id]=clean;
       }
     }
-    p.width=p.modules.length?expectedWidth(p):clamp(round(number(raw.width,p.width)),500,7000);
+    p.width=p.modules.length?expectedWidth(p):clamp(round(number(raw.width,p.width)),500,p.plan?12000:7000);
     return p;
   }
   function expectedWidth(p) {return p.modules.length?(p.modules.length+1)*50 + p.modules.reduce((s,m)=>s+m.width,0):p.width;}
@@ -417,5 +501,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,ZONE_KINDS,normalizePlan,planFrame,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

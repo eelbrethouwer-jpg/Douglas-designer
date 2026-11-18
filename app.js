@@ -820,6 +820,49 @@ function scanAction(act){
     commit(()=>{project.scan=M.normalizeScan({...project.scan,x:Math.round(project.width/2-rx),z:Math.round(project.depth/2-rz)});});showScan();draw();}
   else if(act==='calibrate'){closeModal();calibrate={a:null,b:null,target:'scan'};backdropMove=null;toast('Ga naar een 2D-aanzicht indien nodig en klik het eerste punt');if(!viewAxes()||currentView==='bottom')setView('front');$('#drawHelp').classList.remove('hidden');$('#drawHelp').textContent='Scan-schaal: klik het eerste punt, dan het tweede punt waarvan je de afstand weet · Esc stopt';canvas.classList.add('draw-active');}
 }
+
+// ---------- Plattegrond-start ----------
+const PLAN_PRESETS={
+ kapschuur:{label:'Kapschuur (jouw PDF: zitgedeelte, berging, pergola)',name:'Kapschuur',zones:[
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
+ houthok:{label:'Kapschuur met houthok (plattegrond-afbeelding)',name:'Kapschuur met houthok',zones:[
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2300},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
+  {name:'Berging voor',kind:'closed',x:7500,z:1000,w:1500,d:1450,h:2300},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
+ leeg:{label:'Eigen plattegrond (twee lege zones)',name:'Eigen plattegrond',zones:[
+  {name:'Zone 1',kind:'open',x:0,z:0,w:3000,d:2500,h:2500},{name:'Zone 2',kind:'closed',x:3000,z:0,w:2500,d:2500,h:2400}]}
+};
+let planDraft=JSON.parse(JSON.stringify(PLAN_PRESETS.kapschuur)),planKey='kapschuur';
+function planPreview(){
+ const r=M.planFrame({zones:planDraft.zones});
+ const by={};for(const b of r.beams){const k=b.axis==='y'?'staanders':'liggers en regels';by[k]=(by[k]||0)+1;}
+ return {r,text:`${r.beams.length} balken (${by.staanders||0} staanders, ${by['liggers en regels']||0} liggers/regels) · ${fmt(r.bounds.width)} × ${fmt(r.bounds.depth)} mm, ${fmt(r.bounds.height)} mm hoog`};
+}
+function planHTML(){
+ const kinds=Object.entries(M.ZONE_KINDS),pv=planPreview();
+ let h=`<div class="notice-small" style="margin-top:0">Begin met een <strong>plattegrond</strong>: elke zone is een rechthoek (buitenmaten, mm). De app bouwt er een houtconstructie van <strong>losse balken</strong> van, die je daarna in 3D bewerkt (verplaatsen, kader-selecteren, verlengen). Het is een start, geen constructieberekening, en <strong>het dak zit er niet in</strong> (balken zijn recht). Kloppen de maten niet, pas ze hier aan voordat je genereert.</div>`;
+ h+=`<label class="field">Voorbeeld<select data-pl="preset">${Object.entries(PLAN_PRESETS).map(([k,v])=>`<option value="${k}" ${planKey===k?'selected':''}>${esc(v.label)}</option>`).join('')}</select></label>`;
+ h+=`<h4 class="cut-section">ZONES</h4><div style="overflow-x:auto"><table class="cut-table" style="width:100%;font-size:12px"><thead><tr><th>Naam</th><th>Soort</th><th>X</th><th>Z (diepte)</th><th>Breed</th><th>Diep</th><th>Hoogte</th><th></th></tr></thead><tbody>`;
+ planDraft.zones.forEach((z,i)=>{
+  h+=`<tr><td><input data-pz="${i}:name" value="${esc(z.name)}" style="width:110px"></td><td><select data-pz="${i}:kind">${kinds.map(([k,v])=>`<option value="${k}" ${z.kind===k?'selected':''}>${v}</option>`).join('')}</select></td>`
+   +['x','z','w','d','h'].map(f=>`<td><input data-pz="${i}:${f}" type="number" step="50" value="${z[f]}" style="width:72px"></td>`).join('')
+   +`<td><button class="outline-btn" data-plan="del:${i}" title="Zone verwijderen">✕</button></td></tr>`;
+ });
+ h+=`</tbody></table></div><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-top:8px"><button class="outline-btn" data-plan="add">+ Zone toevoegen</button></div>`;
+ h+=`<p class="mini-note">X = afstand vanaf links, Z = afstand vanaf de achterzijde (achterlijn op 0). Zones die tegen elkaar liggen delen hun wand. Hoogte = onderkant dakrand/bovenligger.</p>`;
+ h+=`<div class="notice-small"><strong>Resultaat:</strong> ${esc(pv.text)}${pv.r.truncated?`<br>⚠ ${pv.r.truncated} balken passen niet (max. 100 losse balken): kleiner maken of zones weglaten.`:''}</div>`;
+ h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="primary-btn" data-plan="generate" ${pv.r.beams.length?'':'disabled'}>▦ Maak 3D-project van deze plattegrond</button></div><p class="mini-note">Er komt een nieuw project; je huidige project blijft bewaard. Leg je eigen plattegrondafbeelding eronder met 🖼 Foto in het Boven-aanzicht (PDF eerst als PNG/JPG opslaan).</p>`;
+ return h;
+}
+function showPlan(){openModal('START','Start vanuit plattegrond',planHTML());}
+function planAction(act){
+ if(act==='add'){if(planDraft.zones.length>=8){toast('Maximaal 8 zones');return;}planDraft.zones.push({name:'Zone '+(planDraft.zones.length+1),kind:'open',x:0,z:0,w:2000,d:2000,h:2500});showPlan();}
+ else if(act.startsWith('del:')){planDraft.zones.splice(+act.slice(4),1);showPlan();}
+ else if(act==='generate'){
+  const pv=planPreview();if(!pv.r.beams.length)return;
+  const b=pv.r.bounds,raw={...M.freeProject(),name:planDraft.name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:{zones:planDraft.zones},stockLength:6000,beams:pv.r.beams};
+  if(openNewProject(raw,`Nieuw project met ${pv.r.beams.length} balken · bewerk het in 3D`)){setView('3d');}
+ }
+}
 function backdropHTML(){
  const bd=project.backdrop,viewName={front:'Voor',side:'Zij',top:'Boven'};
  let h=`<div class="notice-small" style="margin-top:0">Gebruik een foto (bijv. van de plek waar de buitenkeuken komt) als <strong>achtergrond in een 2D-aanzicht</strong>. Stel de schaal in met twee punten waarvan je de echte afstand kent, en bouw er dan overheen. Het is een hulpmiddel om op af te tekenen, geen exacte perspectiefcorrectie: maak de foto zo recht mogelijk, vlak van voren.</div>`;
@@ -900,6 +943,7 @@ document.addEventListener('click',e=>{
   const frameCard=e.target.closest('[data-select-frame]');
   const pa=e.target.closest('[data-proj]');if(pa){projectAction(pa.dataset.proj);return;}
   const bda=e.target.closest('[data-bd]');if(bda){backdropAction(bda.dataset.bd);return;}
+  const pla=e.target.closest('[data-plan]');if(pla){planAction(pla.dataset.plan);return;}
   const sca=e.target.closest('[data-scan]');if(sca){scanAction(sca.dataset.scan);return;}
   const sa=e.target.closest('[data-share]');if(sa){shareAction(sa.dataset.share);return;}
   const da=e.target.closest('[data-deliver]');if(da){deliverAction(da.dataset.deliver);return;}
@@ -1009,6 +1053,11 @@ $('#backdropInput')?.addEventListener('change',async e=>{await backdropFile(e.ta
 $('#backdropCamera')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
 $('#backdropTool')?.addEventListener('click',showBackdrop);
 $('#scanTool')?.addEventListener('click',showScan);
+$('#planTool')?.addEventListener('click',showPlan);
+$('#modalContent').addEventListener('change',e=>{
+  const pr=e.target.dataset?.pl;if(pr==='preset'){const p=PLAN_PRESETS[e.target.value];if(p){planKey=e.target.value;planDraft=JSON.parse(JSON.stringify(p));showPlan();}return;}
+  const pz=e.target.dataset?.pz;if(!pz)return;const [i,f]=pz.split(':'),z=planDraft.zones[+i];if(!z)return;
+  z[f]=(f==='name'||f==='kind')?e.target.value:+e.target.value;const n=M.normalizePlan({zones:planDraft.zones});if(n)planDraft.zones=n.zones.map((q,k)=>({...q,name:q.name}));showPlan();});
 $('#scanInput')?.addEventListener('change',async e=>{const f=e.target.files?.[0];e.target.value='';await importScan(f);});
 $('#modalContent').addEventListener('input',e=>{if(e.target.dataset?.scf==='opacity'&&project.scan){project.scan.opacity=M.clamp(+e.target.value/100,.1,1);draw();}});
 $('#modalContent').addEventListener('change',e=>{const f=e.target.dataset?.scf;if(!f||!project.scan)return;
