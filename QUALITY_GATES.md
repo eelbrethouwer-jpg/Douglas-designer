@@ -24,7 +24,7 @@ Testplan inclusief echte browser/iPhone:
 | G2 — Statische checks | Node-syntax op alle relevante JS en `node --test tests/*.test.js` | Een falende test of ontbrekende relevante check |
 | G3 — Model/regressie | Maatconsistentie, balk-ID's, frame-overrides, zaaglijst, undo/redo, JSON en oudere projectdata | Onjuist onderdeel of dataverlies |
 | G4 — Browser-UX | Echte Chrome desktop: upload, stappen, zichtbare wijziging, selectie, muis/scroll/zoom | Niet zichtbare of niet bedienbare functie |
-| G5 — Mobiel | Echte iPhone Safari: ruimtefoto, selecteren, pinchen, toetsenbord, knoppen, opslag en viewport | Werkvlak verborgen, knoppen buiten bereik of touch-breuk |
+| G5 — Mobiel (aanbevolen, niet blokkerend) | Laptop/desktop is leidend. Telefoon is hulpmiddel voor delen en aanleveren (foto's/maten). Echte iPhone Safari: delen-link openen, foto aanleveren, ruimtefoto, toetsenbord, viewport | Alleen blokkerend als de telefoon-route (delen/aanleveren) data verliest; een niet-geteste iPhone blokkeert een release niet maar wordt als `NIET UITGEVOERD` vermeld |
 | G6 — Rendering | Screenshots vanuit voor/achter/links/rechts/boven/onder + schuin orbitten, ook materiaalvarianten | Gaten, flikkering, wegvallend werkblad of foutieve picking |
 | G7 — Deployment | PR gereviewd, na acceptatie gemerged, Actions `main` groen en publieke Pages-versie/caches gecontroleerd | Onbekende publieke versie |
 
@@ -74,3 +74,16 @@ PR #12 is **alleen documentatie**. Integratie van die afspraken in PR #14 is gee
 **Opleverrapport per release:** titel; doel; gerealiseerd; gewijzigde bestanden; tests met PASS/FAIL/NIET UITGEVOERD; regressies; resterende risico's; PR/link; publicatiestatus; release notes.
 
 **Hard stop:** rode CI, dataverlies, foutieve zaaglengtes, defecte basissselectie of een mobiele editor zonder zichtbaar werkvlak. Geen productieclaim ondanks groene deelchecks.
+
+## Status v1.0.0-rc1 (bewijs per gate)
+
+| Gate | Status | Bewijs / opmerking |
+|---|---|---|
+| G2 | PASS | `node --test tests/*.test.js` (146 tests, 0 fouten) |
+| G3 | PASS | Unit-tests voor model, profielen, materialen, documenten, projecten, delen |
+| G4 | PASS (headless Chrome desktop) | `node tools/e2e.js`: start, projecten, opslag, zaaglijst/materiaal/document, profielen, delen, aanleveren, meten, reeks |
+| G5 | NIET UITGEVOERD | Geen echte iPhone beschikbaar; niet blokkerend voor rc1 |
+| G6 | PASS (gedeeltelijk) | Screenshots in headless Chrome met software-WebGL; geen handmatige controle van alle camerastanden |
+| G7 | NIET UITGEVOERD | Release-PR nog niet gemerged; publieke Pages-versie niet gecontroleerd |
+
+Geen productieclaim: de uitkomsten zijn een ontwerpraming. Draagkracht, hitte en ventilatie zijn niet gevalideerd.

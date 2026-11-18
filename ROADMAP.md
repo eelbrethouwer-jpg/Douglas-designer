@@ -30,9 +30,9 @@ Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en 
 | 4.5 | v0.7.2 | **Sketch Studio grid, gekleurde assen, parallelle camera en reparatie projectmutaties** | P0 | Op `main`; CI groen, browseracceptatie open |
 | 4.6 | **v0.7.3 / PR #14** | **Room Capture iOS foto-import, callbackcompatibiliteit, safe-areas en PWA-cache** | **P0** | **Leidende concept-PR; 91/91 checks groen, fysieke iPhone-validatie open** |
 | 5 | v0.8.0 | Sketch Modeling: directe vlak-/randselectie, asvergrendeling, Push/Pull en daarna constructie/3D-materialen | P1 | Gepland |
-| 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gepland |
-| 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gepland |
-| 8 | v1.0.0 | Stabiele eerste productieversie + complete acceptatietest | P1 | Gepland |
+| 6 | v0.9.0 | Materiaallijst, geoptimaliseerde zaaglijst en bouwdocumenten | P1 | Gebouwd in rc1 |
+| 7 | v0.10.0 | Multi-projectbeheer, sterke mobiele UX en PWA-updates | P1 | Gebouwd in rc1 (laptop leidend) |
+| 8 | v1.0.0 | Stabiele eerste productieversie + complete acceptatietest | P1 | Release candidate (rc1), wacht op eigen gebruik |
 
 ### Fase 1 — Bewerkbare frames (v0.5.1, PR #6)
 

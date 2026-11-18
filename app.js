@@ -1006,5 +1006,5 @@ function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=0.7.4',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc1',{updateViaCache:'none'}).catch(()=>{});
 })();
