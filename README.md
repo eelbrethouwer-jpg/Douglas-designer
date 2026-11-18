@@ -118,3 +118,5 @@ Zie [ROADMAP.md](ROADMAP.md) voor werkblad-/renderkwaliteit, naadloze tekenervar
 - Delen (laptop → telefoon): link of `.douglas.json`. Aanleveren (telefoon → laptop): foto's en maten via een bestand of link.
 - Sneltoets **M**: afstand meten in een 2D-aanzicht. Inspector: *Reeks kopiëren*.
 - Tests: `node --test tests/*.test.js`; browsertest: start `python3 -m http.server 8765` en run `node tools/e2e.js` (Chrome nodig).
+- Meerdere balken selecteren: sleep een kader in een 2D-aanzicht (of Ctrl/Cmd+slepen). Pannen in 2D: Shift+slepen.
+- Foto als achtergrond: knop *🖼 Foto*, stel de schaal in met twee punten met bekende afstand en bouw erover.

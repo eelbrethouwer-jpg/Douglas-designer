@@ -84,3 +84,15 @@ test('moveBeams: vrije en framebalken samen verplaatsen, onbekende ids negeren',
  const after=M.framePieces(p).find(b=>b.id===fr.id);assert.deepEqual([after.x,after.y,after.z],[before.x+100,before.y-5,before.z+12]);
  assert.equal(M.moveBeams(p,[],{x:1}),0);
 });
+test('foto-achtergrond: normalisatie en schaal met twee punten',()=>{
+ const jpg='data:image/jpeg;base64,/9j/4AAQ';
+ assert.equal(M.normalizeBackdrop(null),null);assert.equal(M.normalizeBackdrop({photo:'data:image/png;base64,AAAA'}),null);
+ assert.equal(M.normalizeBackdrop({photo:'x'.repeat(10)}),null);
+ const bd=M.normalizeBackdrop({photo:jpg,opacity:5,widthMm:10,x:'q',view:'bad'});
+ assert.deepEqual([bd.opacity,bd.widthMm,bd.x,bd.view,bd.on],[1,200,0,'front',true]);
+ const p=M.normalizeProject({...M.freeProject(),backdrop:{photo:jpg}});assert.ok(p.backdrop&&p.backdrop.photo===jpg);
+ assert.equal(M.normalizeProject({...M.freeProject(),backdrop:{photo:'<script>'}}).backdrop,undefined);
+ const s=M.backdropScale({photo:jpg,widthMm:1000,x:0,y:0,opacity:.5,on:true,view:'front'},{x:100,y:100},{x:300,y:100},['x','y'],400);
+ assert.equal(s.widthMm,2000);assert.equal(s.x,-100);assert.equal(s.y,-100);
+ assert.equal(M.backdropScale(bd,{x:1},{x:1},['x','y'],100),null);assert.equal(M.backdropScale(bd,{x:0},{x:50},['x','y'],0),null);
+});

@@ -1,3 +1,8 @@
+## Ongepubliceerd — kaderselectie en foto-achtergrond
+
+- Kaderselectie: sleep op lege ruimte in een 2D-aanzicht (of Ctrl/Cmd+slepen in elk aanzicht) om meerdere balken te selecteren; links→rechts = volledig binnen, rechts→links = ook rakend; Shift voegt toe. Groep samen verslepen, numeriek verplaatsen, kopiëren, verwijderen (undo-stap per actie). In 2D pan je nu met Shift+slepen of de middelste muisknop.
+- Foto-achtergrond (knop 🖼 Foto): foto kiezen/maken als achtergrond in Voor/Zij/Boven-aanzicht, schaal instellen met twee punten en een bekende afstand, verslepen, zichtbaarheid. Geen perspectiefcorrectie; foto blijft lokaal en gaat niet mee in deel-links.
+
 ## v1.0.0-rc1 — release candidate
 
 - Meerdere projecten (aanmaken, dupliceren, hernoemen, prullenbak, back-up/herstel); oude opslag blijft ongemoeid als back-up.

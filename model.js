@@ -57,6 +57,23 @@
     const photos=(Array.isArray(raw.photos)?raw.photos:[]).filter(p=>typeof p==='string'&&p.length<=450000&&JPEG_RE.test(p)).slice(0,4);
     return notes||photos.length?{notes,photos}:null;
   }
+  // Foto-achtergrond voor 2D-aanzichten: de foto ligt achter het ontwerp, schaal en plek zijn instelbaar.
+  function normalizeBackdrop(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+    const photo=typeof raw.photo==='string'&&raw.photo.length<=600000&&JPEG_RE.test(raw.photo)?raw.photo:'';
+    if(!photo)return null;
+    return {photo,on:raw.on!==false,view:['front','side','top'].includes(raw.view)?raw.view:'front',
+      opacity:clamp(number(raw.opacity,.5),.1,1),widthMm:clamp(round(number(raw.widthMm,3000)),200,60000),
+      x:clamp(round(number(raw.x,0)),-60000,60000),y:clamp(round(number(raw.y,0)),-60000,60000)};
+  }
+  // Schaal de foto zodat de afstand tussen twee punten (wereldmm) gelijk wordt aan realMm; punt a blijft staan.
+  function backdropScale(bd,a,b,plane,realMm){
+    const real=number(realMm,0);if(!bd||!a||!b||!plane||real<=0)return null;
+    const [h,v]=plane,cur=Math.hypot((b[h]||0)-(a[h]||0),(b[v]||0)-(a[v]||0));
+    if(cur<1)return null;const f=real/cur,w=clamp(round(bd.widthMm*f),200,60000),g=w/bd.widthMm;
+    const ah=a[h]||0,av=a[v]||0;
+    return {...bd,widthMm:w,x:clamp(round(ah-(ah-bd.x)*g),-60000,60000),y:clamp(round(av-(av-bd.y)*g),-60000,60000)};
+  }
   function defaultCountertop(){return {thickness:24,overhangSide:8,overhangFront:14,overhangBack:14};}
   function normalizeCountertop(raw){
     const c=defaultCountertop();if(!raw||typeof raw!=='object'||Array.isArray(raw))return c;
@@ -122,6 +139,7 @@
     p.materials=normalizeMaterials(raw.materials);
     p.countertopSpec=normalizeCountertop(raw.countertopSpec);
     {const ref=normalizeReference(raw.reference);if(ref)p.reference=ref;}
+    {const bd=normalizeBackdrop(raw.backdrop);if(bd)p.backdrop=bd;}
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
       name:String(m.name||TYPES[m.kind].label).slice(0,60),
@@ -380,5 +398,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

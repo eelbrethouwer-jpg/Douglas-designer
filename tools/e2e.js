@@ -187,6 +187,34 @@ const scenarios=[
    t.ok('Esc heft selectie op',await b.eval(`!/geselecteerd/.test(document.querySelector('#inspectorTitle').textContent)`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
+ {name:'foto-achtergrond: foto kiezen, tonen in aanzicht, verslepen, schaal, ontwerp bouwen en undo',async run(b,t){
+   await demo(b);
+   const jpgB64=await b.eval(`(()=>{const c=document.createElement('canvas');c.width=1600;c.height=1000;const x=c.getContext('2d');x.fillStyle='#8fb5d6';x.fillRect(0,0,1600,1000);x.fillStyle='#6b8f5a';x.fillRect(0,700,1600,300);x.fillStyle='#b5651d';x.fillRect(500,300,600,400);return c.toDataURL('image/jpeg',.8).split(',')[1];})()`);
+   const photo=tmp('achtergrond.jpg');fs.mkdirSync(path.dirname(photo),{recursive:true});fs.writeFileSync(photo,Buffer.from(jpgB64,'base64'));
+   await b.click('#backdropTool');await sleep(300);
+   t.ok('foto-dialoog opent',await b.eval(`!!document.querySelector('[data-bd="pick"]')`));
+   await b.uploadFile('#backdropInput',[photo]);
+   t.ok('foto opgeslagen als JPEG in project',await waitFor(()=>b.eval(`(()=>{const p=${activeProject};return !!p.backdrop&&p.backdrop.photo.startsWith('data:image/jpeg')&&p.backdrop.view==='front'}`+`)()`)));
+   await sleep(400);
+   t.ok('foto zichtbaar achter het ontwerp in Voor-aanzicht',await b.eval(`(()=>{const i=document.querySelector('#backdropImg');return !!i&&i.style.display==='block'&&parseFloat(i.style.width)>100&&document.querySelector('.view-btn.selected')?.dataset.view==='front'})()`));
+   await b.eval(`document.querySelector('#modalBackdrop [data-bd="move"]').click()`);await sleep(250);
+   const x0=await b.eval(`${activeProject}.backdrop.x`);
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {x:c.left+c.width/2,y:c.top+c.height/2}})()`);
+   await b.drag(r.x,r.y,r.x+80,r.y,6);await sleep(300);
+   t.ok('foto verplaatst met slepen',await b.eval(`${activeProject}.backdrop.x`)!==x0);
+   await b.shot(path.join(OUT,'foto-achtergrond.png'));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(200);
+   await b.click('.view-btn[data-view="top"]');await sleep(300);
+   t.ok('foto verborgen in ander aanzicht',await b.eval(`document.querySelector('#backdropImg').style.display==='none'`));
+   await b.click('.view-btn[data-view="front"]');await sleep(300);
+   await b.click('#backdropTool');await sleep(200);await set(b,'[data-bdf="widthMm"]',4000);await sleep(300);
+   t.ok('breedte aanpasbaar',await b.eval(`${activeProject}.backdrop.widthMm===4000`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(300);
+   t.ok('undo herstelt breedte',await b.eval(`${activeProject}.backdrop.widthMm!==4000`));
+   await b.click('#backdropTool');await sleep(200);await b.eval(`document.querySelector('[data-bd="remove"]').click()`);await sleep(300);
+   t.ok('foto verwijderen',await b.eval(`!${activeProject}.backdrop&&document.querySelector('#backdropImg').style.display==='none'`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

@@ -40,6 +40,22 @@ function syncSketchControls(){
 let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
 let multi=[]; // meerdere geselecteerde balken [{type,id}] (kaderselectie); leeg = enkelvoudige selectie
 let marquee=null;
+let backdropImg=null,backdropSrc='',calibrate=null,backdropMove=null; // foto-achtergrond
+function ensureBackdropEl(){if(backdropImg)return backdropImg;backdropImg=document.createElement('img');backdropImg.id='backdropImg';backdropImg.alt='';backdropImg.setAttribute('aria-hidden','true');
+  backdropImg.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:0;transform-origin:0 0;display:none;max-width:none;user-select:none';
+  const host=canvas.parentElement;if(host&&host.insertBefore)host.insertBefore(backdropImg,host.firstChild);return backdropImg;}
+function backdropActive(){const bd=project.backdrop;return !!(bd&&bd.on&&bd.view===currentView&&viewAxes());}
+function drawBackdrop(){
+  const el=ensureBackdropEl(),bd=project.backdrop;
+  if(!backdropActive()){el.style.display='none';return;}
+  if(backdropSrc!==bd.photo){backdropSrc=bd.photo;el.src=bd.photo;}
+  const nw=el.naturalWidth,nh=el.naturalHeight;if(!nw||!nh){el.onload=()=>draw();return;}
+  const plane=viewAxes(),wh=bd.widthMm*nh/nw;
+  const pt=(h,v)=>{const w={x:0,y:0,z:0};w[plane[0]]=h;w[plane[1]]=v;return toScreen([w.x,w.y,w.z]);};
+  const tl=pt(bd.x,bd.y+wh),br=pt(bd.x+bd.widthMm,bd.y);
+  el.style.display='block';el.style.left=Math.min(tl.x,br.x)+'px';el.style.top=Math.min(tl.y,br.y)+'px';
+  el.style.width=Math.abs(br.x-tl.x)+'px';el.style.height=Math.abs(br.y-tl.y)+'px';el.style.opacity=String(bd.opacity);
+}
 const isSel=o=>!!o&&((selected&&o.id===selected.id)||multi.some(m=>m.type===o.type&&m.id===o.id));
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null,lastSaveOk=true;
@@ -463,6 +479,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   scale=fitting*camera.zoom;
   objects();shapes.sort((a,b)=>b.depth-a.depth);
   hitShapes=shapes.filter(s=>s.owner);
+  drawBackdrop();
   const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY,eye:cameraDistance,parallel:sketchSettings.parallel});
   if(!gpuRendered){
     for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(isSel(s.owner)){ctx.strokeStyle=multi.length?'#d9822b':'#438f77';ctx.lineWidth=2;ctx.stroke();}}
@@ -628,10 +645,10 @@ function deliveryFormHTML(){
 }
 const deliveryPhotosHTML=()=>deliveryDraft.photos.map((p,i)=>`<div style="position:relative"><img src="${p}" alt="Foto ${i+1}" style="width:96px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9"><button class="outline-btn delete-btn" style="position:absolute;top:2px;right:2px;min-height:24px;width:24px;padding:0" data-deliver="rm:${i}" aria-label="Foto verwijderen">✕</button></div>`).join('')||'<span class="mini-note">Nog geen foto\'s</span>';
 function showDeliver(){if(SHARE)openModal('AANLEVEREN','Aanleveren (maten & foto\'s)',deliveryFormHTML());}
-function compressImageFile(file){return new Promise((res,rej)=>{
+function compressImageFile(file,startDim){return new Promise((res,rej)=>{
  if(!(/^image\//.test(file.type)||/\.(jpe?g|png|webp)$/i.test(file.name)))return rej(new Error('Geen afbeelding'));
  const url=URL.createObjectURL(file),img=new Image();
- img.onload=()=>{URL.revokeObjectURL(url);let maxDim=1280,q=.72;
+ img.onload=()=>{URL.revokeObjectURL(url);let maxDim=startDim||1280,q=.72;
   for(let i=0;i<7;i++){const s=Math.min(1,maxDim/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');
    c.width=Math.max(1,Math.round(img.naturalWidth*s));c.height=Math.max(1,Math.round(img.naturalHeight*s));
    c.getContext('2d').drawImage(img,0,0,c.width,c.height);const out=c.toDataURL('image/jpeg',q);
@@ -682,6 +699,41 @@ async function checkShareHash(){
  try{const parsed=await SHARE.decodeLinkData(data);try{window.history.replaceState(null,'',location.pathname+location.search);}catch(_){}receivePayload(parsed);}
  catch(e){toast('Link kon niet worden gelezen: '+e.message);}
 }
+function backdropHTML(){
+ const bd=project.backdrop,viewName={front:'Voor',side:'Zij',top:'Boven'};
+ let h=`<div class="notice-small" style="margin-top:0">Gebruik een foto (bijv. van de plek waar de buitenkeuken komt) als <strong>achtergrond in een 2D-aanzicht</strong>. Stel de schaal in met twee punten waarvan je de echte afstand kent, en bouw er dan overheen. Het is een hulpmiddel om op af te tekenen, geen exacte perspectiefcorrectie: maak de foto zo recht mogelijk, vlak van voren.</div>`;
+ h+=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-top:10px"><button class="primary-btn" data-bd="pick">🖼 Foto kiezen</button><button class="outline-btn" data-bd="camera">📷 Foto maken</button>${project.room?.photo&&!project.room.photo.startsWith('blob')?'<button class="outline-btn" data-bd="useRoom">Ruimtefoto gebruiken</button>':''}</div>`;
+ if(bd){
+  h+=`<h4 class="cut-section">WEERGAVE</h4><div class="field-grid"><label class="field">Zichtbaar in aanzicht<select data-bdf="view">${Object.entries(viewName).map(([k,v])=>`<option value="${k}" ${bd.view===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="field">Zichtbaarheid (${Math.round(bd.opacity*100)}%)<input data-bdf="opacity" type="range" min="10" max="100" step="5" value="${Math.round(bd.opacity*100)}"></label></div>`;
+  h+=`<label class="field" style="flex-direction:row;gap:8px;align-items:center"><input data-bdf="on" type="checkbox" ${bd.on?'checked':''}> Foto tonen</label>`;
+  h+=`<h4 class="cut-section">SCHAAL EN POSITIE</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-bd="calibrate">📏 Schaal instellen met twee punten</button><button class="outline-btn" data-bd="move">✥ Foto verslepen</button></div>`;
+  h+=`<div class="field-grid"><label class="field">Breedte foto (mm)<input data-bdf="widthMm" type="number" step="10" value="${bd.widthMm}"></label><label class="field">Positie links (mm)<input data-bdf="x" type="number" step="10" value="${bd.x}"></label><label class="field">Positie onder (mm)<input data-bdf="y" type="number" step="10" value="${bd.y}"></label></div>`;
+  h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="outline-btn" data-bd="remove">Foto verwijderen</button></div><p class="mini-note">De foto blijft alleen in dit project op dit apparaat; hij gaat niet mee in deel-links.</p>`;
+ }
+ return h;
+}
+function showBackdrop(){openModal('FOTO','Foto als achtergrond',backdropHTML());}
+function setBackdrop(photo){
+ const old=project.backdrop;
+ commit(()=>{const img=new Image();img.src=photo;
+  project.backdrop=M.normalizeBackdrop({photo,on:true,view:old?.view||'front',opacity:old?.opacity||.5,widthMm:old?.widthMm||Math.max(2500,Math.round(project.width*1.6)),x:old?.x??-Math.round((Math.max(2500,Math.round(project.width*1.6))-project.width)/2),y:old?.y||0});});
+ if(!project.backdrop){toast('Foto is te groot of geen JPEG');return;}
+ if(!viewAxes()||currentView==='bottom')setView('front');else if(project.backdrop.view!==currentView)setView(project.backdrop.view);
+ showBackdrop();draw();
+}
+async function backdropFile(file){
+ if(!file)return;
+ try{setBackdrop(await compressImageFile(file,1800));}catch(e){toast(file.name+': '+e.message);}
+}
+function backdropAction(act){
+ if(act==='pick')$('#backdropInput').click();
+ else if(act==='camera')$('#backdropCamera').click();
+ else if(act==='useRoom'){const ph=project.room?.photo;if(ph&&/^data:image\/jpeg/.test(ph))setBackdrop(ph);else toast('Ruimtefoto is geen JPEG');}
+ else if(act==='remove'){commit(()=>{delete project.backdrop;});showBackdrop();draw();}
+ else if(act==='calibrate'){closeModal();calibrate={a:null,b:null};backdropMove=null;toast('Klik het eerste punt op de foto');$('#drawHelp').classList.remove('hidden');$('#drawHelp').textContent='Foto-schaal: klik het eerste punt, dan het tweede punt waarvan je de afstand weet · Esc stopt';canvas.classList.add('draw-active');}
+ else if(act==='move'){closeModal();backdropMove=true;calibrate=null;$('#drawHelp').classList.remove('hidden');$('#drawHelp').textContent='Sleep de foto naar de juiste plek · Esc of klik op Selecteer om te stoppen';canvas.classList.add('draw-active');}
+}
+function stopBackdropTools(){if(calibrate||backdropMove){calibrate=null;backdropMove=null;canvas.classList.remove('draw-active');if(!drawMode&&!measureMode)$('#drawHelp').classList.add('hidden');}}
 function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
 function safeName(){return (project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'douglas';}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
@@ -726,6 +778,7 @@ document.addEventListener('click',e=>{
   const beamCard=e.target.closest('[data-select-beam]');
   const frameCard=e.target.closest('[data-select-frame]');
   const pa=e.target.closest('[data-proj]');if(pa){projectAction(pa.dataset.proj);return;}
+  const bda=e.target.closest('[data-bd]');if(bda){backdropAction(bda.dataset.bd);return;}
   const sa=e.target.closest('[data-share]');if(sa){shareAction(sa.dataset.share);return;}
   const da=e.target.closest('[data-deliver]');if(da){deliverAction(da.dataset.deliver);return;}
   const ra=e.target.closest('[data-recv]');if(ra){receiveAction(ra.dataset.recv);return;}
@@ -825,6 +878,14 @@ document.addEventListener('pointerup',e=>{
 });
 document.addEventListener('pointercancel',()=>{paletteGesture=null;$('#paletteDragGhost').classList.add('hidden');document.body?.classList.remove('beam-mobile-drag');});
 $('#inspector').addEventListener('change',handleInput);
+$('#modalContent').addEventListener('input',e=>{const f=e.target.dataset?.bdf;if(f==='opacity'&&project.backdrop){project.backdrop.opacity=M.clamp(+e.target.value/100,.1,1);draw();}});
+$('#modalContent').addEventListener('change',e=>{const f=e.target.dataset?.bdf;if(!f||!project.backdrop)return;
+  commit(()=>{const bd=project.backdrop;if(f==='on')bd.on=e.target.checked;else if(f==='view')bd.view=e.target.value;else if(f==='opacity')bd.opacity=M.clamp(+e.target.value/100,.1,1);else bd[f]=+e.target.value;project.backdrop=M.normalizeBackdrop(bd);});
+  if(f==='view'||f==='on'){if(project.backdrop.on&&project.backdrop.view!==currentView)setView(project.backdrop.view);}
+  showBackdrop();draw();});
+$('#backdropInput')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
+$('#backdropCamera')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
+$('#backdropTool')?.addEventListener('click',showBackdrop);
 $('#sidebar').addEventListener('change',updateSettings);
 $('#sketchGridVisible')?.addEventListener('change',e=>setSketchSetting('visible',e.target.checked));
 $('#sketchGridStep')?.addEventListener('change',e=>setSketchSetting('step',Number(e.target.value)));
@@ -863,6 +924,7 @@ window.addEventListener('keydown',e=>{
   if(key==='escape'){
     $('#shortcutHelp').classList.add('hidden');
     if(armedBeamType)disarmBeam();
+    if(calibrate||backdropMove){stopBackdropTools();draw();}
     if(multi.length){setSelected(null,null);}
     if(measureMode)toggleMeasureMode(false);
     if(drawMode)toggleDrawMode(false);
@@ -894,6 +956,19 @@ canvas.addEventListener('pointerdown',e=>{
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
     dragging={mode:'move-kitchen',before:JSON.stringify(project),startPlacement:{...project.room.placement},startX:e.offsetX,startY:e.offsetY,moved:false};
     return;
+  }
+  if(calibrate){
+    const pt=drawPoint(e.offsetX,e.offsetY);if(!pt)return;
+    if(!calibrate.a){calibrate.a=pt;calibrate.b=pt;toast('Klik nu het tweede punt');draw();return;}
+    const plane=viewAxes(),r=D.measure(calibrate.a,pt,plane);if(!r||r.dist<5){toast('Kies een tweede punt verder weg');return;}
+    const real=window.prompt(`Wat is de echte afstand tussen deze twee punten in mm?\n(Nu staat de foto op ${r.dist} mm)`,String(r.dist));
+    const next=M.backdropScale(project.backdrop,calibrate.a,pt,plane,real);
+    if(next){commit(()=>{project.backdrop=next;});toast(`Foto geschaald: ${fmt(next.widthMm)} mm breed`);}else toast('Geen geldige afstand ingevoerd');
+    stopBackdropTools();draw();showBackdrop();return;
+  }
+  if(backdropMove&&project.backdrop){
+    pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+    dragging={mode:'move-backdrop',before:JSON.stringify(project),startX:e.offsetX,startY:e.offsetY,moved:false,start:{x:project.backdrop.x,y:project.backdrop.y},ref:{x:0,y:0,z:0}};return;
   }
   if(measureMode){
     const pt=drawPoint(e.offsetX,e.offsetY);if(!pt)return;
@@ -962,6 +1037,10 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
     }
     return;
   }
+  if(dragging.mode==='move-backdrop'){
+    const plane=viewAxes(),d=dragWorldDelta(e.offsetX-dragging.startX,e.offsetY-dragging.startY,dragging.ref);
+    project.backdrop.x=Math.round(dragging.start.x+d[plane[0]]);project.backdrop.y=Math.round(dragging.start.y+d[plane[1]]);draw();return;
+  }
   if(dragging.mode==='marquee'){
     if(dragging.moved){marquee={x0:dragging.x0,y0:dragging.y0,x1:e.offsetX,y1:e.offsetY};draw();}
     return;
@@ -1008,6 +1087,11 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';Array.from(document.querySelectorAll('.view-btn')).forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){
+  if(dragging?.mode==='move-backdrop'){
+    const d=dragging;dragging=null;pointers.delete(e.pointerId);
+    if(JSON.stringify(project)!==d.before){undoStack.push(d.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();}
+    draw();return;
+  }
   if(dragging?.mode==='marquee'){
     const d=dragging;dragging=null;pointers.delete(e.pointerId);const r=marquee;marquee=null;
     if(!d.moved||!r){if(multi.length||selected)setSelected(null,null);else draw();return;}
