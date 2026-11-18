@@ -1,3 +1,9 @@
+## Ongepubliceerd — wanden, deur en bekleding (kapschuur)
+
+- Plattegrond-zones krijgen wanden (achter/voor/links/rechts) en een deur (900 × 2050 mm, positie instelbaar). Gevelbekleding wordt een wandpaneel rond het frame; de deuropening krijgt twee stijlen en een bovendorpel, regels worden vrijgehouden.
+- Nieuw: panelen (`project.panels`): dunne platen zonder constructiefunctie; selecteerbaar, aanpasbaar en te verwijderen. Materiaallijst telt gevelbekleding (m², met verlies) en buitendeuren.
+- In het plan ligt de achterzijde op Z=0; het model spiegelt dat zodat de voorzijde bij de 3D-weergave klopt (pergola voor, berging met deur rechts naast het zitgedeelte).
+
 ## Ongepubliceerd — start vanuit plattegrond
 
 - Knop 📐 Plattegrond: definieer zones (open overkapping, gesloten ruimte, pergola) met buitenmaten en hoogte, en maak er een nieuw 3D-project van losse balken van (staanders 100×100, bovenliggers 50×150, regels, pergola-latten). Gedeelde wanden tussen zones, geen overlappende balken (getest), buitencontour klopt. Voorbeelden: kapschuur uit de PDF en variant met houthok.

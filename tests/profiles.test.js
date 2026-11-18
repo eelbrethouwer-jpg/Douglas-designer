@@ -137,3 +137,31 @@ test('plattegrond: ongeldige invoer en grenzen',()=>{
  const r=M.planFrame(many);assert.equal(r.beams.length,100);assert.ok(r.truncated>0);
  assert.deepEqual(M.planFrame(null).beams,[]);
 });
+test('wanden, deur en bekleding: panelen, kozijn, geen conflicten, materiaallijst',()=>{
+ const Mat=require('../materials.js');
+ const zones=[{name:'Zit',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}];
+ const r=M.planFrame({zones});
+ const door=r.panels.filter(q=>q.kind==='door'),clad=r.panels.filter(q=>q.kind==='cladding');
+ assert.equal(door.length,1);assert.equal(door[0].w,900);assert.equal(door[0].h,2030);
+ assert.ok(clad.length>=6);assert.ok(r.panels.every(q=>q.w>=1&&q.h>=1&&q.d>=1));
+ // voorwand berging: opening laat deur vrij, geen paneel overlapt het deurvlak
+ const front=clad.filter(q=>q.d===20&&q.z===4050);
+ assert.ok(front.every(q=>q.x+q.w<=door[0].x-100+1||q.x>=door[0].x+door[0].w+100-1||q.y>=2050),'bekleding laat de opening vrij');
+ assert.ok(r.beams.some(b=>/Deurstijl/.test(b.name))&&r.beams.some(b=>/Bovendorpel/.test(b.name)));
+ // buitencontour: geen paneel steekt buiten 9000 × 6500
+ assert.ok(r.panels.every(q=>q.x>=0&&q.x+q.w<=9000&&q.z>=0&&q.z+q.d<=6500));
+ // geen twee bekledingspanelen vlak op elkaar (z-fighting)
+ for(let i=0;i<clad.length;i++)for(let j=i+1;j<clad.length;j++){const a=clad[i],b=clad[j];
+  const ov=(k,l)=>Math.min(a[k]+a[l],b[k]+b[l])-Math.max(a[k],b[k]);assert.ok(!(ov('x','w')>1&&ov('y','h')>1&&ov('z','d')>1),a.name+' x '+b.name);}
+ const p=M.normalizeProject({...M.freeProject(),width:9000,depth:6500,height:2700,plan:{zones},beams:r.beams,panels:r.panels});
+ assert.equal(p.panels.length,r.panels.length);
+ const c=M.conflicts(p);assert.equal(c.overlaps.length,0,c.overlaps.map(([a,b])=>a.name+'/'+b.name).join());assert.equal(c.unsupported.length,0,c.unsupported.map(b=>b.name).join());
+ const g=Mat.build(p,M).groups.flatMap(x=>x.lines),bek=g.find(l=>l.id==='bekleding'),dr=g.find(l=>l.id==='deuren');
+ assert.ok(bek&&bek.qty>10&&bek.qty<80,JSON.stringify(bek));assert.equal(dr.qty,1);
+ // panelen normaliseren
+ assert.deepEqual(M.normalizePanels('x'),[]);const q=M.normalizePanels([{name:'<i>',kind:'x',w:-1,h:99999,d:'a',color:'red'}])[0];
+ assert.deepEqual([q.name,q.kind,q.w,q.h,q.d,q.color],['i','cladding',1,10000,20,'#1d2124']);
+ assert.equal(M.normalizePanels(new Array(80).fill({})).length,60);
+ assert.equal(M.normalizePlan({zones:[{kind:'closed'}]}).zones[0].walls,'nesw');assert.equal(M.normalizePlan({zones:[{kind:'open'}]}).zones[0].walls,'');
+ assert.equal(M.normalizePlan({zones:[{door:{edge:'q'}}]}).zones[0].door,null);
+});

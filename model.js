@@ -118,21 +118,45 @@
     p.modules=[];p.beams=[];p.countertop=false;return p;
   }
   // ---------- Plattegrond-start: zones (rechthoeken) → een 3D-houtconstructie van losse balken ----------
+  // Wand- en deurpanelen (dunne platen): bekleding rond het frame. Geen constructie; telt mee in de materiaallijst.
+  const PANEL_KINDS={cladding:'Gevelbekleding',door:'Deur'};
+  function normalizePanels(list){
+    if(!Array.isArray(list))return [];
+    return list.slice(0,60).map(q=>{
+      if(!q||typeof q!=='object')return null;
+      const dim=(v,lo,hi,def)=>clamp(round(number(v,def)),lo,hi);
+      return {id:String(q.id||uid()).slice(0,40),name:String(q.name||'Paneel').replace(/[\u0000-\u001f<>]/g,'').slice(0,60),
+        kind:PANEL_KINDS[q.kind]?q.kind:'cladding',
+        x:dim(q.x,-20000,40000,0),y:dim(q.y,-20000,10000,0),z:dim(q.z,-20000,40000,0),
+        w:dim(q.w,1,20000,20),h:dim(q.h,1,10000,20),d:dim(q.d,1,20000,20),
+        color:/^#[0-9a-fA-F]{6}$/.test(q.color||'')?q.color:(q.kind==='door'?'#a8743a':'#1d2124')};
+    }).filter(Boolean);
+  }
   const ZONE_KINDS={open:'Open overkapping',closed:'Gesloten ruimte',pergola:'Pergola'};
+  function normalizeDoor(raw){
+    if(!raw||typeof raw!=='object'||!'nesw'.includes(String(raw.edge||'x')[0])||!raw.edge)return null;
+    return {edge:String(raw.edge)[0],offset:clamp(round(number(raw.offset,150)),0,12000),width:clamp(round(number(raw.width,900)),600,2000),height:clamp(round(number(raw.height,2050)),1800,2600)};
+  }
   function normalizePlan(raw){
     if(!raw||typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.zones))return null;
     const zones=raw.zones.slice(0,8).map((z,i)=>z&&typeof z==='object'?({
       id:String(z.id||'z'+(i+1)).slice(0,20),name:String(z.name||('Zone '+(i+1))).replace(/[\u0000-\u001f<>]/g,'').slice(0,40),
       kind:ZONE_KINDS[z.kind]?z.kind:'open',
       x:clamp(round(number(z.x,0)),0,20000),z:clamp(round(number(z.z,0)),0,20000),
-      w:clamp(round(number(z.w,2000)),600,12000),d:clamp(round(number(z.d,2000)),600,12000),h:clamp(round(number(z.h,2500)),1200,4000)
+      w:clamp(round(number(z.w,2000)),600,12000),d:clamp(round(number(z.d,2000)),600,12000),h:clamp(round(number(z.h,2500)),1200,4000),
+      walls:typeof z.walls==='string'?[...new Set(z.walls.split('').filter(c=>'nesw'.includes(c)))].join(''):((z.kind==='closed')?'nesw':''),
+      door:normalizeDoor(z.door)
     }):null).filter(Boolean);
     return zones.length?{zones}:null;
   }
   // Maakt staanders (100×100), bovenliggers (50×150) en bij gesloten zones tussenregels; pergola krijgt dwarslatten.
   // Hartlijnen liggen 50 mm binnen de buitencontour, zodat de buitenmaat klopt. Dak niet inbegrepen (balken zijn recht).
   function planFrame(plan){
-    const pl=normalizePlan(plan);if(!pl)return {beams:[],truncated:0,bounds:{width:0,depth:0,height:0}};
+    const pl0=normalizePlan(plan);if(!pl0)return {beams:[],panels:[],truncated:0,bounds:{width:0,depth:0,height:0}};
+    // In het plan ligt de achterzijde op z=0; in het model (en de 3D-weergave) is de voorzijde z=0. Spiegel de diepte-as,
+    // en wissel de zijden achter/voor (n↔s) van wanden en deuren mee.
+    const swapNS=c=>c==='n'?'s':c==='s'?'n':c,maxZ0=Math.max(...pl0.zones.map(q=>q.z+q.d));
+    const pl={zones:pl0.zones.map(q=>({...q,z:maxZ0-(q.z+q.d),walls:q.walls.split('').map(swapNS).join(''),door:q.door?{...q.door,edge:swapNS(q.door.edge)}:null}))};
     const POST='100x100',PLATE='50x150',RAIL='50x100',PS=100,plateT=PROFILES[PLATE].t,plateS=PROFILES[PLATE].s;
     const Z=pl.zones,out=[],posts=new Map(),segs=new Map();
     // een rand is gedeeld als een andere zone dezelfde lijn aan de overzijde heeft met overlappend bereik
@@ -143,12 +167,14 @@
         if(side==='n')return o.z+o.d===zone.z;
         return o.z===zone.z+zone.d;});
     };
+    const info=[],panels=[],clips=[]; // clips: [{axis,fixed,lo,hi}] stukken van regels die vrij moeten blijven (deuropeningen)
     const addPost=(cx,cz,h,name)=>{const k=cx+','+cz,old=posts.get(k);if(old){if(h<old.h)old.h=h;return;}posts.set(k,{cx,cz,h,name});};
     const addSeg=(axis,fixed,lo,hi,y,profile,name)=>{ // fixed = hartlijn op de andere vloeras; lo/hi langs axis
       const k=axis+'|'+fixed+'|'+y+'|'+profile;let a=segs.get(k);if(!a){a={axis,fixed,y,profile,name,list:[]};segs.set(k,a);}a.list.push([lo,hi]);};
     for(const zn of Z){
       const x0=zn.x+(edgeShared(zn,'w')?0:PS/2),x1=zn.x+zn.w-(edgeShared(zn,'e')?0:PS/2);
       const z0=zn.z+(edgeShared(zn,'n')?0:PS/2),z1=zn.z+zn.d-(edgeShared(zn,'s')?0:PS/2);
+      info.push({zn,x0,x1,z0,z1});
       const top=zn.h,postLen=top-plateT;
       // staanders: hoeken, bij gesloten zones tussenstaanders (≤ 2500 mm h.o.h.)
       const xs=[x0,x1],zs=[z0,z1];
@@ -171,6 +197,39 @@
         for(let i=1;i<n;i++){const px=Math.round((x0+(x1-x0)*i/n)/5)*5;addSeg('z',px,z0,z1,top-50,'50x50','Dwarslat '+zn.name);}
       }
     }
+    // deuren en wandpanelen
+    const closedNeighbour=(zn,side)=>Z.some(o=>o!==zn&&o.kind==='closed'&&(
+      side==='w'?o.x+o.w===zn.x&&o.z<zn.z+zn.d&&o.z+o.d>zn.z:side==='e'?o.x===zn.x+zn.w&&o.z<zn.z+zn.d&&o.z+o.d>zn.z:
+      side==='n'?o.z+o.d===zn.z&&o.x<zn.x+zn.w&&o.x+o.w>zn.x:o.z===zn.z+zn.d&&o.x<zn.x+zn.w&&o.x+o.w>zn.x));
+    const CLAD='#262b2e',DOOR='#a8743a',PT=20,YB=100;
+    const addPanel=(kind,name,x,y,z,w,h,d)=>{if(w>=1&&h>=1&&d>=1)panels.push({id:uid(),name,kind,x:Math.round(x),y:Math.round(y),z:Math.round(z),w:Math.round(w),h:Math.round(h),d:Math.round(d),color:kind==='door'?DOOR:CLAD});};
+    for(const {zn,x0,x1,z0,z1} of info){
+      const door=zn.door;
+      for(const side of zn.walls||''){
+        if(closedNeighbour(zn,side)&&!(door&&door.edge===side))continue;
+        const alongX=side==='n'||side==='s',line=side==='w'?x0:side==='e'?x1:side==='n'?z0:z1;
+        const outer=side==='w'||side==='n'?line-PS/2:line+PS/2-PT; // buitenzijde van de staanders
+        const a0=alongX?x0-(edgeShared(zn,'w')?0:PS/2):z0+PS/2,a1=alongX?x1+(edgeShared(zn,'e')?0:PS/2):z1-PS/2;
+        const wallH=zn.h-YB;
+        const put=(kind,name,lo,hi,y,h)=>{if(hi-lo<5)return;
+          if(alongX)addPanel(kind,name,lo,y,outer,hi-lo,h,PT);else addPanel(kind,name,outer,y,lo,PT,h,hi-lo);};
+        if(door&&door.edge===side){
+          const start=(alongX?zn.x:zn.z)+door.offset,d0=start,d1=start+door.width,H=door.height;
+          if(d0-PS<a0||d1+PS>a1){/* deur past niet in deze wand: geen opening maken */ put('cladding','Gevelbekleding '+zn.name,a0,a1,YB,wallH);continue;}
+          put('cladding','Gevelbekleding '+zn.name,a0,d0-PS,YB,wallH);put('cladding','Gevelbekleding '+zn.name,d1+PS,a1,YB,wallH);
+          put('cladding','Gevelbekleding boven deur',d0-PS,d1+PS,H,zn.h-H);
+          // deurpaneel iets dikker en dichter bij de buitenkant
+          const dOut=(side==='s'||side==='e')?outer-PT:outer;
+          if(alongX)addPanel('door','Deur '+zn.name,d0,20,dOut,door.width,H-20,PT*2);else addPanel('door','Deur '+zn.name,dOut,20,d0,PT*2,H-20,door.width);
+          // kozijn: twee stijlen (100×100) en een bovendrempel (50×100) tussen de stijlen
+          const jambLen=H+100,perp=line-PS/2;
+          if(alongX){out.push({id:uid(),name:'Deurstijl '+zn.name,axis:'y',length:jambLen,x:d0-PS,y:0,z:perp,profile:POST},{id:uid(),name:'Deurstijl '+zn.name,axis:'y',length:jambLen,x:d1,y:0,z:perp,profile:POST},
+            {id:uid(),name:'Bovendorpel '+zn.name,axis:'x',length:d1-d0,x:d0,y:H,z:line-25,profile:RAIL});clips.push({axis:'x',fixed:line,lo:d0-PS,hi:d1+PS});}
+          else{out.push({id:uid(),name:'Deurstijl '+zn.name,axis:'y',length:jambLen,x:perp,y:0,z:d0-PS,profile:POST},{id:uid(),name:'Deurstijl '+zn.name,axis:'y',length:jambLen,x:perp,y:0,z:d1,profile:POST},
+            {id:uid(),name:'Bovendorpel '+zn.name,axis:'z',length:d1-d0,x:line-25,y:H,z:d0,profile:RAIL});clips.push({axis:'z',fixed:line,lo:d0-PS,hi:d1+PS});}
+        }else put('cladding','Gevelbekleding '+zn.name,a0,a1,YB,wallH);
+      }
+    }
     // staanders
     for(const p of posts.values())out.push({id:uid(),name:'Staander '+p.name,axis:'y',length:p.h,x:p.cx-PS/2,y:0,z:p.cz-PS/2,profile:POST});
     // segmenten: overlappende bereiken samenvoegen (gedeelde wanden), uiteinden 25 mm inkorten ter plekke van kruisende liggers
@@ -189,6 +248,15 @@
           let start=cuts[i],end=cuts[i+1];
           if(a.axis==='z'&&(a.profile===PLATE||a.profile==='50x50')){start+=plateS/2;end-=plateS/2;} // tussen de x-liggers
           if(a.profile===RAIL){start+=PS/2;end-=PS/2;} // tussen de staanders
+          if(a.profile===RAIL){
+            const hit=clips.find(c=>c.axis===a.axis&&c.fixed===a.fixed&&c.lo<end&&c.hi>start);
+            if(hit){ // laat de deuropening vrij: knip het stuk rond de opening
+              const parts=[];if(hit.lo-start>=50)parts.push([start,hit.lo]);if(end-hit.hi>=50)parts.push([hit.hi,end]);
+              for(const [ps,pe] of parts){const len=Math.round(pe-ps);
+                if(a.axis==='x')out.push({id:uid(),name:a.name,axis:'x',length:len,x:ps,y:a.y,z:a.fixed-pr.s/2,profile:a.profile});
+                else out.push({id:uid(),name:a.name,axis:'z',length:len,x:a.fixed-pr.s/2,y:a.y,z:ps,profile:a.profile});}
+              continue;}
+          }
           const length=Math.round(end-start);if(length<50)continue;
           if(a.axis==='x')out.push({id:uid(),name:a.name,axis:'x',length,x:start,y:a.y,z:a.fixed-pr.s/2,profile:a.profile});
           else out.push({id:uid(),name:a.name,axis:'z',length,x:a.fixed-pr.s/2,y:a.y,z:start,profile:a.profile});
@@ -198,7 +266,7 @@
     // pergola-latten liggen boven de bovenliggers (y = top van de zone)
     const maxX=Math.max(...Z.map(z=>z.x+z.w)),maxZ=Math.max(...Z.map(z=>z.z+z.d)),maxH=Math.max(...Z.map(z=>z.h));
     const beams=out.slice(0,100).map(b=>({...b,length:clamp(Math.round(b.length),50,6500),x:Math.round(b.x),y:Math.round(b.y),z:Math.round(b.z)}));
-    return {beams,truncated:Math.max(0,out.length-100),bounds:{width:maxX,depth:maxZ,height:maxH}};
+    return {beams,panels:normalizePanels(panels),truncated:Math.max(0,out.length-100),bounds:{width:maxX,depth:maxZ,height:maxH}};
   }
   function resizeBeamEndpoint(beam, endpoint, newCoordinate, step=5) {
     if(!beam || !['x','y','z'].includes(beam.axis) || !Number.isFinite(newCoordinate))return false;
@@ -243,6 +311,7 @@
     {const ref=normalizeReference(raw.reference);if(ref)p.reference=ref;}
     {const bd=normalizeBackdrop(raw.backdrop);if(bd)p.backdrop=bd;}
     {const sc=normalizeScan(raw.scan);if(sc)p.scan=sc;}
+    {const pn=normalizePanels(raw.panels);if(pn.length)p.panels=pn;}
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
       name:String(m.name||TYPES[m.kind].label).slice(0,60),
@@ -501,5 +570,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,ZONE_KINDS,normalizePlan,planFrame,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,PANEL_KINDS,normalizePanels,ZONE_KINDS,normalizePlan,planFrame,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

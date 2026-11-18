@@ -64,6 +64,14 @@
       panels.push(line('fronten', 'Frontpanelen deuren/lades (m²)', ceil1(area * waste), 'm²',
         `${frontMods.length} kast(en) × opening × ${openingHeight} mm hoog, indicatief`));
     }
+    const wallPanels = (p.panels || []).filter(x => x.kind === 'cladding'), doorPanels = (p.panels || []).filter(x => x.kind === 'door');
+    if (wallPanels.length) {
+      // Oppervlak = zichtvlak per paneel (lengte × hoogte); de dunne zijde telt niet mee.
+      const area = wallPanels.reduce((s, x) => s + (Math.max(x.w, x.d) * x.h), 0) / 1e6;
+      panels.push(line('bekleding', 'Gevelbekleding / rabatdelen (m²)', ceil1(area * waste), 'm²',
+        `${wallPanels.length} wandvlak(ken), ${ceil1(area)} m² + ${m.wastePct}% verlies`));
+    }
+    if (doorPanels.length) panels.push(line('deuren', 'Buitendeur(en) (st)', doorPanels.length, 'st', doorPanels.map(x => `${Math.max(x.w, x.d)} × ${x.h} mm`).join(', ')));
     if (panels.length) groups.push({title: 'Platen & werkblad', lines: panels});
 
     // 4. Beslag.

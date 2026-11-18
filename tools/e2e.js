@@ -264,8 +264,13 @@ const scenarios=[
    await b.eval(`document.querySelector('[data-plan="generate"]').click()`);await sleep(900);
    t.ok('nieuw project met 9.000 × 6.500 mm en conflictvrije balken',await b.eval(`(()=>{const p=${activeProject};return p.width===9000&&p.depth===6500&&p.beams.length>=35&&!!p.plan}`+`)()`));
    t.ok('oude project blijft bewaard naast Kapschuur',await b.eval(`(()=>{const n=${indexNames};return n.includes('Kapschuur')&&n.includes('Mijn buitenkeuken')})()`));
+   t.ok('wand- en deurpanelen aangemaakt (1 deur)',await b.eval(`(()=>{const p=${activeProject};return p.panels&&p.panels.length>=6&&p.panels.filter(q=>q.kind==='door').length===1}`+`)()`));
    await sleep(500);await b.shot(path.join(OUT,'plattegrond-3d.png'));
-   await b.click('.view-btn[data-view="top"]');await sleep(500);await b.shot(path.join(OUT,'plattegrond-boven.png'));
+   await b.click('.view-btn[data-view="front"]');await sleep(600);await b.shot(path.join(OUT,'plattegrond-voor.png'));
+   await b.eval(`document.querySelector('#showCutlist, #openCutlist')?.click()`);await sleep(600);
+   t.ok('materiaallijst toont gevelbekleding en deur',await b.eval(`/Gevelbekleding/.test(document.querySelector('#modalContent').textContent)&&/Buitendeur/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(300);
+   await b.click('.view-btn[data-view="3d"]');await sleep(300);await b.click('.view-btn[data-view="top"]');await sleep(500);await b.shot(path.join(OUT,'plattegrond-boven.png'));
    // kaderselectie in Boven-aanzicht over de berging en verplaatsen
    const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {l:c.left,t:c.top,w:c.width,h:c.height}})()`);
    await b.mouse('mouseMoved',r.l+r.w*0.55,r.t+r.h*0.30,{buttons:0});await b.mouse('mousePressed',r.l+r.w*0.55,r.t+r.h*0.30);

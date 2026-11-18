@@ -137,7 +137,7 @@ function switchProject(id){
  project=normalize(raw);store.setActive(id);resetSession();render();closeModal();toast('Geopend: '+project.name);
 }
 function history(dir){multi=[];const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
-function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);return null;}
+function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);if(selected.type==='panel')return (project.panels||[]).find(b=>b.id===selected.id);return null;}
 function setSelected(type,id){
   multi=[];selected=id?{type,id}:null;beamMoveMode=false;render();
   if(window.innerWidth<=800){
@@ -289,6 +289,12 @@ function renderInspector(){
     foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="openCutlist">▤ Zaaglijst & materiaal bekijken →</button><button class="outline-btn full" id="imageBtn">↓ 3D-aanzicht opslaan (PNG)</button></div>';
     return;
   }
+  if(selected.type==='panel'){
+    $('#inspectorTitle').textContent=obj.kind==='door'?'Deur':'Wandpaneel';
+    body.innerHTML=`<div class="preview-icon">▭</div><p class="inspector-label">${esc(M.PANEL_KINDS[obj.kind]||'Paneel').toUpperCase()} — GEEN CONSTRUCTIE</p><label class="field">Naam<input data-edit="name" value="${esc(obj.name)}"></label><div class="field-grid"><label class="field">Breedte (mm)<input data-edit="w" type="number" step="10" value="${obj.w}"></label><label class="field">Hoogte (mm)<input data-edit="h" type="number" step="10" value="${obj.h}"></label><label class="field">Dikte (mm)<input data-edit="d" type="number" step="5" value="${obj.d}"></label></div><div class="field-grid"><label class="field">X<input data-edit="x" type="number" step="10" value="${obj.x}"></label><label class="field">Y<input data-edit="y" type="number" step="10" value="${obj.y}"></label><label class="field">Z<input data-edit="z" type="number" step="10" value="${obj.z}"></label></div><p class="mini-note">Platen hebben geen draagfunctie en tellen mee in de materiaallijst (m² bekleding, aantal deuren).</p>`;
+    foot.innerHTML='<div class="right-foot-actions"><button class="danger-btn full" id="deleteSelected">Verwijder paneel</button></div>';
+    return;
+  }
   if(selected.type==='module'){
     const spec=M.TYPES[obj.kind];const kindOptions=Object.entries(M.TYPES).map(([k,v])=>`<option value="${k}" ${obj.kind===k?'selected':''}>${v.label}</option>`).join('');
     $('#inspectorTitle').textContent=obj.name;
@@ -397,6 +403,7 @@ function objects(){shapes=[];hitShapes=[];
   }
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
+  for(const q of project.panels||[])box(q.x,q.y,q.z,q.w,q.h,q.d,q.color,{type:'panel',id:q.id});
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
   if(project.countertop){const ct=M.countertopBox(project);box(ct.x,ct.y,ct.z,ct.w,ct.h,ct.d,RGB.top,null,gpu.ready?Infinity:110);}
  drawRoomGeometry();
@@ -824,31 +831,34 @@ function scanAction(act){
 // ---------- Plattegrond-start ----------
 const PLAN_PRESETS={
  kapschuur:{label:'Kapschuur (jouw PDF: zitgedeelte, berging, pergola)',name:'Kapschuur',zones:[
-  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
  houthok:{label:'Kapschuur met houthok (plattegrond-afbeelding)',name:'Kapschuur met houthok',zones:[
-  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2300},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
   {name:'Berging voor',kind:'closed',x:7500,z:1000,w:1500,d:1450,h:2300},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
  leeg:{label:'Eigen plattegrond (twee lege zones)',name:'Eigen plattegrond',zones:[
   {name:'Zone 1',kind:'open',x:0,z:0,w:3000,d:2500,h:2500},{name:'Zone 2',kind:'closed',x:3000,z:0,w:2500,d:2500,h:2400}]}
 };
-let planDraft=JSON.parse(JSON.stringify(PLAN_PRESETS.kapschuur)),planKey='kapschuur';
+const clonePreset=k=>{const p=JSON.parse(JSON.stringify(PLAN_PRESETS[k]));p.zones=M.normalizePlan({zones:p.zones}).zones;return p;};
+let planDraft=clonePreset('kapschuur'),planKey='kapschuur';
 function planPreview(){
  const r=M.planFrame({zones:planDraft.zones});
  const by={};for(const b of r.beams){const k=b.axis==='y'?'staanders':'liggers en regels';by[k]=(by[k]||0)+1;}
- return {r,text:`${r.beams.length} balken (${by.staanders||0} staanders, ${by['liggers en regels']||0} liggers/regels) · ${fmt(r.bounds.width)} × ${fmt(r.bounds.depth)} mm, ${fmt(r.bounds.height)} mm hoog`};
+ return {r,text:`${r.beams.length} balken (${by.staanders||0} staanders, ${by['liggers en regels']||0} liggers/regels), ${r.panels.length} wand-/deurpanelen · ${fmt(r.bounds.width)} × ${fmt(r.bounds.depth)} mm, ${fmt(r.bounds.height)} mm hoog`};
 }
 function planHTML(){
  const kinds=Object.entries(M.ZONE_KINDS),pv=planPreview();
  let h=`<div class="notice-small" style="margin-top:0">Begin met een <strong>plattegrond</strong>: elke zone is een rechthoek (buitenmaten, mm). De app bouwt er een houtconstructie van <strong>losse balken</strong> van, die je daarna in 3D bewerkt (verplaatsen, kader-selecteren, verlengen). Het is een start, geen constructieberekening, en <strong>het dak zit er niet in</strong> (balken zijn recht). Kloppen de maten niet, pas ze hier aan voordat je genereert.</div>`;
  h+=`<label class="field">Voorbeeld<select data-pl="preset">${Object.entries(PLAN_PRESETS).map(([k,v])=>`<option value="${k}" ${planKey===k?'selected':''}>${esc(v.label)}</option>`).join('')}</select></label>`;
- h+=`<h4 class="cut-section">ZONES</h4><div style="overflow-x:auto"><table class="cut-table" style="width:100%;font-size:12px"><thead><tr><th>Naam</th><th>Soort</th><th>X</th><th>Z (diepte)</th><th>Breed</th><th>Diep</th><th>Hoogte</th><th></th></tr></thead><tbody>`;
+ h+=`<h4 class="cut-section">ZONES</h4><div style="overflow-x:auto"><table class="cut-table" style="width:100%;font-size:12px"><thead><tr><th>Naam</th><th>Soort</th><th>X</th><th>Z (diepte)</th><th>Breed</th><th>Diep</th><th>Hoogte</th><th>Wanden</th><th>Deur</th><th></th></tr></thead><tbody>`;
  planDraft.zones.forEach((z,i)=>{
   h+=`<tr><td><input data-pz="${i}:name" value="${esc(z.name)}" style="width:110px"></td><td><select data-pz="${i}:kind">${kinds.map(([k,v])=>`<option value="${k}" ${z.kind===k?'selected':''}>${v}</option>`).join('')}</select></td>`
    +['x','z','w','d','h'].map(f=>`<td><input data-pz="${i}:${f}" type="number" step="50" value="${z[f]}" style="width:72px"></td>`).join('')
+   +`<td style="white-space:nowrap">${[['n','A','achter'],['s','V','voor'],['w','L','links'],['e','R','rechts']].map(([c,l,t])=>`<label title="Wand ${t}" style="margin-right:4px"><input type="checkbox" data-pw="${i}:${c}" ${(z.walls||'').includes(c)?'checked':''} style="width:auto;height:auto;margin:0"> ${l}</label>`).join('')}</td>`
+   +`<td style="white-space:nowrap"><select data-pd="${i}:edge"><option value="">geen</option>${[['n','achter'],['s','voor'],['w','links'],['e','rechts']].map(([c,t])=>`<option value="${c}" ${z.door?.edge===c?'selected':''}>${t}</option>`).join('')}</select>${z.door?` <input data-pd="${i}:offset" type="number" step="50" value="${z.door.offset}" style="width:64px" title="Afstand vanaf het begin van die wand (mm)">`:''}</td>`
    +`<td><button class="outline-btn" data-plan="del:${i}" title="Zone verwijderen">✕</button></td></tr>`;
  });
  h+=`</tbody></table></div><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-top:8px"><button class="outline-btn" data-plan="add">+ Zone toevoegen</button></div>`;
- h+=`<p class="mini-note">X = afstand vanaf links, Z = afstand vanaf de achterzijde (achterlijn op 0). Zones die tegen elkaar liggen delen hun wand. Hoogte = onderkant dakrand/bovenligger.</p>`;
+ h+=`<p class="mini-note">Wanden: A achter, V voor, L links, R rechts (zwarte bekleding rond het frame; tussen twee gesloten zones komt geen wand). Deur: 900 × 2050 mm met kozijn; afstand = vanaf het begin van die wand. X = afstand vanaf links, Z = afstand vanaf de achterzijde (achterlijn op 0). Zones die tegen elkaar liggen delen hun wand. Hoogte = onderkant dakrand/bovenligger.</p>`;
  h+=`<div class="notice-small"><strong>Resultaat:</strong> ${esc(pv.text)}${pv.r.truncated?`<br>⚠ ${pv.r.truncated} balken passen niet (max. 100 losse balken): kleiner maken of zones weglaten.`:''}</div>`;
  h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="primary-btn" data-plan="generate" ${pv.r.beams.length?'':'disabled'}>▦ Maak 3D-project van deze plattegrond</button></div><p class="mini-note">Er komt een nieuw project; je huidige project blijft bewaard. Leg je eigen plattegrondafbeelding eronder met 🖼 Foto in het Boven-aanzicht (PDF eerst als PNG/JPG opslaan).</p>`;
  return h;
@@ -859,7 +869,7 @@ function planAction(act){
  else if(act.startsWith('del:')){planDraft.zones.splice(+act.slice(4),1);showPlan();}
  else if(act==='generate'){
   const pv=planPreview();if(!pv.r.beams.length)return;
-  const b=pv.r.bounds,raw={...M.freeProject(),name:planDraft.name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:{zones:planDraft.zones},stockLength:6000,beams:pv.r.beams};
+  const b=pv.r.bounds,raw={...M.freeProject(),name:planDraft.name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:{zones:planDraft.zones},stockLength:6000,beams:pv.r.beams,panels:pv.r.panels};
   if(openNewProject(raw,`Nieuw project met ${pv.r.beams.length} balken · bewerk het in 3D`)){setView('3d');}
  }
 }
@@ -913,6 +923,8 @@ function screenshot(){
   outCanvas.toBlob(b=>{if(!b){toast('Afbeelding maken mislukt');return;}const u=URL.createObjectURL(b),a=document.createElement('a');a.download='douglas-ontwerp.png';a.href=u;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);},'image/png');
 }
 function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSelected();if(!field||!obj)return;
+  if(selected?.type==='panel'){const n=['x','y','z','w','h','d'].includes(field)?Number(el.value):el.value;if(typeof n==='number'&&!Number.isFinite(n)){toast('Ongeldige waarde');render();return;}
+    commit(()=>{const i=(project.panels||[]).findIndex(q=>q.id===selected.id);if(i<0)return;const next=M.normalizePanels([{...project.panels[i],[field]:n}])[0];if(next)project.panels[i]=next;});return;}
   const isNumeric=['width','x','y','z','length','app_w','app_d','app_h'].includes(field),val=isNumeric?Number(el.value):el.value;
   if(isNumeric&&!Number.isFinite(val)){toast('Ongeldige waarde');render();return;}
   commit(()=>{
@@ -1000,7 +1012,7 @@ document.addEventListener('click',e=>{
     case 'copyMaterials':if(MAT){const text=MAT.toText(MAT.build(project,M),project.name);(navigator.clipboard?.writeText?navigator.clipboard.writeText(text):Promise.reject()).then(()=>toast('Materiaallijst gekopieerd'),()=>toast('Kopiëren niet gelukt'));}break;
     case 'csvMaterials':if(MAT){download(safeName()+'-materiaallijst.csv',MAT.toCSV(MAT.build(project,M)),'text/csv;charset=utf-8');}break;
     case 'printBtn':window.print();break;case 'imageBtn':screenshot();break;
-    case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
+    case 'deleteSelected':if(!selected)return;commit(()=>{if(selected.type==='frame'){M.editFrameBeam(project,selected.id,{disabled:true});selected=null;return;}if(selected.type==='module')project.modules=project.modules.filter(m=>m.id!==selected.id);else if(selected.type==='panel'){project.panels=(project.panels||[]).filter(q=>q.id!==selected.id);if(!project.panels.length)delete project.panels;}else project.beams=project.beams.filter(b=>b.id!==selected.id);selected=null;if(!project.modules.length)project.countertop=false;});break;
     case 'zoomIn':camera.zoom=M.clamp(camera.zoom*1.16,.35,4);draw();break;
     case 'zoomOut':camera.zoom=M.clamp(camera.zoom/1.16,.35,4);draw();break;
     case 'resetView':camera.zoom=1;setView('3d');break;
@@ -1055,9 +1067,11 @@ $('#backdropTool')?.addEventListener('click',showBackdrop);
 $('#scanTool')?.addEventListener('click',showScan);
 $('#planTool')?.addEventListener('click',showPlan);
 $('#modalContent').addEventListener('change',e=>{
-  const pr=e.target.dataset?.pl;if(pr==='preset'){const p=PLAN_PRESETS[e.target.value];if(p){planKey=e.target.value;planDraft=JSON.parse(JSON.stringify(p));showPlan();}return;}
+  const pr=e.target.dataset?.pl;if(pr==='preset'){const p=PLAN_PRESETS[e.target.value];if(p){planKey=e.target.value;planDraft=clonePreset(e.target.value);showPlan();}return;}
+  const pw=e.target.dataset?.pw;if(pw){const [i,c]=pw.split(':'),z=planDraft.zones[+i];if(z){const s=new Set((z.walls||'').split('').filter(Boolean));e.target.checked?s.add(c):s.delete(c);z.walls=[...s].join('');showPlan();}return;}
+  const pd=e.target.dataset?.pd;if(pd){const [i,f]=pd.split(':'),z=planDraft.zones[+i];if(z){if(f==='edge')z.door=e.target.value?{edge:e.target.value,offset:z.door?.offset??150,width:z.door?.width||900,height:z.door?.height||2050}:null;else if(z.door)z.door.offset=Math.max(0,+e.target.value||0);showPlan();}return;}
   const pz=e.target.dataset?.pz;if(!pz)return;const [i,f]=pz.split(':'),z=planDraft.zones[+i];if(!z)return;
-  z[f]=(f==='name'||f==='kind')?e.target.value:+e.target.value;const n=M.normalizePlan({zones:planDraft.zones});if(n)planDraft.zones=n.zones.map((q,k)=>({...q,name:q.name}));showPlan();});
+  z[f]=(f==='name'||f==='kind')?e.target.value:+e.target.value;const n=M.normalizePlan({zones:planDraft.zones});if(n)planDraft.zones=n.zones.map(q=>({...q}));showPlan();});
 $('#scanInput')?.addEventListener('change',async e=>{const f=e.target.files?.[0];e.target.value='';await importScan(f);});
 $('#modalContent').addEventListener('input',e=>{if(e.target.dataset?.scf==='opacity'&&project.scan){project.scan.opacity=M.clamp(+e.target.value/100,.1,1);draw();}});
 $('#modalContent').addEventListener('change',e=>{const f=e.target.dataset?.scf;if(!f||!project.scan)return;
@@ -1161,13 +1175,13 @@ canvas.addEventListener('pointerdown',e=>{
   }
   // Kaderselectie: Ctrl/Cmd+slepen (overal) of gewoon slepen op lege ruimte in een 2D-aanzicht.
   if(!armedBeamType&&(e.ctrlKey||e.metaKey||viewAxes())){
-    const over=hit(e.offsetX,e.offsetY),inMulti=over&&multi.some(m=>m.id===over.id);
+    const rawOver=hit(e.offsetX,e.offsetY),over=rawOver&&rawOver.type==='panel'?null:rawOver,inMulti=over&&multi.some(m=>m.id===over.id);
     if(inMulti&&!(e.ctrlKey||e.metaKey)){pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
       const b=M.framePieces(project).concat(project.beams).find(x=>x.id===over.id);
       dragging={mode:'move-group',before:JSON.stringify(project),startBeam:{x:b.x,y:b.y,z:b.z},startX:e.offsetX,startY:e.offsetY,moved:false,applied:{x:0,y:0,z:0}};return;}
     if(!over||(e.ctrlKey||e.metaKey)){
       pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
-      dragging={mode:'marquee',x0:e.offsetX,y0:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false,additive:e.shiftKey};return;
+      dragging={mode:'marquee',x0:e.offsetX,y0:e.offsetY,startX:e.offsetX,startY:e.offsetY,moved:false,additive:e.shiftKey,panelHit:rawOver&&rawOver.type==='panel'?rawOver:null};return;
     }
   }
   const resize=(selected?.type==='beam'||selected?.type==='frame') && handleAt(e.offsetX,e.offsetY);
@@ -1271,7 +1285,7 @@ function pointerEnd(e){
   }
   if(dragging?.mode==='marquee'){
     const d=dragging;dragging=null;pointers.delete(e.pointerId);const r=marquee;marquee=null;
-    if(!d.moved||!r){if(multi.length||selected)setSelected(null,null);else draw();return;}
+    if(!d.moved||!r){if(d.panelHit)setSelected('panel',d.panelHit.id);else if(multi.length||selected)setSelected(null,null);else draw();return;}
     const found=D.rectSelect(shapes,r,r.x1<r.x0);
     const keep=d.additive?multi.concat(selected&&!multi.length?[selected]:[]):[];
     const all=[...keep];for(const o of found)if(!all.some(k=>k.type===o.type&&k.id===o.id))all.push(o);
@@ -1315,7 +1329,7 @@ function pointerEnd(e){
     if(JSON.stringify(project)!==dragging.before){undoStack.push(dragging.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
     if(fit)toast(`Balk opnieuw passend gemaakt: ${fmt(fit.length)} mm`);
   }
-  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam'||id?.type==='frame')setSelected(id.type,id.id);else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
+  else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam'||id?.type==='frame'||id?.type==='panel')setSelected(id.type,id.id);else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
 canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
