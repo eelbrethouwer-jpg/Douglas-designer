@@ -16,6 +16,7 @@ const fmt=(n)=>new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(n
 const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n);
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
+const MESH=window.DouglasMesh||null;
 const SHARE=window.DouglasShare||null; // optioneel: zonder share.js verdwijnen delen/aanleveren
 const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
 const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
@@ -40,6 +41,7 @@ function syncSketchControls(){
 let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
 let multi=[]; // meerdere geselecteerde balken [{type,id}] (kaderselectie); leeg = enkelvoudige selectie
 let marquee=null;
+let scanData=null,scanKey='',scanMissingKey='',scanLoading=false,scanPrepKey='',scanWorld=null,scanTriRgb=null,scanOrientB=null,scanRaf=0,scanCanvas=null;
 let backdropImg=null,backdropSrc='',calibrate=null,backdropMove=null; // foto-achtergrond
 function ensureBackdropEl(){if(backdropImg)return backdropImg;backdropImg=document.createElement('img');backdropImg.id='backdropImg';backdropImg.alt='';backdropImg.setAttribute('aria-hidden','true');
   backdropImg.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:0;transform-origin:0 0;display:none;max-width:none;user-select:none';
@@ -479,7 +481,7 @@ function draw(){const rect=canvas.getBoundingClientRect();if(rect.width<10||rect
   scale=fitting*camera.zoom;
   objects();shapes.sort((a,b)=>b.depth-a.depth);
   hitShapes=shapes.filter(s=>s.owner);
-  drawBackdrop();
+  drawBackdrop();drawScan();
   const gpuRendered=gpu.ready&&gpu.render(shapes,viewport,dpr,{center:sceneCenter,yaw:camera.yaw,pitch:camera.pitch,scale,panX:camera.panX,panY:camera.panY,eye:cameraDistance,parallel:sketchSettings.parallel});
   if(!gpuRendered){
     for(const s of shapes){ctx.fillStyle=s.fill;path(s.verts);ctx.fill();ctx.strokeStyle=s.stroke;ctx.lineWidth=.8;ctx.stroke();if(isSel(s.owner)){ctx.strokeStyle=multi.length?'#d9822b':'#438f77';ctx.lineWidth=2;ctx.stroke();}}
@@ -699,13 +701,132 @@ async function checkShareHash(){
  try{const parsed=await SHARE.decodeLinkData(data);try{window.history.replaceState(null,'',location.pathname+location.search);}catch(_){}receivePayload(parsed);}
  catch(e){toast('Link kon niet worden gelezen: '+e.message);}
 }
+
+// ---------- 3D-scan (referentiemodel) ----------
+const activeKey=()=>{try{return store&&store.activeId?String(store.activeId()||'x'):'x';}catch(e){return 'x';}};
+function scanDB(){return new Promise((res,rej)=>{if(typeof indexedDB==='undefined')return rej(new Error('Opslag niet beschikbaar'));const r=indexedDB.open('douglas-designer-scans',1);r.onupgradeneeded=()=>r.result.createObjectStore('scans');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function scanIO(mode,key,val){const db=await scanDB();return new Promise((res,rej)=>{const tx=db.transaction('scans',mode==='get'?'readonly':'readwrite'),st=tx.objectStore('scans'),rq=mode==='get'?st.get(key):mode==='put'?st.put(val,key):st.delete(key);tx.oncomplete=()=>res(rq.result);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error||new Error('Opslag mislukt'));});}
+function setScanData(d){scanData=d;scanKey=activeKey();scanPrepKey='';scanMissingKey='';scanOrientB=null;}
+async function loadScan(){
+  if(scanLoading||!MESH)return;scanLoading=true;const key=activeKey();
+  try{const v=await scanIO('get',key);
+    if(v&&v.positions&&v.indices&&v.colors){if(activeKey()===key){scanData=v;scanKey=key;scanPrepKey='';scanOrientB=null;}}
+    else{scanMissingKey=key;toast('De 3D-scan van dit project staat niet meer op dit apparaat. Importeer hem opnieuw via 🧊 Scan.');}
+  }catch(e){scanMissingKey=key;}
+  scanLoading=false;draw();
+}
+function scanPrepare(){
+  const sc=project.scan,key=[sc.scale,sc.rotY,sc.zUp,sc.x,sc.y,sc.z,scanKey].join('|');
+  if(key===scanPrepKey&&scanWorld)return;
+  scanPrepKey=key;
+  const oriented=MESH.orient(scanData.positions,sc.zUp);
+  scanWorld=MESH.transform(oriented,sc);
+  const idx=scanData.indices,n=idx.length/3,rgb=new Array(n),L=[.3,.8,.5],ln=Math.hypot(...L);
+  for(let t=0;t<n;t++){
+    const a=idx[t*3]*3,b=idx[t*3+1]*3,c=idx[t*3+2]*3;
+    const ux=scanWorld[b]-scanWorld[a],uy=scanWorld[b+1]-scanWorld[a+1],uz=scanWorld[b+2]-scanWorld[a+2],vx=scanWorld[c]-scanWorld[a],vy=scanWorld[c+1]-scanWorld[a+1],vz=scanWorld[c+2]-scanWorld[a+2];
+    let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const nl=Math.hypot(nx,ny,nz)||1;
+    const k=.58+.42*Math.abs((nx*L[0]+ny*L[1]+nz*L[2])/(nl*ln)),cd=scanData.colors;
+    rgb[t]=`rgb(${Math.round((cd[a]+cd[b]+cd[c])/3*k)},${Math.round((cd[a+1]+cd[b+1]+cd[c+1])/3*k)},${Math.round((cd[a+2]+cd[b+2]+cd[c+2])/3*k)})`;
+  }
+  scanTriRgb=rgb;
+}
+function ensureScanCanvas(){
+  if(scanCanvas)return scanCanvas;const bd=ensureBackdropEl();
+  scanCanvas=document.createElement('canvas');scanCanvas.id='scanCanvas';scanCanvas.setAttribute('aria-hidden','true');
+  scanCanvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;display:none';
+  const host=canvas.parentElement;if(host&&host.insertBefore)host.insertBefore(scanCanvas,bd.nextSibling);return scanCanvas;
+}
+function drawScan(){
+  if(!MESH)return;const sc=project.scan;
+  if(!sc||!sc.on){if(scanCanvas)scanCanvas.style.display='none';return;}
+  if(!scanData||scanKey!==activeKey()){if(scanCanvas)scanCanvas.style.display='none';if(scanMissingKey!==activeKey())loadScan();return;}
+  if(scanRaf)return;const raf=window.requestAnimationFrame||(f=>setTimeout(f,0));scanRaf=raf(()=>{scanRaf=0;renderScan();});
+}
+function renderScan(){
+  const sc=project.scan;if(!sc||!sc.on||!scanData)return;const cv=ensureScanCanvas();scanPrepare();
+  const dpr=Math.min(2,window.devicePixelRatio||1),w=viewport.w,h=viewport.h;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  cv.style.display='block';const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
+  const nv=scanWorld.length/3,sx=new Float32Array(nv),sy=new Float32Array(nv),sd=new Float32Array(nv);
+  for(let i=0;i<nv;i++){const p=toScreenRaw([scanWorld[i*3],scanWorld[i*3+1],scanWorld[i*3+2]]);sx[i]=p.x;sy[i]=p.y;sd[i]=p.d;}
+  const idx=scanData.indices,nt=idx.length/3,depth=new Float32Array(nt),order=[];
+  for(let t=0;t<nt;t++){const a=idx[t*3],b=idx[t*3+1],d=idx[t*3+2];
+    const minx=Math.min(sx[a],sx[b],sx[d]),maxx=Math.max(sx[a],sx[b],sx[d]),miny=Math.min(sy[a],sy[b],sy[d]),maxy=Math.max(sy[a],sy[b],sy[d]);
+    if(maxx<0||minx>w||maxy<0||miny>h)continue;depth[t]=(sd[a]+sd[b]+sd[d])/3;order.push(t);}
+  order.sort((p,q)=>depth[q]-depth[p]);
+  c.globalAlpha=sc.opacity;c.lineWidth=.6;c.lineJoin='round';
+  for(const t of order){const a=idx[t*3],b=idx[t*3+1],d=idx[t*3+2];c.fillStyle=c.strokeStyle=scanTriRgb[t];c.beginPath();c.moveTo(sx[a],sy[a]);c.lineTo(sx[b],sy[b]);c.lineTo(sx[d],sy[d]);c.closePath();c.fill();c.stroke();}
+  c.globalAlpha=1;
+}
+function scanOrientedBounds(){
+  if(scanOrientB&&scanOrientB.z===project.scan.zUp)return scanOrientB.b;
+  const b=MESH.bounds(MESH.orient(scanData.positions,project.scan.zUp));scanOrientB={z:project.scan.zUp,b};return b;
+}
+function scanSizeText(){
+  if(!scanData||!project.scan)return '';const b=scanOrientedBounds(),s=project.scan.scale,sz=[0,1,2].map(i=>fmt(Math.round((b.max[i]-b.min[i])*s)));
+  return `${sz[0]} × ${sz[2]} (breed × diep) en ${sz[1]} mm hoog`;
+}
+function scanHTML(){
+  const sc=project.scan;
+  let h=`<div class="notice-small" style="margin-top:0">Importeer een <strong>3D-scan van de ruimte</strong> (.glb, .gltf met ingebedde data of .obj, bijv. uit Polycam of de iPhone-scan) en bouw er je ontwerp tegenaan. Het model is een <strong>referentie</strong>: het telt niet mee in de zaaglijst. Zware modellen worden vereenvoudigd (max. ${fmt(MESH.LIMITS.targetTriangles)} driehoeken) en staan alleen in de browser van dit apparaat, niet in deel-links of exportbestanden.</div>`;
+  h+=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-top:10px"><button class="primary-btn" data-scan="pick">🧊 ${sc?'Andere scan kiezen':'Scan kiezen'}</button></div>`;
+  if(sc){
+    h+=`<div class="notice-small"><strong>${esc(sc.name)}</strong>${scanData?`<br>Nu: ${esc(scanSizeText())}<br>${scanData.decimated?`Vereenvoudigd van ${fmt(scanData.originalTriangles)} naar ${fmt(scanData.indices.length/3)} driehoeken`:`${fmt(scanData.indices.length/3)} driehoeken`}`:'<br>Model niet beschikbaar op dit apparaat: kies de scan opnieuw.'}</div>`;
+    h+=`<h4 class="cut-section">WEERGAVE</h4><label class="field" style="flex-direction:row;gap:8px;align-items:center"><input data-scf="on" type="checkbox" style="width:auto;height:auto;margin:0;flex:none" ${sc.on?'checked':''}> Scan tonen</label><label class="field">Zichtbaarheid (${Math.round(sc.opacity*100)}%)<input data-scf="opacity" type="range" min="10" max="100" step="5" value="${Math.round(sc.opacity*100)}"></label>`;
+    h+=`<h4 class="cut-section">SCHAAL, RICHTING EN POSITIE</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-scan="calibrate">📏 Schaal instellen met twee punten</button><button class="outline-btn" data-scan="floor">⤓ Op de vloer zetten</button><button class="outline-btn" data-scan="center">⌖ Midden op keuken</button></div><p class="mini-note">Schaal instellen werkt in een 2D-aanzicht (Voor/Zij/Boven): klik twee punten op de scan waarvan je de echte afstand kent.</p>`;
+    h+=`<div class="field-grid"><label class="field">Schaal (mm per bronseenheid)<input data-scf="scale" type="number" step="any" value="${sc.scale}"></label><label class="field">Draaien om verticaal (°)<input data-scf="rotY" type="number" step="5" value="${sc.rotY}"></label></div><label class="field" style="flex-direction:row;gap:8px;align-items:center"><input data-scf="zUp" type="checkbox" style="width:auto;height:auto;margin:0;flex:none" ${sc.zUp?'checked':''}> Bovenkant van de scan is de Z-as (vaak bij .obj)</label><div class="field-grid"><label class="field">Positie X (mm)<input data-scf="x" type="number" step="10" value="${sc.x}"></label><label class="field">Positie Y (mm)<input data-scf="y" type="number" step="10" value="${sc.y}"></label><label class="field">Positie Z (mm)<input data-scf="z" type="number" step="10" value="${sc.z}"></label></div><div class="right-foot-actions" style="margin-top:10px"><button class="outline-btn" data-scan="remove">Scan verwijderen</button></div>`;
+  }
+  return h;
+}
+function showScan(){if(!MESH)return;openModal('3D','3D-scan als referentie',scanHTML());}
+async function decodeScanTextures(mesh){
+  const cache=new Map();
+  for(const p of mesh.pending){
+    if(cache.has(p.image))continue;
+    try{const bmp=await createImageBitmap(new Blob([p.image.bytes],{type:p.image.mime})),s=Math.min(1,2048/Math.max(bmp.width,bmp.height)),cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(bmp.width*s));cv.height=Math.max(1,Math.round(bmp.height*s));const cx=cv.getContext('2d');cx.drawImage(bmp,0,0,cv.width,cv.height);cache.set(p.image,cx.getImageData(0,0,cv.width,cv.height));}
+    catch(e){cache.set(p.image,null);}
+  }
+  MESH.applyTextures(mesh,(img,u,v)=>{const d=cache.get(img);if(!d)return null;u-=Math.floor(u);v-=Math.floor(v);const x=Math.min(d.width-1,Math.floor(u*d.width)),y=Math.min(d.height-1,Math.floor(v*d.height)),o=(y*d.width+x)*4;return [d.data[o],d.data[o+1],d.data[o+2]];});
+}
+async function importScan(file){
+  if(!file||!MESH)return;
+  if(file.size>MESH.LIMITS.fileBytes){toast('Bestand is te groot (max '+Math.round(MESH.LIMITS.fileBytes/1048576)+' MB)');return;}
+  toast('Scan wordt verwerkt…');await new Promise(r=>setTimeout(r,30));
+  try{
+    const name=file.name,isObj=/\.obj$/i.test(name),raw=await (isObj?file.text():file.arrayBuffer());
+    const mesh=MESH.parseAny(name,raw);if(mesh.pending.length)await decodeScanTextures(mesh);
+    const d=MESH.decimate(mesh,MESH.LIMITS.targetTriangles),b=MESH.bounds(d.positions);
+    const ext=Math.max(b.max[0]-b.min[0],b.max[1]-b.min[1],b.max[2]-b.min[2]),scale=ext>0&&ext<100?1000:1;
+    const data={positions:d.positions,indices:d.indices,colors:d.colors,decimated:d.decimated,originalTriangles:d.originalTriangles};
+    const meta=M.normalizeScan({name,on:true,opacity:.85,scale,rotY:0,zUp:false,
+      x:Math.round(project.width/2-((b.min[0]+b.max[0])/2)*scale),y:Math.round(-b.min[1]*scale),z:Math.round(project.depth/2-((b.min[2]+b.max[2])/2)*scale)});
+    if(!meta){toast('Ongeldige bestandsnaam');return;}
+    let saved=true;try{await scanIO('put',activeKey(),{positions:d.positions,indices:d.indices,colors:d.colors});}catch(e){saved=false;}
+    setScanData(data);commit(()=>{project.scan=meta;});
+    toast(saved?`Scan geladen: ${fmt(d.indices.length/3)} driehoeken · controleer de schaal`:'Scan geladen, maar opslaan op dit apparaat mislukte: na herladen opnieuw importeren');
+    showScan();draw();
+  }catch(e){toast('Scan importeren mislukt: '+(e&&e.message||e));}
+}
+function scanAction(act){
+  if(act==='pick'){$('#scanInput').click();return;}
+  if(!project.scan)return;
+  if(act==='remove'){const key=activeKey();commit(()=>{delete project.scan;});scanData=null;scanWorld=null;scanTriRgb=null;scanIO('delete',key).catch(()=>{});if(scanCanvas)scanCanvas.style.display='none';showScan();draw();}
+  else if(act==='floor'&&scanData){const b=scanOrientedBounds(),s=project.scan.scale;commit(()=>{project.scan=M.normalizeScan({...project.scan,y:Math.round(-b.min[1]*s)});});showScan();draw();}
+  else if(act==='center'&&scanData){const b=scanOrientedBounds(),s=project.scan.scale,r=(project.scan.rotY||0)*Math.PI/180,cx=(b.min[0]+b.max[0])/2*s,cz=(b.min[2]+b.max[2])/2*s;
+    // draai het midden mee zodat het midden van de scan op het midden van de keuken komt
+    const rx=cx*Math.cos(r)+cz*Math.sin(r),rz=-cx*Math.sin(r)+cz*Math.cos(r);
+    commit(()=>{project.scan=M.normalizeScan({...project.scan,x:Math.round(project.width/2-rx),z:Math.round(project.depth/2-rz)});});showScan();draw();}
+  else if(act==='calibrate'){closeModal();calibrate={a:null,b:null,target:'scan'};backdropMove=null;toast('Ga naar een 2D-aanzicht indien nodig en klik het eerste punt');if(!viewAxes()||currentView==='bottom')setView('front');$('#drawHelp').classList.remove('hidden');$('#drawHelp').textContent='Scan-schaal: klik het eerste punt, dan het tweede punt waarvan je de afstand weet · Esc stopt';canvas.classList.add('draw-active');}
+}
 function backdropHTML(){
  const bd=project.backdrop,viewName={front:'Voor',side:'Zij',top:'Boven'};
  let h=`<div class="notice-small" style="margin-top:0">Gebruik een foto (bijv. van de plek waar de buitenkeuken komt) als <strong>achtergrond in een 2D-aanzicht</strong>. Stel de schaal in met twee punten waarvan je de echte afstand kent, en bouw er dan overheen. Het is een hulpmiddel om op af te tekenen, geen exacte perspectiefcorrectie: maak de foto zo recht mogelijk, vlak van voren.</div>`;
  h+=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-top:10px"><button class="primary-btn" data-bd="pick">🖼 Foto kiezen</button><button class="outline-btn" data-bd="camera">📷 Foto maken</button>${project.room?.photo&&!project.room.photo.startsWith('blob')?'<button class="outline-btn" data-bd="useRoom">Ruimtefoto gebruiken</button>':''}</div>`;
  if(bd){
   h+=`<h4 class="cut-section">WEERGAVE</h4><div class="field-grid"><label class="field">Zichtbaar in aanzicht<select data-bdf="view">${Object.entries(viewName).map(([k,v])=>`<option value="${k}" ${bd.view===k?'selected':''}>${v}</option>`).join('')}</select></label><label class="field">Zichtbaarheid (${Math.round(bd.opacity*100)}%)<input data-bdf="opacity" type="range" min="10" max="100" step="5" value="${Math.round(bd.opacity*100)}"></label></div>`;
-  h+=`<label class="field" style="flex-direction:row;gap:8px;align-items:center"><input data-bdf="on" type="checkbox" ${bd.on?'checked':''}> Foto tonen</label>`;
+  h+=`<label class="field" style="flex-direction:row;gap:8px;align-items:center"><input data-bdf="on" type="checkbox" style="width:auto;height:auto;margin:0;flex:none" ${bd.on?'checked':''}> Foto tonen</label>`;
   h+=`<h4 class="cut-section">SCHAAL EN POSITIE</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-bd="calibrate">📏 Schaal instellen met twee punten</button><button class="outline-btn" data-bd="move">✥ Foto verslepen</button></div>`;
   h+=`<div class="field-grid"><label class="field">Breedte foto (mm)<input data-bdf="widthMm" type="number" step="10" value="${bd.widthMm}"></label><label class="field">Positie links (mm)<input data-bdf="x" type="number" step="10" value="${bd.x}"></label><label class="field">Positie onder (mm)<input data-bdf="y" type="number" step="10" value="${bd.y}"></label></div>`;
   h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="outline-btn" data-bd="remove">Foto verwijderen</button></div><p class="mini-note">De foto blijft alleen in dit project op dit apparaat; hij gaat niet mee in deel-links.</p>`;
@@ -779,6 +900,7 @@ document.addEventListener('click',e=>{
   const frameCard=e.target.closest('[data-select-frame]');
   const pa=e.target.closest('[data-proj]');if(pa){projectAction(pa.dataset.proj);return;}
   const bda=e.target.closest('[data-bd]');if(bda){backdropAction(bda.dataset.bd);return;}
+  const sca=e.target.closest('[data-scan]');if(sca){scanAction(sca.dataset.scan);return;}
   const sa=e.target.closest('[data-share]');if(sa){shareAction(sa.dataset.share);return;}
   const da=e.target.closest('[data-deliver]');if(da){deliverAction(da.dataset.deliver);return;}
   const ra=e.target.closest('[data-recv]');if(ra){receiveAction(ra.dataset.recv);return;}
@@ -886,6 +1008,11 @@ $('#modalContent').addEventListener('change',e=>{const f=e.target.dataset?.bdf;i
 $('#backdropInput')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
 $('#backdropCamera')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
 $('#backdropTool')?.addEventListener('click',showBackdrop);
+$('#scanTool')?.addEventListener('click',showScan);
+$('#scanInput')?.addEventListener('change',async e=>{const f=e.target.files?.[0];e.target.value='';await importScan(f);});
+$('#modalContent').addEventListener('input',e=>{if(e.target.dataset?.scf==='opacity'&&project.scan){project.scan.opacity=M.clamp(+e.target.value/100,.1,1);draw();}});
+$('#modalContent').addEventListener('change',e=>{const f=e.target.dataset?.scf;if(!f||!project.scan)return;
+  commit(()=>{const s={...project.scan};if(f==='on'||f==='zUp')s[f]=e.target.checked;else s[f]=+e.target.value;project.scan=M.normalizeScan(s);});showScan();draw();});
 $('#sidebar').addEventListener('change',updateSettings);
 $('#sketchGridVisible')?.addEventListener('change',e=>setSketchSetting('visible',e.target.checked));
 $('#sketchGridStep')?.addEventListener('change',e=>setSketchSetting('step',Number(e.target.value)));
@@ -960,11 +1087,12 @@ canvas.addEventListener('pointerdown',e=>{
   if(calibrate){
     const pt=drawPoint(e.offsetX,e.offsetY);if(!pt)return;
     if(!calibrate.a){calibrate.a=pt;calibrate.b=pt;toast('Klik nu het tweede punt');draw();return;}
-    const plane=viewAxes(),r=D.measure(calibrate.a,pt,plane);if(!r||r.dist<5){toast('Kies een tweede punt verder weg');return;}
-    const real=window.prompt(`Wat is de echte afstand tussen deze twee punten in mm?\n(Nu staat de foto op ${r.dist} mm)`,String(r.dist));
-    const next=M.backdropScale(project.backdrop,calibrate.a,pt,plane,real);
-    if(next){commit(()=>{project.backdrop=next;});toast(`Foto geschaald: ${fmt(next.widthMm)} mm breed`);}else toast('Geen geldige afstand ingevoerd');
-    stopBackdropTools();draw();showBackdrop();return;
+    const plane=viewAxes(),r=D.measure(calibrate.a,pt,plane),target=calibrate.target;if(!r||r.dist<5){toast('Kies een tweede punt verder weg');return;}
+    const what=target==='scan'?'de scan':'de foto';
+    const real=window.prompt(`Wat is de echte afstand tussen deze twee punten in mm?\n(Nu staat ${what} op ${r.dist} mm)`,String(r.dist));
+    const next=target==='scan'?M.scanScale(project.scan,calibrate.a,pt,plane,real):M.backdropScale(project.backdrop,calibrate.a,pt,plane,real);
+    if(next){commit(()=>{if(target==='scan')project.scan=next;else project.backdrop=next;});toast(target==='scan'?`Scan geschaald: schaal ${next.scale}`:`Foto geschaald: ${fmt(next.widthMm)} mm breed`);}else toast('Geen geldige afstand ingevoerd');
+    stopBackdropTools();draw();if(target==='scan')showScan();else showBackdrop();return;
   }
   if(backdropMove&&project.backdrop){
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});

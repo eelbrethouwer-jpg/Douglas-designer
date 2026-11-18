@@ -215,6 +215,44 @@ const scenarios=[
    t.ok('foto verwijderen',await b.eval(`!${activeProject}.backdrop&&document.querySelector('#backdropImg').style.display==='none'`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
+ {name:'3D-scan: .glb importeren, tonen, schalen, bewaren na herladen, verwijderen',async run(b,t){
+   await demo(b);
+   // testscan: vloer + achterwand + zijwand in meters (5 × 2,5 × 4), gekleurd per vlak
+   const quads=[[[0,0,0],[5,0,0],[5,0,4],[0,0,4],[.5,.62,.4]],[[0,0,0],[5,0,0],[5,2.5,0],[0,2.5,0],[.8,.75,.6]],[[0,0,0],[0,0,4],[0,2.5,4],[0,2.5,0],[.7,.5,.4]]];
+   const pos=Buffer.alloc(quads.length*4*12),col=Buffer.alloc(quads.length*4*12),idx=Buffer.alloc(quads.length*6*2);
+   quads.forEach((q,qi)=>{for(let i=0;i<4;i++){for(let k=0;k<3;k++){pos.writeFloatLE(q[i][k],(qi*4+i)*12+k*4);col.writeFloatLE(q[4][k],(qi*4+i)*12+k*4);}}
+     [0,1,2,0,2,3].forEach((v,i)=>idx.writeUInt16LE(qi*4+v,(qi*6+i)*2));});
+   const bin=Buffer.concat([pos,col,idx]);
+   const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0,COLOR_0:1},indices:2}]}],
+     buffers:[{byteLength:bin.length}],bufferViews:[{buffer:0,byteOffset:0,byteLength:pos.length},{buffer:0,byteOffset:pos.length,byteLength:col.length},{buffer:0,byteOffset:pos.length+col.length,byteLength:idx.length}],
+     accessors:[{bufferView:0,componentType:5126,count:12,type:'VEC3'},{bufferView:1,componentType:5126,count:12,type:'VEC3'},{bufferView:2,componentType:5123,count:18,type:'SCALAR'}]};
+   const jb=Buffer.from(JSON.stringify(json));const jp=Buffer.concat([jb,Buffer.alloc((4-jb.length%4)%4,0x20)]),bp=Buffer.concat([bin,Buffer.alloc((4-bin.length%4)%4)]);
+   const head=Buffer.alloc(12);head.writeUInt32LE(0x46546C67,0);head.writeUInt32LE(2,4);head.writeUInt32LE(12+8+jp.length+8+bp.length,8);
+   const c1=Buffer.alloc(8);c1.writeUInt32LE(jp.length,0);c1.writeUInt32LE(0x4E4F534A,4);const c2=Buffer.alloc(8);c2.writeUInt32LE(bp.length,0);c2.writeUInt32LE(0x004E4942,4);
+   const file=tmp('testruimte.glb');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,Buffer.concat([head,c1,jp,c2,bp]));
+   const painted=()=>b.eval(`(()=>{const c=document.querySelector('#scanCanvas');if(!c||c.style.display==='none')return 0;const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>0)n++;return n;})()`);
+   await b.click('#scanTool');await sleep(300);
+   t.ok('scan-dialoog opent',await b.eval(`!!document.querySelector('[data-scan="pick"]')`));
+   await b.uploadFile('#scanInput',[file]);
+   t.ok('scan in project, schaal herkend als meters (1000)',await waitFor(()=>b.eval(`(()=>{const p=${activeProject};return !!p.scan&&p.scan.name==='testruimte.glb'&&p.scan.scale===1000}`+`)()`)));
+   await sleep(600);
+   t.ok('scan is getekend op het canvas',(await painted())>5000,String(await painted()));
+   t.ok('afmetingen kloppen (5000 × 4000, 2500 hoog)',await b.eval(`/5\\.000 × 4\\.000.*2\\.500/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`document.querySelector('#modalBackdrop [data-scan="center"]')?.click()`);await sleep(300);await b.eval(`document.querySelector('#modalClose, #closeModal, .modal-close')?.click()`);await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(500);await b.shot(path.join(OUT,'scan-3d.png'));
+   await b.click('.view-btn[data-view="front"]');await sleep(500);
+   t.ok('ook zichtbaar in voor-aanzicht',(await painted())>3000);
+   await b.shot(path.join(OUT,'scan-voor.png'));
+   await b.click('#scanTool');await sleep(200);await set(b,'[data-scf="scale"]',2000);await sleep(500);
+   t.ok('schaal aanpasbaar: afmetingen verdubbeld',await b.eval(`/10\\.000 × 8\\.000/.test(document.querySelector('#modalContent').textContent)`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(400);
+   t.ok('undo herstelt de schaal',await b.eval(`${activeProject}.scan.scale===1000`));
+   await b.goto(URL_);await sleep(1200);
+   t.ok('scan blijft na herladen (IndexedDB)',(await waitFor(async()=>(await painted())>3000,6000)));
+   await b.click('#scanTool');await sleep(200);await b.eval(`document.querySelector('[data-scan="remove"]').click()`);await sleep(400);
+   t.ok('scan verwijderd',await b.eval(`!${activeProject}.scan`)&&(await painted())===0);
+   await b.eval(`(()=>{})()`);
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

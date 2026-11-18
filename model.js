@@ -66,6 +66,24 @@
       opacity:clamp(number(raw.opacity,.5),.1,1),widthMm:clamp(round(number(raw.widthMm,3000)),200,60000),
       x:clamp(round(number(raw.x,0)),-60000,60000),y:clamp(round(number(raw.y,0)),-60000,60000)};
   }
+  // 3D-scan (alleen instellingen; het mesh zelf staat in IndexedDB). Schaal = mm per bronseenheid.
+  function normalizeScan(raw){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+    const name=String(raw.name==null?'':raw.name).replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,120);
+    if(!name)return null;
+    const r6=v=>Math.round(v*1e6)/1e6;
+    return {name,on:raw.on!==false,opacity:clamp(number(raw.opacity,.85),.1,1),scale:clamp(r6(number(raw.scale,1)),0.000001,1000000),
+      rotY:clamp(round(number(raw.rotY,0)),-360,360),zUp:raw.zUp===true,
+      x:clamp(round(number(raw.x,0)),-1e6,1e6),y:clamp(round(number(raw.y,0)),-1e6,1e6),z:clamp(round(number(raw.z,0)),-1e6,1e6)};
+  }
+  // Schaal de scan zodat de afstand tussen twee punten (in het tekenvlak) realMm wordt; punt a blijft staan.
+  function scanScale(scan,a,b,plane,realMm){
+    const real=number(realMm,0);if(!scan||!a||!b||!plane||real<=0)return null;
+    const [h,v]=plane,cur=Math.hypot((b[h]||0)-(a[h]||0),(b[v]||0)-(a[v]||0));if(cur<1)return null;
+    const f=real/cur,next={...scan,scale:scan.scale*f};
+    for(const k of [h,v]){const ak=a[k]||0;next[k]=ak+(scan[k]-ak)*f;}
+    return normalizeScan(next);
+  }
   // Schaal de foto zodat de afstand tussen twee punten (wereldmm) gelijk wordt aan realMm; punt a blijft staan.
   function backdropScale(bd,a,b,plane,realMm){
     const real=number(realMm,0);if(!bd||!a||!b||!plane||real<=0)return null;
@@ -140,6 +158,7 @@
     p.countertopSpec=normalizeCountertop(raw.countertopSpec);
     {const ref=normalizeReference(raw.reference);if(ref)p.reference=ref;}
     {const bd=normalizeBackdrop(raw.backdrop);if(bd)p.backdrop=bd;}
+    {const sc=normalizeScan(raw.scan);if(sc)p.scan=sc;}
     p.modules=Array.isArray(raw.modules) ? raw.modules.slice(0,12).filter(m=>TYPES[m.kind]).map(m=>({
       id:String(m.id||uid()),kind:m.kind,width:clamp(round(number(m.width,500)),200,2400),
       name:String(m.name||TYPES[m.kind].label).slice(0,60),
@@ -398,5 +417,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

@@ -89,6 +89,7 @@
     if (p.room) { p.room.photo = null; p.room.corners = []; }
     delete p.reference;
     delete p.backdrop;
+    delete p.scan;
     return {format: FORMAT, v: VERSION, t: 'project', at: now, project: p};
   }
   function buildDeliveryPayload(d, now = Date.now()) {

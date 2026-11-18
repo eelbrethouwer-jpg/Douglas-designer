@@ -1,3 +1,10 @@
+## Ongepubliceerd — 3D-scan importeren
+
+- Knop 🧊 Scan: importeer een 3D-scan van de ruimte (.glb, .gltf met ingebedde data, .obj) als referentiemodel; kleuren en texturen worden overgenomen, zware modellen vereenvoudigd tot max. 45.000 driehoeken. Zichtbaar in 3D en alle 2D-aanzichten achter het ontwerp.
+- Schaal instellen met twee punten (2D-aanzicht) of numeriek, draaien, Z-omhoog, op de vloer zetten, midden op de keuken, zichtbaarheid.
+- Scan telt niet mee in zaaglijst/materiaal; blijft lokaal (IndexedDB), niet in deel-links of exportbestanden. Niet ondersteund: Draco/meshopt-compressie, extern .bin, sparse accessors.
+- Nieuwe module `mesh-import.js` met 9 tests.
+
 ## Ongepubliceerd — kaderselectie en foto-achtergrond
 
 - Kaderselectie: sleep op lege ruimte in een 2D-aanzicht (of Ctrl/Cmd+slepen in elk aanzicht) om meerdere balken te selecteren; links→rechts = volledig binnen, rechts→links = ook rakend; Shift voegt toe. Groep samen verslepen, numeriek verplaatsen, kopiëren, verwijderen (undo-stap per actie). In 2D pan je nu met Shift+slepen of de middelste muisknop.

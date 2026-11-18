@@ -96,3 +96,15 @@ test('foto-achtergrond: normalisatie en schaal met twee punten',()=>{
  assert.equal(s.widthMm,2000);assert.equal(s.x,-100);assert.equal(s.y,-100);
  assert.equal(M.backdropScale(bd,{x:1},{x:1},['x','y'],100),null);assert.equal(M.backdropScale(bd,{x:0},{x:50},['x','y'],0),null);
 });
+test('scan-instellingen: normalisatie en schaal om punt a',()=>{
+ assert.equal(M.normalizeScan(null),null);assert.equal(M.normalizeScan({name:'  '}),null);
+ const s=M.normalizeScan({name:'Tuin<b>.glb',scale:'x',opacity:9,rotY:1000,x:5.4});
+ assert.deepEqual([s.name,s.scale,s.opacity,s.rotY,s.x,s.on,s.zUp],['Tuinb.glb',1,1,360,5,true,false]);
+ const p=M.normalizeProject({...M.freeProject(),scan:{name:'a.glb',scale:1000}});assert.equal(p.scan.scale,1000);
+ assert.equal(M.normalizeProject({...M.freeProject(),scan:{name:''}}).scan,undefined);
+ const sc=M.scanScale({name:'a',on:true,opacity:1,scale:1000,rotY:0,zUp:false,x:100,y:0,z:50},{x:100,y:0},{x:300,y:0},['x','y'],400);
+ assert.equal(sc.scale,2000);assert.equal(sc.x,100);assert.equal(sc.y,0);assert.equal(sc.z,50);
+ const sc2=M.scanScale({name:'a',on:true,opacity:1,scale:1,rotY:0,zUp:false,x:0,y:0,z:0},{x:10,y:10},{x:20,y:10},['x','y'],5);
+ assert.equal(sc2.scale,.5);assert.equal(sc2.x,5);assert.equal(sc2.y,5);
+ assert.equal(M.scanScale(s,{x:1},{x:1},['x','y'],10),null);assert.equal(M.scanScale(s,{x:0},{x:9},['x','y'],0),null);
+});
