@@ -280,6 +280,20 @@
     return map;
   }
   // Geometrische controle (geen constructieve berekening): overlappende balken en balken zonder steunpunt.
+  // Reeks: maakt `count` kopieën van een balk, telkens `spacing` mm verder langs `axis` (x/y/z).
+  // Kopieën zijn vrije balken (ook als het origineel een framebalk is). Respecteert het maximum van 100 losse balken.
+  function arrayBeams(p,source,axis,count,spacing){
+    if(!source||!['x','y','z'].includes(axis))return {ok:false,error:'Ongeldige richting',beams:[]};
+    const n=Math.round(number(count,0)),step=Math.round(number(spacing,0));
+    if(n<1||n>50)return {ok:false,error:'Aantal moet tussen 1 en 50 liggen',beams:[]};
+    if(step===0||Math.abs(step)>10000)return {ok:false,error:'Afstand moet tussen 1 en 10.000 mm liggen (niet 0)',beams:[]};
+    const room=Math.max(0,100-p.beams.length),made=Math.min(n,room),beams=[];
+    for(let i=1;i<=made;i++){
+      const b={id:uid(),name:String(source.name||'Balk').slice(0,52)+' '+(i+1),axis:source.axis,length:source.length,x:source.x,y:source.y,z:source.z,profile:profileOf(source).id};
+      b[axis]=source[axis]+step*i;beams.push(b);
+    }
+    return {ok:true,beams,skipped:n-made};
+  }
   function conflicts(p){
     const items=allBeams(p).map(b=>({b,box:beamBox(b)})),overlaps=[],unsupported=[];
     const ov=(a,b,k,l)=>Math.min(a[k]+a[l],b[k]+b[l])-Math.max(a[k],b[k]);
@@ -355,5 +369,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
+  return {TYPES,PROFILES,arrayBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,boardPlan,warnings};
 });

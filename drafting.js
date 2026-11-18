@@ -38,6 +38,12 @@ function snapDrawingPoint(world,plane,opts={}){
  }
  return next;
 }
+// Afstand tussen twee punten binnen een tekenvlak (plane = twee assen). Geeft hele millimeters.
+function measure(a,b,plane){
+ if(!a||!b||!Array.isArray(plane)||plane.length!==2)return null;
+ const [h,v]=plane,dx=Math.abs((b[h]||0)-(a[h]||0)),dy=Math.abs((b[v]||0)-(a[v]||0));
+ return {h,v,dx:Math.round(dx),dy:Math.round(dy),dist:Math.round(Math.hypot(dx,dy))};
+}
 function dimensionLabel(mm){return new Intl.NumberFormat('nl-NL',{maximumFractionDigits:0}).format(mm)+' mm';}
-return {snap,anchors,nearestAnchor,snapDrawingPoint,dimensionLabel};
+return {snap,anchors,nearestAnchor,snapDrawingPoint,measure,dimensionLabel};
 });

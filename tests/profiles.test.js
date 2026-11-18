@@ -64,3 +64,15 @@ test('apparaatmaten: waarschuwing alleen als eigen maten niet passen; 0 = onbeke
  assert.deepEqual(M.normalizeProject(JSON.parse(JSON.stringify(p))).modules.find(m=>m.kind==='fridge').appliance,{w:700,d:900,h:700});
  assert.deepEqual(M.normalizeAppliance({w:-5,d:'x',h:99999}),{w:0,d:0,h:2500});
 });
+test('reeks kopiëren: aantal, afstand, richting, vrije balken en begrenzing',()=>{
+ const p=M.freeProject();p.beams=[{id:'a',name:'Rachel',axis:'x',x:100,y:200,z:0,length:900,profile:'28x70'}];
+ const r=M.arrayBeams(p,p.beams[0],'z',3,400);
+ assert.equal(r.ok,true);assert.equal(r.beams.length,3);assert.deepEqual(r.beams.map(b=>b.z),[400,800,1200]);
+ assert.ok(r.beams.every(b=>b.x===100&&b.y===200&&b.length===900&&b.axis==='x'&&b.profile==='28x70'));
+ assert.equal(new Set(r.beams.map(b=>b.id)).size,3);assert.ok(!r.beams.some(b=>b.id==='a'));
+ assert.deepEqual(M.arrayBeams(p,p.beams[0],'y',2,-50).beams.map(b=>b.y),[150,100]);
+ for(const bad of [['q',3,400],['z',0,400],['z',51,400],['z',3,0],['z',3,20000],['z','x',400]])assert.equal(M.arrayBeams(p,p.beams[0],...bad).ok,false,JSON.stringify(bad));
+ p.beams=Array.from({length:98},(_,i)=>({id:'b'+i,name:'x',axis:'x',x:0,y:0,z:0,length:100}));
+ const lim=M.arrayBeams(p,p.beams[0],'z',5,50);assert.equal(lim.beams.length,2);assert.equal(lim.skipped,3);
+ const fp=M.demoProject(),post=M.framePieces(fp)[0],fr=M.arrayBeams(fp,post,'x',1,100);assert.equal(fr.beams.length,1);assert.equal(fr.beams[0].group,undefined,'kopie van framebalk is een vrije balk');
+});

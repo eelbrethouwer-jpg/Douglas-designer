@@ -140,6 +140,32 @@ const scenarios=[
    t.ok('ongeldige aanlevering geweigerd met melding',await b.eval(`document.querySelector('#toast').textContent.includes('Niet gelukt')`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
+ {name:'modelleren: afstand meten met de muis en reeks kopiëren (met undo)',async run(b,t){
+   await demo(b);
+   await b.click('#measureTool');await sleep(300);
+   t.ok('meetmodus actief in 2D-aanzicht',await b.eval(`document.querySelector('#measureTool').getAttribute('aria-pressed')==='true'&&!document.querySelector('#drawHelp').classList.contains('hidden')`));
+   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {x:c.left+c.width/2,y:c.top+c.height/2}})()`);
+   await b.mouse('mouseMoved',r.x-200,r.y,{buttons:0});await b.mouse('mousePressed',r.x-200,r.y);await b.mouse('mouseReleased',r.x-200,r.y);
+   await b.mouse('mouseMoved',r.x+200,r.y+30,{buttons:0});await sleep(150);
+   await b.mouse('mousePressed',r.x+200,r.y+30);await b.mouse('mouseReleased',r.x+200,r.y+30);await sleep(200);
+   const help=await b.eval(`document.querySelector('#drawHelp').textContent`);
+   const mm=+(/Gemeten: ([\d.]+) mm/.exec(help)||[])[1].toString().replace(/\./g,'');
+   t.ok('meting getoond en plausibel (100–5000 mm)',mm>=100&&mm<=5000,help);
+   await b.shot(path.join(OUT,'meten.png'));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(200);
+   t.ok('Esc stopt het meten',await b.eval(`document.querySelector('#measureTool').getAttribute('aria-pressed')==='false'`));
+   t.ok('meten wijzigt het ontwerp niet',await b.eval(`${activeProject}.beams.length===0&&document.querySelector('#statBeams').textContent.includes('28')`));
+   // reeks kopiëren
+   await b.eval(`document.querySelector('.side-tab[data-panel="beams"]')?.click()`);await sleep(250);
+   await b.eval(`document.querySelector('[data-select-frame]').click()`);await sleep(400);
+   t.ok('reeks-gereedschap zichtbaar',await b.eval(`!!document.querySelector('#arrayBeamBtn')`));
+   await set(b,'#arrCount',3);await set(b,'#arrSpacing',400);
+   await b.click('#arrayBeamBtn');await sleep(500);
+   t.ok('3 vrije kopieën, zaaglijst 31 stuks',await b.eval(`${activeProject}.beams.length===3&&document.querySelector('#statBeams').textContent.includes('31')`));
+   await b.eval(`document.querySelector('#undoBtn').click()`);await sleep(400);
+   t.ok('undo herstelt 28 stuks',await b.eval(`${activeProject}.beams.length===0&&document.querySelector('#statBeams').textContent.includes('28')`));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+
 ];
 
 (async()=>{

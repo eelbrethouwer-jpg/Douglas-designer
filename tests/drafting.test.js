@@ -37,3 +37,10 @@ test('grid point snaps only active axes without moving the other coordinate',()=
  const fixed=D.snapDrawingPoint(point,['x','y'],{step:5,anchor:{point:{x:151,y:251,z:900}}});
  assert.deepEqual(fixed,{x:150,y:250,z:123});
 });
+test('measure: afstand en delta in het tekenvlak, afgerond op hele mm',()=>{
+ const D2=require('../drafting.js');
+ assert.deepEqual(D2.measure({x:0,y:0,z:0},{x:300,y:400,z:99},['x','y']),{h:'x',v:'y',dx:300,dy:400,dist:500});
+ assert.deepEqual(D2.measure({x:10,y:0,z:5},{x:10,y:0,z:-95},['x','z']),{h:'x',v:'z',dx:0,dy:100,dist:100});
+ assert.equal(D2.measure(null,{x:1},['x','y']),null);assert.equal(D2.measure({x:0},{x:1},['x']),null);
+ assert.equal(D2.measure({x:0.4,y:0},{x:0.6,y:0},['x','y']).dist,0);
+});
