@@ -247,6 +247,8 @@ function create(opts){
       if(selection.type==='zone'){const z=plan.zones.find(q=>q.id===selection.id);if(!z)return;
         if(f.pf){const k=f.pf;if(k==='name'||k==='kind')z[k]=e.target.value;else z[k]=+e.target.value;}
         if(f.pw){const s=new Set((z.walls||'').split('').filter(Boolean));e.target.checked?s.add(f.pw):s.delete(f.pw);z.walls=[...s].join('');}
+        if(f.pr==='high'){z.roof=e.target.value?{kind:'lessenaar',high:e.target.value,low:Math.max(600,z.roof?.low??z.h-300)}:null;if(!z.roof)delete z.roof;if(z.roof&&z.roof.low>=z.h)z.roof.low=Math.max(600,z.h-300);}
+        else if(f.pr==='low'&&z.roof)z.roof.low=Math.min(Math.max(600,+e.target.value||0),z.h-50);
         if(f.pd==='edge')z.door=e.target.value?{edge:e.target.value,offset:z.door?.offset??150,width:z.door?.width||900,height:z.door?.height||2050}:null;
         else if(f.pd==='offset'&&z.door)z.door.offset=Math.max(0,+e.target.value||0);
       }else{const l=plan.lines.find(q=>q.id===selection.id);if(!l)return;
@@ -267,7 +269,8 @@ function create(opts){
         <label>Hoogte bovenligger (mm)<input data-pf="h" type="number" step="50" value="${z.h}"></label>
         <div class="pe-row">Wanden:${[['n','A','achter'],['s','V','voor'],['w','L','links'],['e','R','rechts']].map(([c,l,t])=>`<label class="pe-chk" title="Wand ${t}"><input type="checkbox" data-pw="${c}" ${(z.walls||'').includes(c)?'checked':''}> ${l}</label>`).join('')}</div>
         <div class="pe-row">Deur: <select data-pd="edge"><option value="">geen</option>${[['n','achter'],['s','voor'],['w','links'],['e','rechts']].map(([c,t])=>`<option value="${c}" ${z.door?.edge===c?'selected':''}>${t}</option>`).join('')}</select>${z.door?` <input data-pd="offset" type="number" step="50" value="${z.door.offset}" title="Afstand vanaf begin van de wand (mm)">`:''}</div>
-        <p class="pe-note">${fmt(z.w)} × ${fmt(z.d)} mm = ${(z.w*z.d/1e6).toFixed(2).replace('.',',')} m² (bruto)</p><button type="button" class="pe-del" data-pe="delete">Verwijder blok</button>`;}
+        ${z.kind==='pergola'?'':`<div class="pe-row">Dak: <select data-pr="high"><option value="">plat</option>${[['n','achter hoog'],['s','voor hoog'],['w','links hoog'],['e','rechts hoog']].map(([c,t])=>`<option value="${c}" ${z.roof?.high===c?'selected':''}>${t}</option>`).join('')}</select>${z.roof?` laag: <input data-pr="low" type="number" step="50" value="${z.roof.low}" title="Hoogte van de lage rand (mm)"> mm`:''}</div>`}
+        <p class="pe-note">${fmt(z.w)} × ${fmt(z.d)} mm = ${(z.w*z.d/1e6).toFixed(2).replace('.',',')} m² (bruto)${z.roof?` · lessenaarsdak, ${fmt(Math.round(Math.atan((z.h-z.roof.low)/((z.roof.high==='w'||z.roof.high==='e')?z.w:z.d))*180/Math.PI*10)/10).replace('.',',')}° helling`:''}</p><button type="button" class="pe-del" data-pe="delete">Verwijder blok</button>`;}
     }else if(selection?.type==='line'){
       const l=plan.lines.find(q=>q.id===selection.id);
       if(l){h+=`<h3>Lijn / wand</h3><label>Naam<input data-pl="name" value="${esc(l.name)}"></label><div class="pe-grid"><label>X1<input data-pl="x1" type="number" step="50" value="${l.x1}"></label><label>Z1<input data-pl="z1" type="number" step="50" value="${l.z1}"></label><label>X2<input data-pl="x2" type="number" step="50" value="${l.x2}"></label><label>Z2<input data-pl="z2" type="number" step="50" value="${l.z2}"></label></div><label>Hoogte (mm)<input data-pl="h" type="number" step="50" value="${l.h}"></label><p class="pe-note">Lengte ${fmt(Math.hypot(l.x2-l.x1,l.z2-l.z1))} mm. Een lijn wordt in 3D een wand met staanders, bovenligger en bekleding.</p><button type="button" class="pe-del" data-pe="delete">Verwijder lijn</button>`;}
@@ -312,6 +315,10 @@ function create(opts){
     if(!isPreview){ctx.strokeStyle='#111';ctx.lineWidth=5;for(const c of q.walls||''){ctx.beginPath();if(c==='n'){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,a.y);}else if(c==='s'){ctx.moveTo(a.x,b.y);ctx.lineTo(b.x,b.y);}else if(c==='w'){ctx.moveTo(a.x,a.y);ctx.lineTo(a.x,b.y);}else{ctx.moveTo(b.x,a.y);ctx.lineTo(b.x,b.y);}ctx.stroke();}
       if(q.door){const d=q.door,len=d.width*view.scale;ctx.strokeStyle='#d9822b';ctx.lineWidth=5;ctx.beginPath();
         if(d.edge==='n'||d.edge==='s'){const y=d.edge==='n'?a.y:b.y,x=a.x+d.offset*view.scale;ctx.moveTo(x,y);ctx.lineTo(x+len,y);}else{const x=d.edge==='w'?a.x:b.x,y=a.y+d.offset*view.scale;ctx.moveTo(x,y);ctx.lineTo(x,y+len);}ctx.stroke();}}
+    if(q.roof&&!isPreview){ // pijl wijst naar de lage rand (waterafvoer)
+      const dx={w:1,e:-1,n:0,s:0}[q.roof.high],dz={n:1,s:-1,w:0,e:0}[q.roof.high],mx=a.x+w/2,my=a.y+h/2,L=Math.min(Math.max(Math.abs(dx)?w*.28:h*.28,12),60);
+      ctx.save();ctx.strokeStyle='rgba(30,90,140,.8)';ctx.fillStyle='rgba(30,90,140,.8)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(mx-dx*L,my-dz*L);ctx.lineTo(mx+dx*L,my+dz*L);ctx.stroke();
+      const ex=mx+dx*L,ey=my+dz*L;ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-dx*8-dz*5,ey-dz*8+dx*5);ctx.lineTo(ex-dx*8+dz*5,ey-dz*8-dx*5);ctx.closePath();ctx.fill();ctx.restore();}
     // tekst
     ctx.textAlign='center';const cx=a.x+w/2,cy=a.y+h/2;
     if(q.name&&w>60&&h>34){ctx.fillStyle=q.kind==='closed'?'#fff':'#1f2a33';ctx.font='700 13px sans-serif';ctx.fillText(q.name,cx,cy-2);}

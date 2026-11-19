@@ -65,14 +65,33 @@
         `${frontMods.length} kast(en) × opening × ${openingHeight} mm hoog, indicatief`));
     }
     const wallPanels = (p.panels || []).filter(x => x.kind === 'cladding'), doorPanels = (p.panels || []).filter(x => x.kind === 'door');
+    const roofPanels = (p.panels || []).filter(x => x.kind === 'roof'), rafterPanels = (p.panels || []).filter(x => x.kind === 'rafter');
+    // lengte langs de helling (schuine lengte) en gemiddelde hoogte van een paneel met schuine boven-/onderzijde
+    const run = x => x.slope ? (x.slope.axis === 'x' ? x.w : x.d) : Math.max(x.w, x.d);
+    const slantLen = x => x.slope ? Math.hypot(run(x), x.slope.y2 - x.y) : run(x);
+    const avgH = x => x.slope ? (x.h + x.slope.h2) / 2 : x.h;
     if (wallPanels.length) {
-      // Oppervlak = zichtvlak per paneel (lengte × hoogte); de dunne zijde telt niet mee.
-      const area = wallPanels.reduce((s, x) => s + (Math.max(x.w, x.d) * x.h), 0) / 1e6;
+      // Oppervlak = zichtvlak per paneel (lengte × gemiddelde hoogte); de dunne zijde telt niet mee.
+      const area = wallPanels.reduce((s, x) => s + (run(x) * avgH(x)), 0) / 1e6;
       panels.push(line('bekleding', 'Gevelbekleding / rabatdelen (m²)', ceil1(area * waste), 'm²',
         `${wallPanels.length} wandvlak(ken), ${ceil1(area)} m² + ${m.wastePct}% verlies`));
     }
     if (doorPanels.length) panels.push(line('deuren', 'Buitendeur(en) (st)', doorPanels.length, 'st', doorPanels.map(x => `${Math.max(x.w, x.d)} × ${x.h} mm`).join(', ')));
+    if (roofPanels.length) {
+      // Dakplaat: schuine lengte × breedte (dwars op de helling).
+      const area = roofPanels.reduce((s, x) => s + slantLen(x) * (x.slope ? (x.slope.axis === 'x' ? x.d : x.w) : Math.min(x.w, x.d)), 0) / 1e6;
+      panels.push(line('dakbeplating', 'Dakbeplating / dakplaat (m²)', ceil1(area * waste), 'm²',
+        `${roofPanels.length} dakvlak(ken), schuin gemeten ${ceil1(area)} m² + ${m.wastePct}% verlies (overstek niet inbegrepen)`));
+    }
     if (panels.length) groups.push({title: 'Platen & werkblad', lines: panels});
+    if (rafterPanels.length) {
+      // Daksparren 50 × 150: schuine lengte + 100 mm zaagverlies; zo veel mogelijk uit één stok gehaald.
+      const lens = rafterPanels.map(x => Math.round(slantLen(x)) + 50).sort((a, b) => b - a), stock = p.stockLength, boards = [];
+      for (const l of lens) { const b = boards.find(r => r + l + p.kerf <= stock); if (b === undefined) boards.push(l); else boards[boards.indexOf(b)] = b + l + p.kerf; }
+      const total = lens.reduce((s, l) => s + l, 0) / 1000;
+      groups.push({title: 'Dak', lines: [line('daksparren', `Daksparren 50 × 150 × ${stock} mm`, boards.length, 'st',
+        `${rafterPanels.length} sparren, samen ${nl(total, 1)} m schuin gemeten (elk +50 mm zaagmarge)`)]});
+    }
 
     // 4. Beslag.
     const hardware = [];

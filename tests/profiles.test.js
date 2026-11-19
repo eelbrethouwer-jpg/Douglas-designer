@@ -161,7 +161,7 @@ test('wanden, deur en bekleding: panelen, kozijn, geen conflicten, materiaallijs
  // panelen normaliseren
  assert.deepEqual(M.normalizePanels('x'),[]);const q=M.normalizePanels([{name:'<i>',kind:'x',w:-1,h:99999,d:'a',color:'red'}])[0];
  assert.deepEqual([q.name,q.kind,q.w,q.h,q.d,q.color],['i','cladding',1,10000,20,'#1d2124']);
- assert.equal(M.normalizePanels(new Array(80).fill({})).length,60);
+ assert.equal(M.normalizePanels(new Array(200).fill({})).length,160);
  assert.equal(M.normalizePlan({zones:[{kind:'closed'}]}).zones[0].walls,'nesw');assert.equal(M.normalizePlan({zones:[{kind:'open'}]}).zones[0].walls,'');
  assert.equal(M.normalizePlan({zones:[{door:{edge:'q'}}]}).zones[0].door,null);
 });
@@ -175,4 +175,37 @@ test('plan met lijnen: normalisatie haaks, minimale lengte, unieke ids en wand i
  assert.ok(r.beams.filter(b=>b.axis==='y').length>=5);assert.equal(r.panels.length,2);
  const p=M.normalizeProject({...M.freeProject(),width:r.bounds.width,depth:r.bounds.depth,height:r.bounds.height,beams:r.beams,panels:r.panels});
  assert.equal(M.conflicts(p).overlaps.length,0);assert.equal(M.conflicts(p).unsupported.length,0);
+});
+
+test('lessenaarsdak: normalisatie, schuine sparren/dakplaat, wand met schuine bovenzijde, materiaallijst',()=>{
+ const raw={zones:[{id:'a',name:'Berging',kind:'closed',x:0,z:0,w:2500,d:2000,h:2550,walls:'nesw',door:{edge:'s',offset:300,width:900,height:2050},roof:{high:'w',low:2300}}]};
+ const pl=M.normalizePlan(raw);assert.deepEqual(pl.zones[0].roof,{kind:'lessenaar',high:'w',low:2300});
+ // ongeldig dak valt weg: pergola, onbekende zijde, lage rand niet lager dan hoge rand
+ assert.equal(M.normalizePlan({zones:[{kind:'pergola',roof:{high:'w',low:2000}}]}).zones[0].roof,undefined);
+ assert.equal(M.normalizePlan({zones:[{roof:{high:'q',low:2000}}]}).zones[0].roof,undefined);
+ assert.ok(M.normalizePlan({zones:[{h:2500,roof:{high:'n',low:9000}}]}).zones[0].roof.low<=2450);
+ const r=M.planFrame(pl);
+ const rafters=r.panels.filter(q=>q.kind==='rafter'),sheet=r.panels.filter(q=>q.kind==='roof');
+ assert.ok(rafters.length>=4&&sheet.length===1);
+ for(const q of rafters){assert.equal(q.slope.axis,'x');assert.ok(q.y>q.slope.y2,'hoog links, laag rechts');assert.equal(q.h,150);assert.equal(q.d,50);}
+ assert.equal(sheet[0].y-rafters[0].y,150);
+ // wand langs de helling heeft schuine bovenzijde en eindigt op de sparhoogte
+ const slopedWall=r.panels.find(q=>q.kind==='cladding'&&q.slope);assert.ok(slopedWall);
+ assert.ok(slopedWall.y+slopedWall.h>slopedWall.slope.y2+slopedWall.slope.h2);
+ // staanders aan de hoge rand zijn langer dan aan de lage rand
+ const posts=r.beams.filter(b=>b.axis==='y'),hi=Math.max(...posts.map(b=>b.length)),lo=Math.min(...posts.map(b=>b.length));assert.ok(hi>lo);
+ assert.equal(r.bounds.height,2550+150+18);
+ // panelen met helling blijven na normaliseren behouden; onjuiste as wordt genegeerd
+ const n=M.normalizePanels([{kind:'rafter',w:1000,h:150,d:50,slope:{axis:'x',y2:2000,h2:150}},{kind:'rafter',slope:{axis:'q'}}]);
+ assert.deepEqual(n[0].slope,{axis:'x',y2:2000,h2:150});assert.equal(n[1].slope,undefined);
+ // materiaallijst: dakplaat in m², daksparren op schuine lengte uit stokken
+ const p=M.normalizeProject({...M.freeProject(),plan:raw,stockLength:6000,width:r.bounds.width,depth:r.bounds.depth,height:r.bounds.height,beams:r.beams,panels:r.panels});
+ const list=X.build(p,M),all=list.groups.flatMap(g=>g.lines),plate=all.find(l=>l.id==='dakbeplating'),spar=all.find(l=>l.id==='daksparren');
+ assert.ok(plate&&plate.qty>5&&plate.qty<7,JSON.stringify(plate));assert.ok(spar&&spar.qty>=2&&spar.qty<=4,JSON.stringify(spar));
+ assert.equal(M.conflicts(p).overlaps.length,0);assert.equal(M.conflicts(p).unsupported.length,0);
+ // plat dak blijft ongewijzigd: geen sparren
+ assert.equal(M.planFrame({zones:[{...raw.zones[0],roof:undefined}]}).panels.filter(q=>q.kind==='rafter').length,0);
+ // spiegeling voor/achter: hoge zijde 'n' in de plattegrond (achter) is hoog aan z=achterzijde in 3D
+ const rn=M.planFrame({zones:[{id:'a',kind:'open',x:0,z:0,w:2000,d:3000,h:2600,roof:{high:'n',low:2300}}]});
+ const rf=rn.panels.filter(q=>q.kind==='rafter')[0];assert.equal(rf.slope.axis,'z');assert.ok(rf.y<rf.slope.y2,'z=0 is voorzijde (laag), achter hoog');
 });

@@ -350,6 +350,13 @@ function box(x,y,z,w,h,d,color,owner,tileSize=Infinity){if(w<=0||h<=0||d<=0)retu
     }
   });
 }
+// Schuin paneel (dakspar, dakplaat, wand met schuine bovenzijde): onder- en bovenzijde lopen mee langs as 'x' of 'z'.
+function slopedBox(q,owner){
+  const sl=q.slope,ax=sl.axis==='x';
+  const v=(e,t,c)=>{const y=e?sl.y2+(t?sl.h2:0):q.y+(t?q.h:0);return ax?[q.x+(e?q.w:0),y,q.z+(c?q.d:0)]:[q.x+(c?q.w:0),y,q.z+(e?q.d:0)];};
+  const faces=[[[0,1,0],[1,1,0],[1,1,1],[0,1,1],1.13],[[0,0,0],[1,0,0],[1,0,1],[0,0,1],.64],[[0,0,0],[1,0,0],[1,1,0],[0,1,0],.8],[[0,0,1],[1,0,1],[1,1,1],[0,1,1],.97],[[0,0,0],[0,1,0],[0,1,1],[0,0,1],.7],[[1,0,0],[1,1,0],[1,1,1],[1,0,1],.85]];
+  for(const f of faces)poly(f.slice(0,4).map(a=>v(...a)),shade(q.color,f[4]),owner);
+}
 function egg(cx,cy,cz,rx,ry,rz,color,owner){const lat=10,lon=18;for(let i=0;i<lat;i++)for(let j=0;j<lon;j++){
   function point(theta,phi){const r=Math.sin(theta)*(1+.1*Math.cos(theta)),yy=Math.cos(theta);return [cx+rx*r*Math.cos(phi),cy+ry*yy,cz+rz*r*Math.sin(phi)];}
   const a=i*Math.PI/lat,b=(i+1)*Math.PI/lat,t=j*2*Math.PI/lon,u=(j+1)*2*Math.PI/lon;
@@ -404,7 +411,7 @@ function objects(){shapes=[];hitShapes=[];
   }
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
-  for(const q of project.panels||[])box(q.x,q.y,q.z,q.w,q.h,q.d,q.color,{type:'panel',id:q.id});
+  for(const q of project.panels||[]){if(q.slope)slopedBox(q,{type:'panel',id:q.id});else box(q.x,q.y,q.z,q.w,q.h,q.d,q.color,{type:'panel',id:q.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
   if(project.countertop){const ct=M.countertopBox(project);box(ct.x,ct.y,ct.z,ct.w,ct.h,ct.d,RGB.top,null,gpu.ready?Infinity:110);}
  drawRoomGeometry();
@@ -832,9 +839,9 @@ function scanAction(act){
 // ---------- Plattegrond-start ----------
 const PLAN_PRESETS={
  kapschuur:{label:'Kapschuur (jouw PDF: zitgedeelte, berging, pergola)',name:'Kapschuur',zones:[
-  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2550,roof:{high:'n',low:2300},door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
  houthok:{label:'Kapschuur met houthok (plattegrond-afbeelding)',name:'Kapschuur met houthok',zones:[
-  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2550,roof:{high:'n',low:2300},door:{edge:'s',offset:150,width:900,height:2050}},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
   {name:'Berging voor',kind:'closed',x:7500,z:1000,w:1500,d:1450,h:2300},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
  leeg:{label:'Eigen plattegrond (twee lege zones)',name:'Eigen plattegrond',zones:[
   {name:'Zone 1',kind:'open',x:0,z:0,w:3000,d:2500,h:2500},{name:'Zone 2',kind:'closed',x:3000,z:0,w:2500,d:2500,h:2400}]}

@@ -1,3 +1,12 @@
+## Ongepubliceerd — Fase 2: lessenaarsdak in 3D
+
+- Elk blok (open of gesloten, niet pergola) kan een **lessenaarsdak** krijgen: kies in het zijpaneel *Dak → achter/voor/links/rechts hoog* en vul de hoogte van de lage rand in. In de schets wijst een pijl naar de lage kant; het zijpaneel toont de helling in graden.
+- In 3D: bovenliggers alleen langs de hoge en lage rand, **daksparren 50 × 150 h.o.h. ≤ 600 mm** (schuin) en een **dakplaat**; staanders en wanden volgen de helling (wanden langs de helling krijgen een schuine bovenzijde).
+- Nieuw paneeltype met helling (`slope`) en soorten *Dakspar* en *Dakbeplating*; limiet nu 160 panelen.
+- Materiaallijst: *Dakbeplating* (m², schuin gemeten, overstek niet inbegrepen) en *Daksparren* (aantal stokken, schuine lengte + zaagmarge).
+- Voorbeeld Kapschuur: berging met lessenaarsdak 2,55 m (achter) naar 2,30 m (voor). Aanname: de PDF vermeldt de helling niet.
+- Nog niet: zadeldak/kap (nok 3,30 m) voor het zitgedeelte, dakoverstek, kilgoot/dakbedekking.
+
 ## Ongepubliceerd — Fase 1: plattegrond schetsen in 2D
 
 - Knop 📐 Plattegrond opent nu een schetsvenster in SketchUp-stijl: **Blok** (B) en **Lijn** (L) tekenen door te slepen, **Selecteren** (V) om te klikken, te verplaatsen en met de vierkante grepen groter/kleiner te maken. Raster (50–500 mm), magneet naar andere randen, live maten, scrollen = zoomen, Shift+slepen = verschuiven, pijltjes = verplaatsen, Delete = verwijderen, Ctrl+Z/Y.

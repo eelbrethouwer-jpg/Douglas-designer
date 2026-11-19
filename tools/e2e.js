@@ -302,9 +302,22 @@ const scenarios=[
    await b.shot(path.join(OUT,'schets-kapschuur.png'));
    await b.click('[data-pe="generate"]');await sleep(900);
    t.ok('schetsvenster dicht en nieuw project 9.000 × 6.500 mm',await b.eval(`!document.querySelector('.plan-editor.open')&&(()=>{const p=${activeProject};return p.width===9000&&p.depth===6500&&p.beams.length>=35&&p.panels.length>=6})()`));
+   t.ok('berging heeft lessenaarsdak: daksparren, dakplaat en schuine wand in het project',await b.eval(`(()=>{const p=${activeProject};const k=q=>(p.panels||[]).filter(x=>x.kind===q).length;return k('rafter')>=8&&k('roof')===1&&(p.panels||[]).some(x=>x.kind==='cladding'&&x.slope)})()`));
+   t.ok('materiaallijst bevat dakbeplating en daksparren',await b.eval(`(()=>{const p=${activeProject};const l=DouglasMaterials.build(p,DouglasModel).groups.flatMap(g=>g.lines).map(x=>x.id);return l.includes('dakbeplating')&&l.includes('daksparren')})()`));
    await b.shot(path.join(OUT,'plattegrond-3d.png'));
+   for(const [lbl,f] of [['Zij','zij'],['Voor','voor']]){await b.eval(`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='${lbl}').click()`);await sleep(500);await b.shot(path.join(OUT,'plattegrond-'+f+'.png'));}
+   await b.eval(`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='3D').click()`);await sleep(300);
    // heropenen toont de bewaarde schets; Esc sluit
    await b.click('#planTool');await sleep(400);t.ok('heropenen toont bewaarde schets',(await st()).zones.length===3);
+   {const z=await b.eval(`(()=>{const s=window.DouglasPlanEditorInstance._state(),c=document.querySelector('.pe-canvas').getBoundingClientRect(),q=s.plan.zones.find(z=>z.name==='Berging');return {x:c.left+s.view.ox+(q.x+q.w/2)*s.view.scale,y:c.top+s.view.oz+(q.z+q.d/2)*s.view.scale,high:q.roof&&q.roof.high}})()`);
+    t.ok('berging heeft in de schets een dak (hoog achter)',z.high==='n',JSON.stringify(z));
+    await b.mouse('mouseMoved',z.x,z.y,{buttons:0});await b.mouse('mousePressed',z.x,z.y);await b.mouse('mouseReleased',z.x,z.y);await sleep(300);
+    await b.eval(`(()=>{const s=document.querySelector('[data-pr="high"]');s.value='e';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+    t.ok('dakkeuze in het zijpaneel past de zone aan',await b.eval(`window.DouglasPlanEditorInstance._state().plan.zones.find(z=>z.name==='Berging').roof.high==='e'`));
+    await b.shot(path.join(OUT,'schets-dak.png'));
+    await b.eval(`(()=>{const s=document.querySelector('[data-pr="high"]');s.value='';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+    t.ok('plat dak: dak weg uit de zone',await b.eval(`!window.DouglasPlanEditorInstance._state().plan.zones.find(z=>z.name==='Berging').roof`));}
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(300);
    await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(300);
    t.ok('Esc sluit het schetsvenster',await b.eval(`!document.querySelector('.plan-editor.open')`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
