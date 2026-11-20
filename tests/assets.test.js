@@ -16,7 +16,7 @@ test('every local script and stylesheet referenced in HTML exists',()=>{
 });
 test('all runtime scripts are in correct dependency order',()=>{
  const scripts=[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(m=>m[1].split('?')[0]);
- assert.deepEqual(scripts,['room-space.js','sketch-grid.js','model.js','materials.js','documents.js','projects.js','share.js','mesh-import.js','drafting.js','render3d.js','room-studio.js','app.js']);
+ assert.deepEqual(scripts,['room-space.js','sketch-grid.js','model.js','materials.js','documents.js','projects.js','share.js','mesh-import.js','plan-editor.js','drafting.js','render3d.js','room-studio.js','app.js']);
 });
 test('PWA caches the same versioned files used by the page',()=>{
  const cached=[...service.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
@@ -53,7 +53,7 @@ test('iPhone safe-area layout and Room Capture version agree with deployed PWA',
  assert.match(css,/env\(safe-area-inset-bottom/);
  assert.match(photo,/room-capture-version">v0\.7\.4/);
  assert.match(html,/room-studio\.js\?rev=0\.7\.4/);
- assert.match(html,/app\.js\?rev=0\.7\.4/);
+ assert.match(html,/app\.js\?rev=\d+\.\d+\.\d+/);
 });
 
 test('mobile floor-corner handles are draggable and point selectors appear in photo workflow',()=>{

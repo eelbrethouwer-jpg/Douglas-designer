@@ -17,6 +17,7 @@ const euro=(n)=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'})
 const icons={drawers:'▤',fridge:'▣',kamado:'◉',doors:'▥',open:'▧'};
 const defaults={drawers:500,fridge:600,kamado:570,doors:520,open:500};
 const MESH=window.DouglasMesh||null;
+const PE=window.DouglasPlanEditor||null;
 const SHARE=window.DouglasShare||null; // optioneel: zonder share.js verdwijnen delen/aanleveren
 const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
 const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
@@ -349,6 +350,13 @@ function box(x,y,z,w,h,d,color,owner,tileSize=Infinity){if(w<=0||h<=0||d<=0)retu
     }
   });
 }
+// Schuin paneel (dakspar, dakplaat, wand met schuine bovenzijde): onder- en bovenzijde lopen mee langs as 'x' of 'z'.
+function slopedBox(q,owner){
+  const sl=q.slope,ax=sl.axis==='x';
+  const v=(e,t,c)=>{const y=e?sl.y2+(t?sl.h2:0):q.y+(t?q.h:0);return ax?[q.x+(e?q.w:0),y,q.z+(c?q.d:0)]:[q.x+(c?q.w:0),y,q.z+(e?q.d:0)];};
+  const faces=[[[0,1,0],[1,1,0],[1,1,1],[0,1,1],1.13],[[0,0,0],[1,0,0],[1,0,1],[0,0,1],.64],[[0,0,0],[1,0,0],[1,1,0],[0,1,0],.8],[[0,0,1],[1,0,1],[1,1,1],[0,1,1],.97],[[0,0,0],[0,1,0],[0,1,1],[0,0,1],.7],[[1,0,0],[1,1,0],[1,1,1],[1,0,1],.85]];
+  for(const f of faces)poly(f.slice(0,4).map(a=>v(...a)),shade(q.color,f[4]),owner);
+}
 function egg(cx,cy,cz,rx,ry,rz,color,owner){const lat=10,lon=18;for(let i=0;i<lat;i++)for(let j=0;j<lon;j++){
   function point(theta,phi){const r=Math.sin(theta)*(1+.1*Math.cos(theta)),yy=Math.cos(theta);return [cx+rx*r*Math.cos(phi),cy+ry*yy,cz+rz*r*Math.sin(phi)];}
   const a=i*Math.PI/lat,b=(i+1)*Math.PI/lat,t=j*2*Math.PI/lon,u=(j+1)*2*Math.PI/lon;
@@ -403,7 +411,7 @@ function objects(){shapes=[];hitShapes=[];
   }
   for(const b of frame){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,b.axis==='y'?RGB.post:RGB.wood,{type:'frame',id:b.id});}
   for(const b of project.beams){const d=M.beamBox(b);box(d.x,d.y,d.z,d.w,d.h,d.d,RGB.highlight,{type:'beam',id:b.id});}
-  for(const q of project.panels||[])box(q.x,q.y,q.z,q.w,q.h,q.d,q.color,{type:'panel',id:q.id});
+  for(const q of project.panels||[]){if(q.slope)slopedBox(q,{type:'panel',id:q.id});else box(q.x,q.y,q.z,q.w,q.h,q.d,q.color,{type:'panel',id:q.id});}
   if(previewBeam){const d=M.beamBox(previewBeam);box(d.x,d.y,d.z,d.w,d.h,d.d,'#58a882',null);}
   if(project.countertop){const ct=M.countertopBox(project);box(ct.x,ct.y,ct.z,ct.w,ct.h,ct.d,RGB.top,null,gpu.ready?Infinity:110);}
  drawRoomGeometry();
@@ -831,9 +839,9 @@ function scanAction(act){
 // ---------- Plattegrond-start ----------
 const PLAN_PRESETS={
  kapschuur:{label:'Kapschuur (jouw PDF: zitgedeelte, berging, pergola)',name:'Kapschuur',zones:[
-  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:5000,d:2450,h:2550,roof:{high:'n',low:2300},door:{edge:'s',offset:150,width:900,height:2050}},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
  houthok:{label:'Kapschuur met houthok (plattegrond-afbeelding)',name:'Kapschuur met houthok',zones:[
-  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2300,door:{edge:'s',offset:150,width:900,height:2050}},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
+  {name:'Zitgedeelte',kind:'open',x:0,z:0,w:4000,d:3300,h:2700,walls:'n'},{name:'Berging',kind:'closed',x:4000,z:0,w:3500,d:2450,h:2550,roof:{high:'n',low:2300},door:{edge:'s',offset:150,width:900,height:2050}},{name:'Houthok',kind:'closed',x:7500,z:0,w:1500,d:1000,h:2300},
   {name:'Berging voor',kind:'closed',x:7500,z:1000,w:1500,d:1450,h:2300},{name:'Pergola',kind:'pergola',x:0,z:3300,w:4000,d:3200,h:2500}]},
  leeg:{label:'Eigen plattegrond (twee lege zones)',name:'Eigen plattegrond',zones:[
   {name:'Zone 1',kind:'open',x:0,z:0,w:3000,d:2500,h:2500},{name:'Zone 2',kind:'closed',x:3000,z:0,w:2500,d:2500,h:2400}]}
@@ -863,14 +871,31 @@ function planHTML(){
  h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="primary-btn" data-plan="generate" ${pv.r.beams.length?'':'disabled'}>▦ Maak 3D-project van deze plattegrond</button></div><p class="mini-note">Er komt een nieuw project; je huidige project blijft bewaard. Leg je eigen plattegrondafbeelding eronder met 🖼 Foto in het Boven-aanzicht (PDF eerst als PNG/JPG opslaan).</p>`;
  return h;
 }
+function generatePlanProject(planObj,name){
+ const r=M.planFrame(planObj);if(!r.beams.length&&!r.panels.length){toast('Teken eerst een blok of lijn');return false;}
+ const b=r.bounds,raw={...M.freeProject(),name:name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:planObj,stockLength:6000,beams:r.beams,panels:r.panels};
+ if(r.truncated)toast(`Let op: ${r.truncated} balken passen niet (max. 100). Maak de schets kleiner of deel hem op.`);
+ if(openNewProject(raw,`Nieuw project met ${r.beams.length} balken · bewerk het in 3D`)){setView('3d');return true;}
+ return false;
+}
+const PLAN_DRAFT_KEY='douglas-designer-plan-draft-v1';
+let planEditor=null;
+function openPlanEditor(){
+ if(!PE){showPlan();return;}
+ if(!planEditor)planEditor=PE.create({M,presets:PLAN_PRESETS,
+  onChange:p=>{try{localStorage.setItem(PLAN_DRAFT_KEY,JSON.stringify(p));}catch(e){}},
+  onGenerate:p=>{if(generatePlanProject(p,'Plattegrond schets'))planEditor.close();}});
+ let initial=null;try{initial=JSON.parse(localStorage.getItem(PLAN_DRAFT_KEY)||'null');}catch(e){}
+ if(!initial||!((initial.zones&&initial.zones.length)||(initial.lines&&initial.lines.length)))initial={zones:[],lines:[]};
+ window.DouglasPlanEditorInstance=planEditor;
+ planEditor.open(initial);
+}
 function showPlan(){openModal('START','Start vanuit plattegrond',planHTML());}
 function planAction(act){
  if(act==='add'){if(planDraft.zones.length>=8){toast('Maximaal 8 zones');return;}planDraft.zones.push({name:'Zone '+(planDraft.zones.length+1),kind:'open',x:0,z:0,w:2000,d:2000,h:2500});showPlan();}
  else if(act.startsWith('del:')){planDraft.zones.splice(+act.slice(4),1);showPlan();}
  else if(act==='generate'){
-  const pv=planPreview();if(!pv.r.beams.length)return;
-  const b=pv.r.bounds,raw={...M.freeProject(),name:planDraft.name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:{zones:planDraft.zones},stockLength:6000,beams:pv.r.beams,panels:pv.r.panels};
-  if(openNewProject(raw,`Nieuw project met ${pv.r.beams.length} balken · bewerk het in 3D`)){setView('3d');}
+  generatePlanProject({zones:planDraft.zones,lines:[]},planDraft.name);
  }
 }
 function backdropHTML(){
@@ -1065,7 +1090,7 @@ $('#backdropInput')?.addEventListener('change',async e=>{await backdropFile(e.ta
 $('#backdropCamera')?.addEventListener('change',async e=>{await backdropFile(e.target.files?.[0]);e.target.value='';});
 $('#backdropTool')?.addEventListener('click',showBackdrop);
 $('#scanTool')?.addEventListener('click',showScan);
-$('#planTool')?.addEventListener('click',showPlan);
+$('#planTool')?.addEventListener('click',openPlanEditor);
 $('#modalContent').addEventListener('change',e=>{
   const pr=e.target.dataset?.pl;if(pr==='preset'){const p=PLAN_PRESETS[e.target.value];if(p){planKey=e.target.value;planDraft=clonePreset(e.target.value);showPlan();}return;}
   const pw=e.target.dataset?.pw;if(pw){const [i,c]=pw.split(':'),z=planDraft.zones[+i];if(z){const s=new Set((z.walls||'').split('').filter(Boolean));e.target.checked?s.add(c):s.delete(c);z.walls=[...s].join('');showPlan();}return;}
@@ -1106,6 +1131,7 @@ $('#cameraInput').addEventListener('change',async e=>{await addDeliveryPhotos(e.
 window.addEventListener('hashchange',checkShareHash);
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{
+  if(document.body?.classList?.contains?.('plan-editor-open'))return; // het plattegrond-schetsvenster regelt zijn eigen toetsen
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
   const key=e.key.toLowerCase();
   if((e.metaKey||e.ctrlKey)&&key==='z'&&!editing){e.preventDefault();history(e.shiftKey?'redo':'undo');return;}

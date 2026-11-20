@@ -119,17 +119,18 @@
   }
   // ---------- Plattegrond-start: zones (rechthoeken) → een 3D-houtconstructie van losse balken ----------
   // Wand- en deurpanelen (dunne platen): bekleding rond het frame. Geen constructie; telt mee in de materiaallijst.
-  const PANEL_KINDS={cladding:'Gevelbekleding',door:'Deur'};
+  const PANEL_KINDS={cladding:'Gevelbekleding',door:'Deur',rafter:'Dakspar',roof:'Dakbeplating'};
   function normalizePanels(list){
     if(!Array.isArray(list))return [];
-    return list.slice(0,60).map(q=>{
+    return list.slice(0,160).map(q=>{
       if(!q||typeof q!=='object')return null;
       const dim=(v,lo,hi,def)=>clamp(round(number(v,def)),lo,hi);
+      const sl=q.slope&&typeof q.slope==='object'&&(q.slope.axis==='x'||q.slope.axis==='z')?{axis:q.slope.axis,y2:dim(q.slope.y2,-20000,10000,0),h2:dim(q.slope.h2,1,10000,20)}:null;
       return {id:String(q.id||uid()).slice(0,40),name:String(q.name||'Paneel').replace(/[\u0000-\u001f<>]/g,'').slice(0,60),
-        kind:PANEL_KINDS[q.kind]?q.kind:'cladding',
+        kind:PANEL_KINDS[q.kind]?q.kind:'cladding',...(sl?{slope:sl}:{}),
         x:dim(q.x,-20000,40000,0),y:dim(q.y,-20000,10000,0),z:dim(q.z,-20000,40000,0),
         w:dim(q.w,1,20000,20),h:dim(q.h,1,10000,20),d:dim(q.d,1,20000,20),
-        color:/^#[0-9a-fA-F]{6}$/.test(q.color||'')?q.color:(q.kind==='door'?'#a8743a':'#1d2124')};
+        color:/^#[0-9a-fA-F]{6}$/.test(q.color||'')?q.color:(q.kind==='door'?'#a8743a':q.kind==='rafter'?'#b8824f':q.kind==='roof'?'#7b858b':'#1d2124')};
     }).filter(Boolean);
   }
   const ZONE_KINDS={open:'Open overkapping',closed:'Gesloten ruimte',pergola:'Pergola'};
@@ -137,26 +138,41 @@
     if(!raw||typeof raw!=='object'||!'nesw'.includes(String(raw.edge||'x')[0])||!raw.edge)return null;
     return {edge:String(raw.edge)[0],offset:clamp(round(number(raw.offset,150)),0,12000),width:clamp(round(number(raw.width,900)),600,2000),height:clamp(round(number(raw.height,2050)),1800,2600)};
   }
+  // Lessenaarsdak: 'high' = zijde met de hoge rand (n/e/s/w, in plattegrondrichting), 'low' = hoogte van de lage bovenligger.
+  function normalizeRoof(raw,zone){
+    if(!raw||typeof raw!=='object'||zone.kind==='pergola'||!'nesw'.includes(String(raw.high||'x')[0])||!raw.high)return null;
+    const low=clamp(round(number(raw.low,zone.h-400)),600,zone.h-50);
+    return low>=zone.h?null:{kind:'lessenaar',high:String(raw.high)[0],low};
+  }
+  function normalizeLine(l,i){
+    if(!l||typeof l!=='object')return null;
+    const c=v=>clamp(round(number(v,0)),0,40000);let x1=c(l.x1),z1=c(l.z1),x2=c(l.x2),z2=c(l.z2);
+    if(Math.abs(x2-x1)>=Math.abs(z2-z1))z2=z1;else x2=x1; // altijd haaks
+    if(Math.hypot(x2-x1,z2-z1)<300)return null;
+    return {id:String(l.id||'l'+(i+1)).slice(0,20),name:String(l.name||('Wand '+(i+1))).replace(/[\u0000-\u001f<>]/g,'').slice(0,40),x1,z1,x2,z2,h:clamp(round(number(l.h,2400)),1200,4000)};
+  }
   function normalizePlan(raw){
     if(!raw||typeof raw!=='object'||Array.isArray(raw)||!Array.isArray(raw.zones))return null;
-    const zones=raw.zones.slice(0,8).map((z,i)=>z&&typeof z==='object'?({
-      id:String(z.id||'z'+(i+1)).slice(0,20),name:String(z.name||('Zone '+(i+1))).replace(/[\u0000-\u001f<>]/g,'').slice(0,40),
+    const used=new Set(),uniq=(id,fallback)=>{let k=String(id||fallback).slice(0,20),n=1;while(used.has(k))k=(String(id||fallback).slice(0,16)+'-'+(n++));used.add(k);return k;};
+    const zones=raw.zones.slice(0,8).map((z,i)=>z&&typeof z==='object'?(zn=>{zn.roof=normalizeRoof(z.roof,zn);if(!zn.roof)delete zn.roof;return zn;})({
+      id:uniq(z.id,'z'+(i+1)),name:String(z.name||('Zone '+(i+1))).replace(/[\u0000-\u001f<>]/g,'').slice(0,40),
       kind:ZONE_KINDS[z.kind]?z.kind:'open',
       x:clamp(round(number(z.x,0)),0,20000),z:clamp(round(number(z.z,0)),0,20000),
       w:clamp(round(number(z.w,2000)),600,12000),d:clamp(round(number(z.d,2000)),600,12000),h:clamp(round(number(z.h,2500)),1200,4000),
       walls:typeof z.walls==='string'?[...new Set(z.walls.split('').filter(c=>'nesw'.includes(c)))].join(''):((z.kind==='closed')?'nesw':''),
       door:normalizeDoor(z.door)
     }):null).filter(Boolean);
-    return zones.length?{zones}:null;
+    const lines=(Array.isArray(raw.lines)?raw.lines:[]).slice(0,20).map(normalizeLine).filter(Boolean).map(l=>({...l,id:uniq(l.id,'l')}));
+    return zones.length||lines.length?{zones,lines}:null;
   }
   // Maakt staanders (100×100), bovenliggers (50×150) en bij gesloten zones tussenregels; pergola krijgt dwarslatten.
   // Hartlijnen liggen 50 mm binnen de buitencontour, zodat de buitenmaat klopt. Dak niet inbegrepen (balken zijn recht).
   function planFrame(plan){
-    const pl0=normalizePlan(plan);if(!pl0)return {beams:[],panels:[],truncated:0,bounds:{width:0,depth:0,height:0}};
+    const pl0=normalizePlan(plan&&{zones:plan.zones||[],lines:plan.lines||[]});if(!pl0)return {beams:[],panels:[],truncated:0,bounds:{width:0,depth:0,height:0}};
     // In het plan ligt de achterzijde op z=0; in het model (en de 3D-weergave) is de voorzijde z=0. Spiegel de diepte-as,
     // en wissel de zijden achter/voor (n↔s) van wanden en deuren mee.
-    const swapNS=c=>c==='n'?'s':c==='s'?'n':c,maxZ0=Math.max(...pl0.zones.map(q=>q.z+q.d));
-    const pl={zones:pl0.zones.map(q=>({...q,z:maxZ0-(q.z+q.d),walls:q.walls.split('').map(swapNS).join(''),door:q.door?{...q.door,edge:swapNS(q.door.edge)}:null}))};
+    const swapNS=c=>c==='n'?'s':c==='s'?'n':c,maxZ0=Math.max(0,...pl0.zones.map(q=>q.z+q.d),...pl0.lines.map(l=>Math.max(l.z1,l.z2)));
+    const pl={zones:pl0.zones.map(q=>({...q,z:maxZ0-(q.z+q.d),walls:q.walls.split('').map(swapNS).join(''),door:q.door?{...q.door,edge:swapNS(q.door.edge)}:null,...(q.roof?{roof:{...q.roof,high:swapNS(q.roof.high)}}:{})})),lines:pl0.lines.map(l=>({...l,z1:maxZ0-l.z1,z2:maxZ0-l.z2}))};
     const POST='100x100',PLATE='50x150',RAIL='50x100',PS=100,plateT=PROFILES[PLATE].t,plateS=PROFILES[PLATE].s;
     const Z=pl.zones,out=[],posts=new Map(),segs=new Map();
     // een rand is gedeeld als een andere zone dezelfde lijn aan de overzijde heeft met overlappend bereik
@@ -167,7 +183,11 @@
         if(side==='n')return o.z+o.d===zone.z;
         return o.z===zone.z+zone.d;});
     };
-    const info=[],panels=[],clips=[]; // clips: [{axis,fixed,lo,hi}] stukken van regels die vrij moeten blijven (deuropeningen)
+    const RAFTER='50x150',RAFT_D=150,SHEET_T=18;
+    const slopeAxis=zn=>zn.roof?(zn.roof.high==='w'||zn.roof.high==='e'?'x':'z'):null;
+    // hoogte (bovenkant draagvlak) op een punt van de zone; plat dak = zn.h
+    const topAt=(zn,x,z)=>{const r=zn.roof;if(!r)return zn.h;const t=clamp(slopeAxis(zn)==='x'?(x-zn.x)/zn.w:(z-zn.z)/zn.d,0,1),f=(r.high==='w'||r.high==='n')?t:1-t;return zn.h-(zn.h-r.low)*f;};
+    const info=[],panels=[],clips=[],panelsLine=[],rafters=[]; // clips: [{axis,fixed,lo,hi}] stukken van regels die vrij moeten blijven (deuropeningen)
     const addPost=(cx,cz,h,name)=>{const k=cx+','+cz,old=posts.get(k);if(old){if(h<old.h)old.h=h;return;}posts.set(k,{cx,cz,h,name});};
     const addSeg=(axis,fixed,lo,hi,y,profile,name)=>{ // fixed = hartlijn op de andere vloeras; lo/hi langs axis
       const k=axis+'|'+fixed+'|'+y+'|'+profile;let a=segs.get(k);if(!a){a={axis,fixed,y,profile,name,list:[]};segs.set(k,a);}a.list.push([lo,hi]);};
@@ -175,16 +195,37 @@
       const x0=zn.x+(edgeShared(zn,'w')?0:PS/2),x1=zn.x+zn.w-(edgeShared(zn,'e')?0:PS/2);
       const z0=zn.z+(edgeShared(zn,'n')?0:PS/2),z1=zn.z+zn.d-(edgeShared(zn,'s')?0:PS/2);
       info.push({zn,x0,x1,z0,z1});
-      const top=zn.h,postLen=top-plateT;
+      const top=zn.roof?zn.roof.low:zn.h,sx=slopeAxis(zn),H=zn.h,L=zn.roof?zn.roof.low:zn.h;
+      // staander: op de rand met bovenligger (plat deel) of tot onder de dakspar (langs de helling)
+      const endTop=(coord,a0,a1)=>coord===a0?(zn.roof.high==='w'||zn.roof.high==='n'?H:L):(zn.roof.high==='e'||zn.roof.high==='s'?H:L);
+      const postLen=(px,pz)=>{if(!zn.roof)return zn.h-plateT;
+        if(sx==='x'&&(px===x0||px===x1))return endTop(px,x0,x1)-plateT;
+        if(sx==='z'&&(pz===z0||pz===z1))return endTop(pz,z0,z1)-plateT;
+        return Math.round(topAt(zn,px,pz));};
       // staanders: hoeken, bij gesloten zones tussenstaanders (≤ 2500 mm h.o.h.)
       const xs=[x0,x1],zs=[z0,z1];
       const split=(a,b)=>{const n=Math.max(1,Math.ceil((b-a)/2500)),r=[];for(let i=1;i<n;i++)r.push(Math.round((a+(b-a)*i/n)/5)*5);return r;};
-      for(const px of xs)for(const pz of zs)addPost(px,pz,postLen,zn.name);
-      if(zn.kind==='closed'){for(const px of split(x0,x1)){addPost(px,z0,postLen,zn.name);addPost(px,z1,postLen,zn.name);}for(const pz of split(z0,z1)){addPost(x0,pz,postLen,zn.name);addPost(x1,pz,postLen,zn.name);}}
+      for(const px of xs)for(const pz of zs)addPost(px,pz,postLen(px,pz),zn.name);
+      if(zn.kind==='closed'){for(const px of split(x0,x1)){addPost(px,z0,postLen(px,z0),zn.name);addPost(px,z1,postLen(px,z1),zn.name);}for(const pz of split(z0,z1)){addPost(x0,pz,postLen(x0,pz),zn.name);addPost(x1,pz,postLen(x1,pz),zn.name);}}
       // bovenliggers (boven op de staanders): x-richting volledig, z-richting ertussen
       const yTop=top-plateT;
-      addSeg('x',z0,x0,x1,yTop,PLATE,'Bovenligger '+zn.name);addSeg('x',z1,x0,x1,yTop,PLATE,'Bovenligger '+zn.name);
-      addSeg('z',x0,z0,z1,yTop,PLATE,'Bovenligger '+zn.name);addSeg('z',x1,z0,z1,yTop,PLATE,'Bovenligger '+zn.name);
+      if(!zn.roof){
+        addSeg('x',z0,x0,x1,yTop,PLATE,'Bovenligger '+zn.name);addSeg('x',z1,x0,x1,yTop,PLATE,'Bovenligger '+zn.name);
+        addSeg('z',x0,z0,z1,yTop,PLATE,'Bovenligger '+zn.name);addSeg('z',x1,z0,z1,yTop,PLATE,'Bovenligger '+zn.name);
+      }else if(sx==='x'){ // liggers alleen langs de hoge en lage rand; de zijkanten krijgen een schuine spar
+        for(const px of [x0,x1])addSeg('z',px,z0-plateS/2,z1+plateS/2,endTop(px,x0,x1)-plateT,PLATE,'Bovenligger '+zn.name);
+      }else{
+        for(const pz of [z0,z1])addSeg('x',pz,x0,x1,endTop(pz,z0,z1)-plateT,PLATE,'Bovenligger '+zn.name);
+      }
+      if(zn.roof){ // daksparren (50×150, h.o.h. ≤ 600) en dakplaat als schuine panelen
+        const lo=sx==='x'?zn.x:zn.z,hi=sx==='x'?zn.x+zn.w:zn.z+zn.d,yLo=Math.round(topAt(zn,sx==='x'?zn.x:0,sx==='x'?0:zn.z)),yHi=Math.round(topAt(zn,sx==='x'?zn.x+zn.w:0,sx==='x'?0:zn.z+zn.d));
+        const c0=sx==='x'?z0:x0,c1=sx==='x'?z1:x1,n=Math.max(1,Math.ceil((c1-c0)/600));
+        for(let i=0;i<=n;i++){const c=Math.round((c0+(c1-c0)*i/n)/5)*5;
+          rafters.push({kind:'rafter',name:'Dakspar '+zn.name,slope:{axis:sx,y2:yHi,h2:RAFT_D},y:yLo,h:RAFT_D,
+            ...(sx==='x'?{x:lo,w:hi-lo,z:c-25,d:50}:{z:lo,d:hi-lo,x:c-25,w:50})});}
+        rafters.push({kind:'roof',name:'Dakplaat '+zn.name,slope:{axis:sx,y2:yHi+RAFT_D,h2:SHEET_T},y:yLo+RAFT_D,h:SHEET_T,
+          ...(sx==='x'?{x:lo,w:hi-lo,z:zn.z,d:zn.d}:{z:lo,d:hi-lo,x:zn.x,w:zn.w})});
+      }
       if(zn.kind==='closed'){ // twee tussenregels (onder en op halve hoogte) voor de gevelbekleding
         const sx=[x0,...split(x0,x1),x1],sz=[z0,...split(z0,z1),z1];
         for(const y of [300,Math.round(top/2/5)*5]){
@@ -194,15 +235,25 @@
       }
       if(zn.kind==='pergola'){ // dwarslatten over de diepte, elke ~600 mm
         const n=Math.max(2,Math.round((x1-x0)/600));
-        for(let i=1;i<n;i++){const px=Math.round((x0+(x1-x0)*i/n)/5)*5;addSeg('z',px,z0,z1,top-50,'50x50','Dwarslat '+zn.name);}
+        for(let i=1;i<n;i++){const px=Math.round((x0+(x1-x0)*i/n)/5)*5;addSeg('z',px,z0,z1,zn.h-50,'50x50','Dwarslat '+zn.name);}
       }
+    }
+    // lijnen (losse wanden): staanders op begin, einde en ≤ 2500 mm h.o.h., bovenligger en één bekledingspaneel
+    for(const l of pl.lines){
+      const alongX=l.z1===l.z2,lo=alongX?Math.min(l.x1,l.x2):Math.min(l.z1,l.z2),hi=alongX?Math.max(l.x1,l.x2):Math.max(l.z1,l.z2),fixed=alongX?l.z1:l.x1;
+      const n=Math.max(1,Math.ceil((hi-lo)/2500)),stops=[];for(let i=0;i<=n;i++)stops.push(Math.round((lo+(hi-lo)*i/n)/5)*5);
+      for(const s of stops)addPost(alongX?s:fixed,alongX?fixed:s,l.h-plateT,l.name);
+      addSeg(alongX?'x':'z',fixed,lo,hi,l.h-plateT,PLATE,'Bovenligger '+l.name);
+      if(alongX)panelsLine.push(['cladding','Gevelbekleding '+l.name,lo-PS/2,100,fixed-10,hi-lo+PS,l.h-100,20]);
+      else panelsLine.push(['cladding','Gevelbekleding '+l.name,fixed-10,100,lo-PS/2,20,l.h-100,hi-lo+PS]);
     }
     // deuren en wandpanelen
     const closedNeighbour=(zn,side)=>Z.some(o=>o!==zn&&o.kind==='closed'&&(
       side==='w'?o.x+o.w===zn.x&&o.z<zn.z+zn.d&&o.z+o.d>zn.z:side==='e'?o.x===zn.x+zn.w&&o.z<zn.z+zn.d&&o.z+o.d>zn.z:
       side==='n'?o.z+o.d===zn.z&&o.x<zn.x+zn.w&&o.x+o.w>zn.x:o.z===zn.z+zn.d&&o.x<zn.x+zn.w&&o.x+o.w>zn.x));
     const CLAD='#262b2e',DOOR='#a8743a',PT=20,YB=100;
-    const addPanel=(kind,name,x,y,z,w,h,d)=>{if(w>=1&&h>=1&&d>=1)panels.push({id:uid(),name,kind,x:Math.round(x),y:Math.round(y),z:Math.round(z),w:Math.round(w),h:Math.round(h),d:Math.round(d),color:kind==='door'?DOOR:CLAD});};
+    const addPanel=(kind,name,x,y,z,w,h,d,slope)=>{if(w>=1&&h>=1&&d>=1)panels.push({id:uid(),name,kind,x:Math.round(x),y:Math.round(y),z:Math.round(z),w:Math.round(w),h:Math.round(h),d:Math.round(d),color:kind==='door'?DOOR:kind==='rafter'?'#b8824f':kind==='roof'?'#7b858b':CLAD,...(slope?{slope}:{})});};
+    for(const a of panelsLine)addPanel(...a);
     for(const {zn,x0,x1,z0,z1} of info){
       const door=zn.door;
       for(const side of zn.walls||''){
@@ -210,14 +261,20 @@
         const alongX=side==='n'||side==='s',line=side==='w'?x0:side==='e'?x1:side==='n'?z0:z1;
         const outer=side==='w'||side==='n'?line-PS/2:line+PS/2-PT; // buitenzijde van de staanders
         const a0=alongX?x0-(edgeShared(zn,'w')?0:PS/2):z0+PS/2,a1=alongX?x1+(edgeShared(zn,'e')?0:PS/2):z1-PS/2;
-        const wallH=zn.h-YB;
+        // dakhelling: wand langs de helling heeft een schuine bovenzijde; wanden aan de hoge/lage rand zijn vlak
+        const sx=slopeAxis(zn),sloped=!!zn.roof&&((alongX&&sx==='x')||(!alongX&&sx==='z'));
+        const flatTop=!zn.roof||sloped?zn.h:((side===zn.roof.high)?zn.h:zn.roof.low);
+        const topOn=p=>Math.round(alongX?topAt(zn,p,0):topAt(zn,0,p));
+        const wallH=flatTop-YB;
         const put=(kind,name,lo,hi,y,h)=>{if(hi-lo<5)return;
-          if(alongX)addPanel(kind,name,lo,y,outer,hi-lo,h,PT);else addPanel(kind,name,outer,y,lo,PT,h,hi-lo);};
+          let hh=h,slope=null;
+          if(sloped){const h0=topOn(lo)-y,h1=topOn(hi)-y;hh=Math.max(1,h0);if(h1!==h0)slope={axis:alongX?'x':'z',y2:y,h2:Math.max(1,h1)};}
+          if(alongX)addPanel(kind,name,lo,y,outer,hi-lo,hh,PT,slope);else addPanel(kind,name,outer,y,lo,PT,hh,hi-lo,slope);};
         if(door&&door.edge===side){
           const start=(alongX?zn.x:zn.z)+door.offset,d0=start,d1=start+door.width,H=door.height;
           if(d0-PS<a0||d1+PS>a1){/* deur past niet in deze wand: geen opening maken */ put('cladding','Gevelbekleding '+zn.name,a0,a1,YB,wallH);continue;}
           put('cladding','Gevelbekleding '+zn.name,a0,d0-PS,YB,wallH);put('cladding','Gevelbekleding '+zn.name,d1+PS,a1,YB,wallH);
-          put('cladding','Gevelbekleding boven deur',d0-PS,d1+PS,H,zn.h-H);
+          put('cladding','Gevelbekleding boven deur',d0-PS,d1+PS,H,flatTop-H);
           // deurpaneel iets dikker en dichter bij de buitenkant
           const dOut=(side==='s'||side==='e')?outer-PT:outer;
           if(alongX)addPanel('door','Deur '+zn.name,d0,20,dOut,door.width,H-20,PT*2);else addPanel('door','Deur '+zn.name,dOut,20,d0,PT*2,H-20,door.width);
@@ -264,7 +321,8 @@
       }
     }
     // pergola-latten liggen boven de bovenliggers (y = top van de zone)
-    const maxX=Math.max(...Z.map(z=>z.x+z.w)),maxZ=Math.max(...Z.map(z=>z.z+z.d)),maxH=Math.max(...Z.map(z=>z.h));
+    const maxX=Math.max(0,...Z.map(z=>z.x+z.w),...pl.lines.map(l=>Math.max(l.x1,l.x2)+PS/2)),maxZ=Math.max(0,...Z.map(z=>z.z+z.d),...pl.lines.map(l=>Math.max(l.z1,l.z2)+PS/2)),maxH=Math.max(0,...Z.map(z=>z.h+(z.roof?RAFT_D+SHEET_T:0)),...pl.lines.map(l=>l.h));
+    for(const r of rafters)addPanel(r.kind,r.name,r.x,r.y,r.z,r.w,r.h,r.d,r.slope);
     const beams=out.slice(0,100).map(b=>({...b,length:clamp(Math.round(b.length),50,6500),x:Math.round(b.x),y:Math.round(b.y),z:Math.round(b.z)}));
     return {beams,panels:normalizePanels(panels),truncated:Math.max(0,out.length-100),bounds:{width:maxX,depth:maxZ,height:maxH}};
   }

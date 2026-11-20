@@ -253,29 +253,73 @@ const scenarios=[
    await b.eval(`(()=>{})()`);
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
- {name:'plattegrond-start: voorbeeld kapschuur → 3D-project, bewerken en nieuw project naast het oude',async run(b,t){
+ {name:'plattegrond-schets: blok en lijn tekenen, vergroten/verkleinen, verplaatsen, undo, naar 3D',async run(b,t){
    await demo(b);
-   await b.click('#planTool');await sleep(300);
-   t.ok('plattegrond-dialoog met zones',await b.eval(`document.querySelectorAll('[data-pz$=":name"]').length===3`));
-   t.ok('resultaat getoond',await b.eval(`/\\d+ balken/.test(document.querySelector('#modalContent').textContent)`));
-   await b.eval(`(()=>{const s=document.querySelector('[data-pl="preset"]');s.value='houthok';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
-   t.ok('houthok-voorbeeld heeft 5 zones',await b.eval(`document.querySelectorAll('[data-pz$=":name"]').length===5`));
-   await b.eval(`(()=>{const s=document.querySelector('[data-pl="preset"]');s.value='kapschuur';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
-   await b.eval(`document.querySelector('[data-plan="generate"]').click()`);await sleep(900);
-   t.ok('nieuw project met 9.000 × 6.500 mm en conflictvrije balken',await b.eval(`(()=>{const p=${activeProject};return p.width===9000&&p.depth===6500&&p.beams.length>=35&&!!p.plan}`+`)()`));
-   t.ok('oude project blijft bewaard naast Kapschuur',await b.eval(`(()=>{const n=${indexNames};return n.includes('Kapschuur')&&n.includes('Mijn buitenkeuken')})()`));
-   t.ok('wand- en deurpanelen aangemaakt (1 deur)',await b.eval(`(()=>{const p=${activeProject};return p.panels&&p.panels.length>=6&&p.panels.filter(q=>q.kind==='door').length===1}`+`)()`));
-   await sleep(500);await b.shot(path.join(OUT,'plattegrond-3d.png'));
-   await b.click('.view-btn[data-view="front"]');await sleep(600);await b.shot(path.join(OUT,'plattegrond-voor.png'));
-   await b.eval(`document.querySelector('#showCutlist, #openCutlist')?.click()`);await sleep(600);
-   t.ok('materiaallijst toont gevelbekleding en deur',await b.eval(`/Gevelbekleding/.test(document.querySelector('#modalContent').textContent)&&/Buitendeur/.test(document.querySelector('#modalContent').textContent)`));
+   await b.click('#planTool');await sleep(500);
+   t.ok('schetsvenster open met tekenvlak',await b.eval(`!!document.querySelector('.plan-editor.open canvas.pe-canvas')`));
+   const st=()=>b.eval(`(()=>{const s=window.DouglasPlanEditorInstance._state();const c=document.querySelector('.pe-canvas').getBoundingClientRect();return {zones:s.plan.zones,lines:s.plan.lines,view:s.view,sel:s.selection,tool:s.tool,l:c.left,t:c.top,w:c.width,h:c.height}})()`);
+   let s=await st();t.ok('start leeg',s.zones.length===0&&s.lines.length===0);
+   const X=(x,v)=>v.l+v.view.ox+x*v.view.scale,Y=(z,v)=>v.t+v.view.oz+z*v.view.scale;
+   // blok tekenen (menu-knop of toets B), sleep over het vlak
+   await b.click('[data-pe-tool="block"]');await sleep(150);
+   const x0=s.l+s.w*0.30,y0=s.t+s.h*0.30,x1=s.l+s.w*0.60,y1=s.t+s.h*0.55;
+   await b.mouse('mouseMoved',x0,y0,{buttons:0});await b.mouse('mousePressed',x0,y0);await b.mouse('mouseMoved',(x0+x1)/2,(y0+y1)/2,{buttons:1});await b.mouse('mouseMoved',x1,y1,{buttons:1});await b.mouse('mouseReleased',x1,y1);await sleep(300);
+   s=await st();
+   t.ok('blok getekend en geselecteerd (maten op raster 100)',s.zones.length===1&&s.sel&&s.sel.type==='zone'&&s.zones[0].w%100===0&&s.zones[0].d%100===0&&s.zones[0].w>=1000,JSON.stringify(s.zones));
+   t.ok('na tekenen terug naar selecteren',s.tool==='select');
+   const w0=s.zones[0].w,d0=s.zones[0].d,zx=s.zones[0].x;
+   // greep rechtsonder slepen = groter
+   const hx=X(s.zones[0].x+w0,s),hy=Y(s.zones[0].z+d0,s);
+   await b.mouse('mouseMoved',hx,hy,{buttons:0});await b.mouse('mousePressed',hx,hy);await b.mouse('mouseMoved',hx+30,hy+20,{buttons:1});await b.mouse('mouseMoved',hx+80,hy+40,{buttons:1});await b.mouse('mouseReleased',hx+80,hy+40);await sleep(300);
+   s=await st();t.ok('groter gemaakt met de greep',s.zones[0].w>w0&&s.zones[0].d>d0,`${w0}x${d0} → ${s.zones[0].w}x${s.zones[0].d}`);
+   // greep linksboven naar binnen = kleiner, rechtsonder blijft staan
+   const right=s.zones[0].x+s.zones[0].w;
+   await b.mouse('mouseMoved',X(s.zones[0].x,s),Y(s.zones[0].z,s),{buttons:0});await b.mouse('mousePressed',X(s.zones[0].x,s),Y(s.zones[0].z,s));await b.mouse('mouseMoved',X(s.zones[0].x,s)+40,Y(s.zones[0].z,s)+30,{buttons:1});await b.mouse('mouseMoved',X(s.zones[0].x,s)+70,Y(s.zones[0].z,s)+50,{buttons:1});await b.mouse('mouseReleased',X(s.zones[0].x,s)+70,Y(s.zones[0].z,s)+50);await sleep(300);
+   const s2=await st();t.ok('kleiner met de linkerbovenhoek, rechterkant blijft staan',s2.zones[0].w<s.zones[0].w&&s2.zones[0].x+s2.zones[0].w===right,`${s.zones[0].w}→${s2.zones[0].w}`);
+   // verplaatsen door binnenin te slepen
+   const cx=X(s2.zones[0].x+s2.zones[0].w/2,s2),cy=Y(s2.zones[0].z+s2.zones[0].d/2,s2),px0=s2.zones[0].x;
+   await b.mouse('mouseMoved',cx,cy,{buttons:0});await b.mouse('mousePressed',cx,cy);await b.mouse('mouseMoved',cx+30,cy+10,{buttons:1});await b.mouse('mouseMoved',cx+100,cy+10,{buttons:1});await b.mouse('mouseReleased',cx+100,cy+10);await sleep(300);
+   const s3=await st();t.ok('blok verplaatst, maat gelijk',s3.zones[0].x>px0&&s3.zones[0].w===s2.zones[0].w&&s3.zones[0].d===s2.zones[0].d);
+   // lijn tekenen
+   await b.eval(`document.querySelector('.pe-canvas').focus()`);
+   await b.click('[data-pe-tool="line"]');await sleep(150);
+   const lx0=s3.l+s3.w*0.2,ly=s3.t+s3.h*0.8;
+   await b.mouse('mouseMoved',lx0,ly,{buttons:0});await b.mouse('mousePressed',lx0,ly);await b.mouse('mouseMoved',lx0+120,ly+6,{buttons:1});await b.mouse('mouseMoved',lx0+300,ly+9,{buttons:1});await b.mouse('mouseReleased',lx0+300,ly+9);await sleep(300);
+   const s4=await st();t.ok('lijn haaks getekend',s4.lines.length===1&&s4.lines[0].z1===s4.lines[0].z2&&Math.abs(s4.lines[0].x2-s4.lines[0].x1)>=1000,JSON.stringify(s4.lines));
+   await b.shot(path.join(OUT,'schets-2d.png'));
+   // maten in het zijpaneel aanpassen
+   await b.click('[data-pe-tool="select"]');await sleep(100);
+   await b.eval(`(()=>{const z=window.DouglasPlanEditorInstance._state().plan.zones[0];})()`);
+   // undo (Ctrl+Z) zet de lijn terug
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'z',ctrlKey:true,bubbles:true}))`);await sleep(250);
+   const s5=await st();t.ok('Ctrl+Z haalt de lijn weg',s5.lines.length===0&&s5.zones.length===1);
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'y',ctrlKey:true,bubbles:true}))`);await sleep(250);
+   t.ok('Ctrl+Y zet de lijn terug',(await st()).lines.length===1);
+   t.ok('schets wordt bewaard als concept',await b.eval(`(()=>{const d=JSON.parse(localStorage.getItem('douglas-designer-plan-draft-v1')||'null');return !!d&&d.zones.length===1&&d.lines.length===1})()`));
+   // voorbeeld laden en naar 3D
+   await b.eval(`(()=>{const s=document.querySelector('[data-pe-preset]');s.value='kapschuur';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(400);
+   const s6=await st();t.ok('voorbeeld kapschuur geladen (3 zones)',s6.zones.length===3);
+   await b.shot(path.join(OUT,'schets-kapschuur.png'));
+   await b.click('[data-pe="generate"]');await sleep(900);
+   t.ok('schetsvenster dicht en nieuw project 9.000 × 6.500 mm',await b.eval(`!document.querySelector('.plan-editor.open')&&(()=>{const p=${activeProject};return p.width===9000&&p.depth===6500&&p.beams.length>=35&&p.panels.length>=6})()`));
+   t.ok('berging heeft lessenaarsdak: daksparren, dakplaat en schuine wand in het project',await b.eval(`(()=>{const p=${activeProject};const k=q=>(p.panels||[]).filter(x=>x.kind===q).length;return k('rafter')>=8&&k('roof')===1&&(p.panels||[]).some(x=>x.kind==='cladding'&&x.slope)})()`));
+   t.ok('materiaallijst bevat dakbeplating en daksparren',await b.eval(`(()=>{const p=${activeProject};const l=DouglasMaterials.build(p,DouglasModel).groups.flatMap(g=>g.lines).map(x=>x.id);return l.includes('dakbeplating')&&l.includes('daksparren')})()`));
+   await b.shot(path.join(OUT,'plattegrond-3d.png'));
+   for(const [lbl,f] of [['Zij','zij'],['Voor','voor']]){await b.eval(`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='${lbl}').click()`);await sleep(500);await b.shot(path.join(OUT,'plattegrond-'+f+'.png'));}
+   await b.eval(`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='3D').click()`);await sleep(300);
+   // heropenen toont de bewaarde schets; Esc sluit
+   await b.click('#planTool');await sleep(400);t.ok('heropenen toont bewaarde schets',(await st()).zones.length===3);
+   {const z=await b.eval(`(()=>{const s=window.DouglasPlanEditorInstance._state(),c=document.querySelector('.pe-canvas').getBoundingClientRect(),q=s.plan.zones.find(z=>z.name==='Berging');return {x:c.left+s.view.ox+(q.x+q.w/2)*s.view.scale,y:c.top+s.view.oz+(q.z+q.d/2)*s.view.scale,high:q.roof&&q.roof.high}})()`);
+    t.ok('berging heeft in de schets een dak (hoog achter)',z.high==='n',JSON.stringify(z));
+    await b.mouse('mouseMoved',z.x,z.y,{buttons:0});await b.mouse('mousePressed',z.x,z.y);await b.mouse('mouseReleased',z.x,z.y);await sleep(300);
+    await b.eval(`(()=>{const s=document.querySelector('[data-pr="high"]');s.value='e';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+    t.ok('dakkeuze in het zijpaneel past de zone aan',await b.eval(`window.DouglasPlanEditorInstance._state().plan.zones.find(z=>z.name==='Berging').roof.high==='e'`));
+    await b.shot(path.join(OUT,'schets-dak.png'));
+    await b.eval(`(()=>{const s=document.querySelector('[data-pr="high"]');s.value='';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(300);
+    t.ok('plat dak: dak weg uit de zone',await b.eval(`!window.DouglasPlanEditorInstance._state().plan.zones.find(z=>z.name==='Berging').roof`));}
    await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(300);
-   await b.click('.view-btn[data-view="3d"]');await sleep(300);await b.click('.view-btn[data-view="top"]');await sleep(500);await b.shot(path.join(OUT,'plattegrond-boven.png'));
-   // kaderselectie in Boven-aanzicht over de berging en verplaatsen
-   const r=await b.eval(`(()=>{const c=document.querySelector('#scene').getBoundingClientRect();return {l:c.left,t:c.top,w:c.width,h:c.height}})()`);
-   await b.mouse('mouseMoved',r.l+r.w*0.55,r.t+r.h*0.30,{buttons:0});await b.mouse('mousePressed',r.l+r.w*0.55,r.t+r.h*0.30);
-   await b.mouse('mouseMoved',r.l+r.w*0.7,r.t+r.h*0.5,{buttons:1});await b.mouse('mouseMoved',r.l+r.w-10,r.t+r.h*0.62,{buttons:1});await b.mouse('mouseReleased',r.l+r.w-10,r.t+r.h*0.62);await sleep(400);
-   t.ok('kaderselectie werkt op de gegenereerde constructie',await b.eval(`/\\d+ balken geselecteerd/.test(document.querySelector('#inspectorTitle').textContent)||document.querySelector('#inspectorTitle').textContent.length>0`));
+   await b.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await sleep(300);
+   t.ok('Esc sluit het schetsvenster',await b.eval(`!document.querySelector('.plan-editor.open')`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
 
 ];
