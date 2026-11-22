@@ -61,3 +61,29 @@ test('formules in CSV-cellen: aanhalingstekens worden ontsnapt',()=>{
  const l={groups:[{title:'G',lines:[{label:'a "b"',qty:1,unit:'st',price:0,total:0,detail:''}]}],total:0};
  assert.match(X.toCSV(l),/"a ""b"""/);
 });
+
+test('overkapping: daksparren staan exact één keer in zaagplan, materiaallijst en onderdelenexport',()=>{
+ require('../startontwerpen.js');
+ const D=require('../documents.js');
+ const p=M.normalizeProject(globalThis.DouglasStartontwerpen.find(p=>p.panels?.some(q=>q.kind==='rafter')));
+ p.materials.prices={'balk-50x150':11,'balk-100x100':20,daksparren:32};
+ const plan=M.boardPlan(p),list=X.build(p,M),rows=D.partsList(p,M);
+ assert.equal(plan.pieces,14);
+ assert.equal(plan.boards.length,12);
+ assert.equal(plan.impossible.length,0);
+ assert.equal(find(list,'daksparren').qty,8);
+ assert.equal(find(list,'balk-50x150').qty,2);
+ assert.equal(plan.estimatedPrice,318);
+ assert.equal(list.total,318);
+ const cuts=plan.boards.flatMap(b=>b.cuts);
+ assert.deepEqual(cuts.map(c=>c.id).sort(),rows.map(r=>r.id).sort());
+ assert.equal(rows.filter(r=>r.group==='Daksparren' && r.length===3054).length,8);
+ assert.match(D.partsCSV(rows),/schuine zaagmaat incl. 50 mm/);
+ p.stockLength=3000;
+ const short=M.boardPlan(p),incomplete=X.build(p,M);
+ assert.equal(short.impossible.filter(c=>c.group==='Daksparren').length,8);
+ assert.equal(find(incomplete,'daksparren'),undefined);
+ assert.ok(short.boards.every(b=>b.used<=p.stockLength));
+ for(const output of [X.toText(incomplete,p.name),X.toCSV(incomplete),D.documentHTML(p,M,X)])
+   assert.match(output,/Zaagplan onvolledig/);
+});
