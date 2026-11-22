@@ -22,7 +22,7 @@ function editor(){
   const src=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
   const augmented=src.replace(/\}\)\(\);\s*$/,`window.__probe={
     setProject(p){project=p;render()},setView,select:setSelected,screen:toScreen,
-    scene(){return shapes},getProject(){return project}
+    scene(){return shapes},getProject(){return project},getZoom(){return camera.zoom},undoCount(){return undoStack.length}
   };})();`);
   assert.notEqual(src,augmented);
   vm.runInNewContext(augmented,sandbox,{timeout:10000});
@@ -67,3 +67,31 @@ test('moving the same beam twice recalculates fit and cut length on each drop',(
   assert.equal(Model.boardPlan(h.api.getProject()).groups.find(x=>x.name==='Regel').length,450,'cut list updates');
   assert.notEqual(firstLength,beam.length);
 });
+for(const interruption of ['pointercancel','pinch']){
+  test('onderbroken balkverplaatsing via '+interruption+' herstelt de oorspronkelijke positie',()=>{
+    const h=editor(),p=Model.freeProject();
+    p.beams.push({id:'regel',name:'Regel',axis:'x',x:150,y:200,z:20,length:450});
+    h.api.setProject(p);h.api.setView('front');h.api.select('beam','regel');
+    const saved=JSON.stringify(h.stored()),original=JSON.stringify(h.api.getProject());
+    const a=h.api.screen([375,250,45]);
+    const event=(type,pointerId,x,y)=>h.events.get('#scene:'+type)({pointerId,offsetX:x,offsetY:y});
+    event('pointerdown',1,a.x,a.y);
+    event('pointermove',1,a.x+40,a.y);
+    assert.notEqual(JSON.stringify(h.api.getProject()),original);
+    if(interruption==='pointercancel')event('pointercancel',1,a.x+40,a.y);
+    else{
+      const zoom=h.api.getZoom();
+      event('pointerdown',2,a.x+100,a.y);
+      event('pointermove',2,a.x+145,a.y);
+      assert.ok(h.api.getZoom()>zoom,'twee vingers zoomen in het vooraanzicht');
+      event('pointerup',2,a.x+145,a.y);
+      event('pointerup',1,a.x+40,a.y);
+    }
+    assert.equal(JSON.stringify(h.api.getProject()),original);
+    assert.equal(JSON.stringify(h.stored()),saved);
+    assert.equal(h.api.undoCount(),0);
+    move(h,h.api.screen([375,250,45]),h.api.screen([675,250,45]));
+    assert.equal(h.api.undoCount(),1,'volgende gewone sleepactie blijft bewerkbaar');
+    assert.notEqual(h.stored().beams[0].x,150);
+  });
+}

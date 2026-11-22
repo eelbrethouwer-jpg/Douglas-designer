@@ -1177,8 +1177,23 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>{if(e.key.toLowerCase()==='s'){magnetHeldOff=false;draw();}});
 window.addEventListener('blur',()=>{magnetHeldOff=false;});
+function cancelCanvasEdit(){
+  // Een onderbroken sleepactie mag geen modelwijziging buiten de undo-geschiedenis achterlaten.
+  if(dragging?.before)project=JSON.parse(dragging.before);
+  dragging=null;marquee=null;previewBeam=null;snapHint=null;
+  if(drawMode)$('#drawHelp').textContent='Sleep van startpunt naar eindpunt';
+  render();
+}
 canvas.addEventListener('pointerdown',e=>{
+  if(pointers.size>=2)return;
   canvas.setPointerCapture(e.pointerId);
+  if(pointers.size===1){
+    const first=pointers.values().next().value;
+    cancelCanvasEdit();
+    pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+    pinchDistance=Math.hypot(e.offsetX-first.x,e.offsetY-first.y);
+    return;
+  }
   // SketchUp-style navigation: Shift+drag or middle mouse pans instead of orbiting.
   if(e.shiftKey===true||e.button===1){
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
@@ -1252,10 +1267,9 @@ canvas.addEventListener('pointerdown',e=>{
       if(b){dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}
     }
   }
-  if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
 });
 canvas.addEventListener('pointermove',e=>{if(measureMode&&measureData&&measureData.a&&!measureData.fixed){const pt=drawPoint(e.offsetX,e.offsetY);if(pt){measureData.b=pt;draw();}}});
-canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
+canvas.addEventListener('pointermove',e=>{if(armedBeamType && pointers.size<2 && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
   if(dragging.mode==='pan-camera'){
     camera.panX+=dx;camera.panY+=dy;draw();return;
@@ -1321,6 +1335,7 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';Array.from(document.querySelectorAll('.view-btn')).forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){
+  if(!pointers.has(e.pointerId))return;
   if(dragging?.mode==='move-backdrop'){
     const d=dragging;dragging=null;pointers.delete(e.pointerId);
     if(JSON.stringify(project)!==d.before){undoStack.push(d.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();}
@@ -1373,7 +1388,10 @@ function pointerEnd(e){
     if(fit)toast(`Balk opnieuw passend gemaakt: ${fmt(fit.length)} mm`);
   }
   else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam'||id?.type==='frame'||id?.type==='panel')setSelected(id.type,id.id);else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
-canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
+canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{
+  if(!pointers.delete(e.pointerId))return;
+  pinchDistance=0;cancelCanvasEdit();
+});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
