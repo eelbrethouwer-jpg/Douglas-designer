@@ -85,3 +85,30 @@ test('dupliceren en importeren wijzigen het actieve project niet; aanmaken en te
  const gone=st.trash(c.id);assert.ok(gone.activeId&&gone.activeId!==c.id&&st.load(gone.activeId),'actief schuift door naar een bestaand project');
  const back=st.restore(st.trashList()[0].trashId);assert.equal(st.activeId(),back.id);
 });
+
+test('grote back-up wordt volledig geïmporteerd, ook voorbij honderd projecten',()=>{
+ const st=mk(fakeStorage()), old=st.init(()=>proj('Bestaand')).id;
+ const projects=Array.from({length:105},(_,i)=>proj('Werkstuk '+(i+1)));
+ const result=st.importAll(JSON.stringify({format:P.BACKUP_FORMAT,projects}));
+ assert.deepEqual(result,{ok:true,added:105,skipped:0});
+ assert.equal(st.list().length,106);
+ assert.equal(st.activeId(),old);
+});
+
+test('mislukte back-upimport kan opnieuw zonder deelimport of dubbele projecten',()=>{
+ for(const failAt of [2,3]){
+  const storage=fakeStorage(),st=mk(storage);
+  st.init(()=>proj('Huidig'));
+  const before=[...storage.m],setItem=storage.setItem;
+  let writes=0;
+  storage.setItem=(key,value)=>{
+   if(++writes===failAt)throw Object.assign(new Error(),{name:'QuotaExceededError'});
+   setItem(key,value);
+  };
+  const text=JSON.stringify({format:P.BACKUP_FORMAT,projects:[proj('A'),proj('B')]});
+  assert.equal(st.importAll(text).added,0);
+  assert.deepEqual([...storage.m],before);
+  assert.equal(st.importAll(text).added,2);
+  assert.equal(st.list().length,3);
+ }
+});
