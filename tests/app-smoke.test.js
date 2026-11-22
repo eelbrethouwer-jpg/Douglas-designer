@@ -18,6 +18,7 @@ function makeApp(){
  const storage={getItem:k=>mem.has(k)?mem.get(k):null,setItem(k,v){mem.set(k,String(v));},removeItem(k){mem.delete(k);},key:i=>[...mem.keys()][i]??null,get length(){return mem.size;}};
  const activeJson=()=>{const ix=JSON.parse(mem.get(Prj.INDEX_KEY)||'null');return ix?mem.get(Prj.PROJECT_PREFIX+ix.activeId):'';};
  const sandbox={window,document,navigator:{},location:{protocol:'file:'},localStorage:storage,Intl,console,Map,Math,JSON,Date,setTimeout,clearTimeout,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../startontwerpen.js'),'utf8'),sandbox);
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),sandbox,{timeout:10000});return {nodes,listeners,stored:activeJson,mem};
 }
 test('app renders module list, stats, and inspector with zero dependencies',()=>{
@@ -49,4 +50,17 @@ test('tapping a palette type arms placement and does not insert a centered beam'
  assert.match(a.nodes.get('#modalContent').innerHTML,/value="12,5"/);
  a.listeners.get('#modalContent:change')({target:{dataset:{mat:'setting:screwsPerJoint'},value:'4'}});
  assert.equal(JSON.parse(a.stored()).materials.screwsPerJoint,4);
+});
+
+test('elk startontwerp opent als zelfstandig bewerkbaar project',()=>{
+ const app=makeApp(),click=app.listeners.get('document:click'),ids=new Set();
+ for(const index of [0,1,2,0]){
+  const button={dataset:{proj:'template:'+index},closest(selector){return selector==='[data-proj]'?this:null;}};
+  click({target:button});
+  const project=JSON.parse(app.stored());
+  assert.equal(project.width,[2800,4000,3000][index]);
+  assert.ok(M.allBeams(project).length);
+  assert.ok(!ids.has(project.id));
+  ids.add(project.id);
+ }
 });
