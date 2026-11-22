@@ -338,13 +338,25 @@ function create(opts){
     }else{for(const [x,z] of [[s.x1,s.z1],[s.x2,s.z2]]){const p=toScreen(view,x,z);ctx.beginPath();ctx.arc(p.x,p.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();}}
   }
 
-  function openEditor(initial){
+  let variantName=null,initialSnapshot=null;
+  function openEditor(initial,sourceName){
     if(!el)build();plan={zones:[],lines:[]};
     const n=M.normalizePlan({zones:initial?.zones||[],lines:initial?.lines||[]});if(n)plan={zones:n.zones,lines:n.lines||[]};
-    selection=null;undo=[];redo=[];open=true;el.classList.add('open');doc.body.classList.add('plan-editor-open');
+    variantName=sourceName||null;initialSnapshot=snapshot();
+    el.querySelector('.pe-head strong').textContent=variantName?'Plattegrond van '+variantName:'Plattegrond schetsen';
+    el.querySelector('.pe-head small').textContent=variantName
+      ?'De variant bouwt de balken en panelen opnieuw op. Handmatige 3D-bewerkingen blijven in het origineel.'
+      :'Teken blokken en lijnen of kies een voorbeeld.';
+    const generate=el.querySelector('[data-pe="generate"]');
+    generate.textContent=variantName?'Maak 3D-variant':'Naar 3D →';
+    generate.title=variantName?'Sla de gewijzigde plattegrond op als nieuw 3D-project':'Maak een nieuw 3D-project';
+    selection=variantName&&plan.zones.length===1&&!plan.lines.length?{type:'zone',id:plan.zones[0].id}:null;
+    undo=[];redo=[];open=true;el.classList.add('open');doc.body.classList.add('plan-editor-open');
     setTool('select');sizeCanvas();fit();canvas.focus();
   }
-  function close(){open=false;if(el)el.classList.remove('open');doc.body.classList.remove('plan-editor-open');opts.onClose&&opts.onClose();}
+  function close(generated=false){
+    if(!generated&&variantName&&snapshot()!==initialSnapshot&&!window.confirm('Sluiten zonder de gewijzigde plattegrond als variant te bewaren?'))return;
+    open=false;if(el)el.classList.remove('open');doc.body.classList.remove('plan-editor-open');opts.onClose&&opts.onClose();}
   return {open:openEditor,close,isOpen:()=>open,getPlan:()=>({zones:plan.zones,lines:plan.lines}),_state:()=>({plan,selection,tool,view,grid})};
 }
 

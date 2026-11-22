@@ -271,6 +271,12 @@ function render(){
   $('#beamList').innerHTML=beams.length?beams.map(b=>`<div class="module-card ${selected?.id===b.id?'active':''}" data-select-beam="${esc(b.id)}"><div class="module-symbol">▥</div><div class="module-meta"><strong>${esc(b.name)}</strong><small>${fmt(b.length)} mm · as ${b.axis.toUpperCase()}</small></div><span style="color:#8e9890">›</span></div>`).join(''):'<p class="hint">Nog geen extra balken geplaatst.</p>';
   $('#presetGrid').innerHTML=Object.entries(M.TYPES).map(([key,v])=>`<button class="preset" data-add="${key}"><span class="preset-icon">${icons[key]}</span>${v.label} ＋</button>`).join('');
   $('#projectName').value=project.name;$('#projectWidth').value=project.width;$('#projectDepth').value=project.depth;$('#projectHeight').value=project.height;$('#stockLength').value=project.stockLength;$('#kerf').value=project.kerf;$('#beamPrice').value=project.beamPrice;$('#countertopCheck').checked=project.countertop;{const c=project.countertopSpec||M.defaultCountertop();$('#ctThickness').value=c.thickness;$('#ctSide').value=c.overhangSide;$('#ctFront').value=c.overhangFront;$('#ctBack').value=c.overhangBack;}
+  for(const field of ['projectWidth','projectDepth','projectHeight'])$('#'+field).readOnly=Boolean(project.plan);
+  $('#editPlanDimensions').classList.toggle('hidden',!project.plan);
+  $('#dimensionHint').textContent=project.plan
+    ?'De buitenmaten volgen uit de zones. Pas de plattegrond aan om een nieuwe 3D-variant te maken.'
+    :modules.length?'De buitenbreedte omvat de tussenstijlen van 50 mm. Bij wijzigen schalen de moduleopeningen mee.'
+    :'Deze maten bepalen de ontwerpruimte. Losse balken kun je afzonderlijk aanpassen.';
   $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;
   renderInspector();draw();
   window.DouglasRoomStudio?.refresh?.();
@@ -881,24 +887,38 @@ function planHTML(){
  h+=`<div class="right-foot-actions" style="margin-top:10px"><button class="primary-btn" data-plan="generate" ${pv.r.beams.length?'':'disabled'}>▦ Maak 3D-project van deze plattegrond</button></div><p class="mini-note">Er komt een nieuw project; je huidige project blijft bewaard. Leg je eigen plattegrondafbeelding eronder met 🖼 Foto in het Boven-aanzicht (PDF eerst als PNG/JPG opslaan).</p>`;
  return h;
 }
-function generatePlanProject(planObj,name){
+function generatePlanProject(planObj,name,source=null){
  const r=M.planFrame(planObj);if(!r.beams.length&&!r.panels.length){toast('Teken eerst een blok of lijn');return false;}
  const b=r.bounds,raw={...M.freeProject(),name:name||'Plattegrond',width:b.width,depth:b.depth,height:b.height,plan:planObj,stockLength:6000,beams:r.beams,panels:r.panels};
+ if(source){
+  raw.stockLength=source.stockLength;raw.kerf=source.kerf;raw.beamPrice=source.beamPrice;
+  raw.materials=source.materials;raw.style=source.style;raw.reference=source.reference;
+  if(r.truncated){toast('Deze variant bevat te veel balken. Verklein de schets voor je de variant maakt.');return false;}
+ }
  if(r.truncated)toast(`Let op: ${r.truncated} balken passen niet (max. 100). Maak de schets kleiner of deel hem op.`);
  if(openNewProject(raw,`Nieuw project met ${r.beams.length} balken · bewerk het in 3D`)){setView('3d');return true;}
  return false;
 }
 const PLAN_DRAFT_KEY='douglas-designer-plan-draft-v1';
-let planEditor=null;
+let planEditor=null,sourcePlanProject=null;
 function openPlanEditor(){
- if(!PE){showPlan();return;}
+ if(!PE){if(project.plan)toast('De plattegrondeditor is niet geladen. Herlaad de app.');else showPlan();return;}
+ sourcePlanProject=project.plan?project:null;
  if(!planEditor)planEditor=PE.create({M,presets:PLAN_PRESETS,
-  onChange:p=>{try{localStorage.setItem(PLAN_DRAFT_KEY,JSON.stringify(p));}catch(e){}},
-  onGenerate:p=>{if(generatePlanProject(p,'Plattegrond schets'))planEditor.close();}});
- let initial=null;try{initial=JSON.parse(localStorage.getItem(PLAN_DRAFT_KEY)||'null');}catch(e){}
- if(!initial||!((initial.zones&&initial.zones.length)||(initial.lines&&initial.lines.length)))initial={zones:[],lines:[]};
+  onChange:p=>{
+   if(!sourcePlanProject){try{localStorage.setItem(PLAN_DRAFT_KEY,JSON.stringify(p));}catch(e){}}
+  },
+  onGenerate:p=>{
+   const source=sourcePlanProject;
+   const name=source?source.name.slice(0,70)+' – variant':'Plattegrond schets';
+   if(generatePlanProject(p,name,source))planEditor.close(true);
+  },
+  onClose:()=>{sourcePlanProject=null;}
+ });
+ let initial=sourcePlanProject?.plan;
+ if(!initial){try{initial=JSON.parse(localStorage.getItem(PLAN_DRAFT_KEY)||'null');}catch(e){}}
  window.DouglasPlanEditorInstance=planEditor;
- planEditor.open(initial);
+ planEditor.open(initial,sourcePlanProject?.name);
 }
 function showPlan(){openModal('START','Start vanuit plattegrond',planHTML());}
 function planAction(act){
@@ -975,6 +995,7 @@ function handleInput(e){const el=e.target,field=el.dataset.edit;const obj=getSel
   });
 }
 function updateSettings(e){const t=e.target,id=t.id;if(!['projectName','projectWidth','projectDepth','projectHeight','stockLength','kerf','beamPrice','countertopCheck','ctThickness','ctSide','ctFront','ctBack'].includes(id))return;
+  if(project.plan&&['projectWidth','projectDepth','projectHeight'].includes(id)){render();return;}
   const v=id==='countertopCheck'?t.checked:id==='projectName'?t.value:Number(t.value);
   if(typeof v==='number'&&!Number.isFinite(v)){render();return;}
   if(id.startsWith('ct')&&id!=='countertopCheck'){const key={ctThickness:'thickness',ctSide:'overhangSide',ctFront:'overhangFront',ctBack:'overhangBack'}[id];commit(()=>{project.countertopSpec=M.normalizeCountertop({...project.countertopSpec,[key]:v});});render();return;}
@@ -1101,6 +1122,7 @@ $('#backdropCamera')?.addEventListener('change',async e=>{await backdropFile(e.t
 $('#backdropTool')?.addEventListener('click',showBackdrop);
 $('#scanTool')?.addEventListener('click',showScan);
 $('#planTool')?.addEventListener('click',openPlanEditor);
+$('#editPlanDimensions')?.addEventListener('click',openPlanEditor);
 $('#modalContent').addEventListener('change',e=>{
   const pr=e.target.dataset?.pl;if(pr==='preset'){const p=PLAN_PRESETS[e.target.value];if(p){planKey=e.target.value;planDraft=clonePreset(e.target.value);showPlan();}return;}
   const pw=e.target.dataset?.pw;if(pw){const [i,c]=pw.split(':'),z=planDraft.zones[+i];if(z){const s=new Set((z.walls||'').split('').filter(Boolean));e.target.checked?s.add(c):s.delete(c);z.walls=[...s].join('');showPlan();}return;}
@@ -1376,5 +1398,5 @@ function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc2',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc2-plan1',{updateViaCache:'none'}).catch(()=>{});
 })();
