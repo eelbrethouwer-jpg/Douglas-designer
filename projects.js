@@ -69,26 +69,24 @@
         const first = isObj(legacy) && Array.isArray(legacy.modules) ? legacy : null;
         let project = first;
         if (first) migrated = true; else { project = defaultFactory(); created = true; }
-        const id = createInIndex(ix, project);
-        if (!id) return {id: null, project, migrated, created, storageError: true}; // werkt in het geheugen; opslag faalt
+        const result = create(project);
+        if (!result.ok) return {id: null, project, migrated, created, storageError: true}; // werkt in het geheugen; opslag faalt
         ix = loadIndex();
-        ix.activeId = id; saveIndex(ix);
       }
       const id = ix.activeId;
       return {id, project: parse(read(PROJECT_PREFIX + id)), migrated, created};
     }
-    function createInIndex(ix, project) {
+    function stageProject(ix, project) {
       let id = String(project.id || uid());
       const taken = (x) => ix.items.some(i => i.id === x) || read(PROJECT_PREFIX + x) !== null;
-      if (taken(id)) id = uid();
+      while (taken(id)) id = uid();
       project.id = id;
       const t = now();
       const w = write(PROJECT_PREFIX + id, JSON.stringify(project));
-      if (!w.ok) return null;
+      if (!w.ok) return w;
       ix.items.push({id, name: cleanName(project.name), createdAt: t, updatedAt: t});
       ix.activeId = ix.activeId || id;
-      saveIndex(ix);
-      return id;
+      return {ok: true, id};
     }
 
     // ---- CRUD ----
@@ -114,11 +112,13 @@
     function create(project, opts = {}) {
       const ix = loadIndex();
       const keep = ix.activeId;
-      const id = createInIndex(ix, project);
-      if (!id) return {ok: false, error: 'Opslag is vol of geblokkeerd'};
+      const staged = stageProject(ix, project);
+      if (!staged.ok) return staged;
+      const id = staged.id;
       ix.activeId = opts.activate === false && keep ? keep : id;
       const w = saveIndex(ix);
-      return w.ok ? {ok: true, id} : {ok: false, error: w.error};
+      if (!w.ok) remove(PROJECT_PREFIX + id);
+      return w.ok ? staged : w;
     }
     function duplicate(id, name) {
       const data = load(id);
@@ -180,13 +180,23 @@
     function importAll(text) {
       const data = parse(text);
       if (!isObj(data) || data.format !== BACKUP_FORMAT || !Array.isArray(data.projects)) return {ok: false, error: 'Geen Douglas Designer back-upbestand'};
-      let added = 0, skipped = 0;
-      for (const p of data.projects.slice(0, 100)) {
-        if (!isObj(p) || !Array.isArray(p.modules)) { skipped++; continue; }
-        const r = create(JSON.parse(JSON.stringify(p)), {activate: false});
-        if (r.ok) added++; else return {ok: false, error: r.error, added, skipped};
+      const ix = loadIndex(), staged = [];
+      let skipped = 0;
+      function rollback(error) {
+        for (const id of staged) remove(PROJECT_PREFIX + id);
+        return {ok: false, error, added: 0, skipped};
       }
-      return {ok: true, added, skipped};
+      for (const project of data.projects) {
+        if (!isObj(project) || !Array.isArray(project.modules)) { skipped++; continue; }
+        const result = stageProject(ix, project);
+        if (!result.ok) return rollback(result.error);
+        staged.push(result.id);
+      }
+      if (staged.length) {
+        const result = saveIndex(ix);
+        if (!result.ok) return rollback(result.error);
+      }
+      return {ok: true, added: staged.length, skipped};
     }
     const usage = () => { let n = 0; try { for (let i = 0; i < storage.length; i++) { const k = storage.key(i); n += (k || '').length + (read(k) || '').length; } } catch (_) { /* onbekend */ } return n; };
 
