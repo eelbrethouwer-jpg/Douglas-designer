@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="apple-touch-icon" href="app-icon-192.png">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="ux.css?rev=0.5.1">
+  <link rel="stylesheet" href="ux.css?rev=1.0.0-rc3">
   <link rel="stylesheet" href="renderer.css?rev=0.5.1">
   <link rel="stylesheet" href="studio.css?rev=0.6.0">
   <link rel="stylesheet" href="room-studio.css?rev=0.7.4">
@@ -20,7 +20,7 @@
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v1.0.0 RC2</b></small></div></div>
+    <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v1.0.0 RC3</b></small></div></div>
     <div class="top-actions"><button class="outline-btn projects-home" id="homeBtn" title="Startscherm openen">⌂ <span class="hide-mobile">Projecten</span></button><span class="save-state" id="saveStatus">● Lokaal opgeslagen</span><button id="undoBtn" class="icon-btn" title="Ongedaan maken" aria-label="Ongedaan maken">↶</button><button id="redoBtn" class="icon-btn" title="Opnieuw" aria-label="Opnieuw">↷</button><button id="shareBtn" class="outline-btn" title="Delen en aanleveren">⇪ <span class="hide-mobile">Delen</span></button><button id="exportBtn" class="outline-btn"><span>↓</span> <span class="hide-mobile">Project exporteren</span></button></div>
   </header>
   <div class="workspace">
@@ -61,11 +61,11 @@
 </div>
 <div class="welcome-layer hidden" id="welcomeLayer" role="dialog" aria-modal="true" aria-labelledby="welcomeHeading">
   <div class="welcome-card">
-    <div class="welcome-eyebrow"><span class="welcome-logo">D<span>.</span></span> DOUGLAS DESIGNER <span class="welcome-version">v1.0.0 RC2</span></div>
-    <h1 id="welcomeHeading">Van idee naar<br><em>buitenkeuken.</em></h1>
-    <p>Ontwerp met complete kastmodules én losse Douglas balken. Alles op maat, met een automatische zaaglijst.</p>
+    <div class="welcome-eyebrow"><span class="welcome-logo">D<span>.</span></span> DOUGLAS DESIGNER <span class="welcome-version">v1.0.0 RC3</span></div>
+    <h1 id="welcomeHeading">Start je ontwerp</h1>
     <div class="welcome-options">
-      <button id="continueProject" class="welcome-option featured"><span class="welcome-option-icon">↗</span><span><strong>Verder met mijn ontwerp</strong><small>Ga direct naar je opgeslagen buitenkeuken</small></span><span class="welcome-arrow">→</span></button>
+      <button id="continueProject" class="welcome-option featured"><span class="welcome-option-icon">↗</span><span><strong>Verder met mijn ontwerp</strong><small id="resumeProjectInfo"></small></span><span class="welcome-arrow">→</span></button>
+      <div id="welcomeTemplates" class="welcome-templates"></div>
       <button id="newProject" class="welcome-option"><span class="welcome-option-icon">＋</span><span><strong>Nieuw ontwerp starten</strong><small>Begin met één open vak en voeg modules toe</small></span><span class="welcome-arrow">→</span></button>
       <button id="newFreeProject" class="welcome-option"><span class="welcome-option-icon">✎</span><span><strong>Vrij tekenen — leeg canvas</strong><small>Teken balken van punt naar punt in 2D en bekijk in 3D</small></span><span class="welcome-arrow">→</span></button>
       <button id="demoProject" class="welcome-option"><span class="welcome-option-icon">◈</span><span><strong>Voorbeeld bekijken</strong><small>Ladekast, koelkast en kamado als inspiratie</small></span><span class="welcome-arrow">→</span></button>
@@ -79,6 +79,6 @@
 <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
 <div id="paletteDragGhost" class="palette-drag-ghost hidden" aria-hidden="true">▥ Douglas balk</div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="room-space.js?rev=0.7.0"></script><script src="sketch-grid.js?rev=0.7.2"></script><script src="model.js?rev=0.8.0"></script><script src="materials.js?rev=0.8.0"></script><script src="documents.js?rev=0.7.5"></script><script src="projects.js?rev=0.7.5"></script><script src="share.js?rev=0.7.5"></script><script src="mesh-import.js?rev=0.7.6"></script><script src="plan-editor.js?rev=0.8.0"></script><script src="drafting.js?rev=0.6.0"></script><script src="render3d.js?rev=0.7.2"></script><script src="room-studio.js?rev=0.7.4"></script><script src="startontwerpen.js?rev=1.0.0-rc2"></script><script src="app.js?rev=1.0.0-rc2"></script>
+<script src="room-space.js?rev=0.7.0"></script><script src="sketch-grid.js?rev=0.7.2"></script><script src="model.js?rev=0.8.0"></script><script src="materials.js?rev=0.8.0"></script><script src="documents.js?rev=0.7.5"></script><script src="projects.js?rev=0.7.5"></script><script src="share.js?rev=0.7.5"></script><script src="mesh-import.js?rev=0.7.6"></script><script src="plan-editor.js?rev=0.8.0"></script><script src="drafting.js?rev=0.6.0"></script><script src="render3d.js?rev=0.7.2"></script><script src="room-studio.js?rev=0.7.4"></script><script src="startontwerpen.js?rev=1.0.0-rc3"></script><script src="app.js?rev=1.0.0-rc3"></script>
 </body>
 </html>
