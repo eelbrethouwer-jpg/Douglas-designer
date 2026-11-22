@@ -3,7 +3,7 @@
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
 const DOCS=window.DouglasDocuments||null;
-const APP_VERSION='1.0.0-rc1';
+const APP_VERSION='1.0.0-rc2';
 const MAT=window.DouglasMaterials||null; // optioneel: zonder materials.js blijft de zaaglijst werken
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
 const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
@@ -579,6 +579,12 @@ function projectsHTML(){
  const items=store.list(),trash=store.trashList(),when=(t)=>new Date(t).toLocaleString('nl-NL',{dateStyle:'short',timeStyle:'short'});
  const kb=(n)=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB';
  let h=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:14px"><button class="primary-btn" data-proj="new">＋ Nieuw (met vak)</button><button class="outline-btn" data-proj="free">✎ Vrij tekenen</button><button class="outline-btn" data-proj="demo">◈ Voorbeeld</button><button class="outline-btn" data-proj="import">↥ Project importeren</button></div>`;
+ const templates=globalThis.DouglasStartontwerpen || [];
+ if(templates.length){
+  h+='<h4 class="cut-section">Start vanuit template</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap">';
+  for(const [index,t] of templates.entries())h+=`<button class="outline-btn" data-proj="template:${index}">${esc(t.name)} · ${fmt(t.width)} × ${fmt(t.depth)} mm</button>`;
+  h+='</div>';
+ }
  h+=`<table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
  for(const it of items)h+=`<tr${it.active?' style="background:#f2f7f1"':''}><td><input data-proj-name="${esc(it.id)}" value="${esc(it.name)}" maxlength="80" aria-label="Projectnaam" style="width:100%;min-width:140px;border:1px solid #dce1d9;border-radius:7px;padding:7px 9px;font:inherit">${it.active?'<small style="color:#2f7059;font-weight:700"> ● actief</small>':''}</td><td>${esc(when(it.updatedAt))}</td><td>${kb(it.bytes)}</td><td style="white-space:nowrap;text-align:right">${it.active?'':`<button class="outline-btn" data-proj="open:${esc(it.id)}">Openen</button> `}<button class="outline-btn" data-proj="dup:${esc(it.id)}" title="Dupliceren">⧉</button> <button class="outline-btn delete-btn" data-proj="del:${esc(it.id)}" title="Verwijderen (naar prullenbak)">✕</button></td></tr>`;
  h+=`</tbody></table>`;
@@ -591,6 +597,10 @@ function projectAction(spec){
  const [act,...rest]=spec.split(':'),id=rest.join(':');
  if(act==='new')openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');
  else if(act==='free'){if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);}}
+ else if(act==='template'){
+  const template=globalThis.DouglasStartontwerpen?.[id];
+  if(template && openNewProject({...template,id:M.uid()},'Startontwerp geopend als nieuw project'))setView('3d');
+ }
  else if(act==='demo')openNewProject(M.demoProject(),'Voorbeeld geopend');
  else if(act==='import')$('#fileInput').click();
  else if(act==='open')switchProject(id);
@@ -1366,5 +1376,5 @@ function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc1',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc2',{updateViaCache:'none'}).catch(()=>{});
 })();
