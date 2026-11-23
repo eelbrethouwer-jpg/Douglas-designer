@@ -117,12 +117,39 @@ const KIND_STYLE={open:{fill:'rgba(138,176,120,.30)',stroke:'#5d8a4a',dash:[8,5]
 function create(opts){
   const M=opts.M,doc=opts.document||document;
   let plan={zones:[],lines:[]},selection=null,tool='select',view={scale:.1,ox:40,oz:40},drag=null,hover=null,preview=null,cursorW=null;
-  let grid=100,magnet=true,undo=[],redo=[],el=null,canvas=null,ctx=null,panel=null,status=null,open=false,pan=null,activePointer=null,touches=new Map(),pinch=null;
+  let grid=100,magnet=true,undo=[],redo=[],el=null,canvas=null,ctx=null,panel=null,status=null,open=false,pan=null,activePointer=null,touches=new Map(),pinch=null,saveFailure=false;
   const snapshot=()=>JSON.stringify(plan);
   const pushUndo=(before)=>{undo.push(before);if(undo.length>60)undo.shift();redo=[];};
   const norm=()=>{const n=M.normalizePlan({zones:plan.zones,lines:plan.lines});plan=n?{zones:n.zones,lines:n.lines||[]}:{zones:[],lines:[]};};
   const commit=(fn)=>{const before=snapshot();fn();norm();if(snapshot()!==before){pushUndo(before);save();}render();};
-  const save=()=>{try{opts.onChange&&opts.onChange({zones:plan.zones,lines:plan.lines});}catch(e){}};
+  const save=()=>{
+    try{if(opts.onChange)opts.onChange({zones:plan.zones,lines:plan.lines});saveFailure=false;}
+    catch(_){saveFailure=true;}
+    showSaveFailure();
+  };
+  function showSaveFailure(){
+    const warning=el?.querySelector('.pe-save-failure');
+    if(warning)warning.hidden=!saveFailure;
+  }
+  function downloadPlan(){
+    const blob=new Blob([snapshot()],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=doc.createElement('a');
+    a.href=url;a.download='douglas-plattegrond-schets.json';doc.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }
+  async function importPlan(file){
+    if(!file)return;
+    try{
+      const input=JSON.parse(await file.text());
+      if(!input||!Array.isArray(input.zones)||!Array.isArray(input.lines))throw new Error('Geen geldig schetsbestand');
+      const normalized=M.normalizePlan({zones:input.zones,lines:input.lines});
+      if(!normalized)throw new Error('Ongeldige plattegrond');
+      if((plan.zones.length||plan.lines.length)&&!window.confirm('Huidige schets vervangen door het gekozen bestand?'))return;
+      commit(()=>{plan={zones:normalized.zones,lines:normalized.lines||[]};selection=null;});
+      fit();
+      setStatus(saveFailure?'Schets geladen, maar lokale opslag is niet gelukt. Download een back-up.':'Schetsbestand geladen en opgeslagen.');
+    }catch(_){setStatus('Dit schetsbestand kan niet worden gelezen. Huidige schets is behouden.');}
+  }
 
   function build(){
     el=doc.createElement('div');el.className='plan-editor';el.setAttribute('role','dialog');el.setAttribute('aria-label','Plattegrond schetsen');
@@ -137,12 +164,14 @@ function create(opts){
       <label>Raster <select data-pe-grid><option value="0">uit</option><option value="50">50 mm</option><option value="100" selected>100 mm</option><option value="250">250 mm</option><option value="500">500 mm</option></select></label>
       <button type="button" data-pe="magnet" class="pe-toggle on" title="Magneet naar andere randen">◉ Magnetisch</button>
       <button type="button" data-pe="fit" title="Alles in beeld">⤢ Alles in beeld</button>
+      <button type="button" data-pe="import-plan" title="Herstel een gedownloade plattegrondschets">↑ Schets laden</button>
        <button type="button" data-pe="details" class="pe-mobile-maten" aria-expanded="false" title="Bewerk geselecteerde maten op mobiel">▤ Maten</button>
       <label>Voorbeeld <select data-pe-preset></select></label>
       <span class="pe-grow"></span>
       <button type="button" class="pe-go" data-pe="generate" title="Maak er een 3D-project van (fase 2)">▦ Naar 3D →</button>
     </div>
-    <div class="pe-main"><div class="pe-stage"><canvas class="pe-canvas" tabindex="0" aria-label="Tekenvlak plattegrond"></canvas><div class="pe-status"></div></div><aside class="pe-panel"></aside></div>`;
+    <input type="file" class="pe-import-input" data-pe-import accept=".json,application/json" hidden>
+    <div class="pe-main"><div class="pe-stage"><canvas class="pe-canvas" tabindex="0" aria-label="Tekenvlak plattegrond"></canvas><div class="pe-save-failure" role="alert" hidden><strong>Deze schets is niet lokaal opgeslagen.</strong><span>Controleer de browseropslag of bewaar je schets als bestand voordat je sluit.</span><div><button type="button" data-pe="retry-save">Opnieuw opslaan</button><button type="button" data-pe="download-plan">Download schets</button></div></div><div class="pe-status"></div></div><aside class="pe-panel"></aside></div>`;
     doc.body.appendChild(el);
     canvas=el.querySelector('canvas');ctx=canvas.getContext('2d');panel=el.querySelector('.pe-panel');status=el.querySelector('.pe-status');
     const ps=el.querySelector('[data-pe-preset]');ps.innerHTML='<option value="">— kies —</option>'+Object.entries(opts.presets||{}).map(([k,v])=>`<option value="${esc(k)}">${esc(v.label)}</option>`).join('');
@@ -181,10 +210,17 @@ function create(opts){
       if(act==='close')close();else if(act==='undo')doUndo();else if(act==='redo')doRedo();
       else if(act==='magnet'){magnet=!magnet;a.classList.toggle('on',magnet);}
       else if(act==='fit')fit();
+      else if(act==='retry-save')save();
+      else if(act==='download-plan')downloadPlan();
+      else if(act==='import-plan')el.querySelector('[data-pe-import]').click();
       else if(act==='details')setDetails(!el.classList.contains('details-open'));
       else if(act==='details-close')setDetails(false);
       else if(act==='generate'){if(!plan.zones.length&&!plan.lines.length){setStatus('Teken eerst een blok of lijn.');return;}opts.onGenerate&&opts.onGenerate({zones:plan.zones,lines:plan.lines});}
       else if(act==='delete')removeSelected();
+    });
+    el.querySelector('[data-pe-import]').addEventListener('change',async e=>{
+      const file=e.target.files?.[0];e.target.value='';
+      await importPlan(file);
     });
     el.querySelector('[data-pe-grid]').addEventListener('change',e=>{grid=+e.target.value;render();});
     el.querySelector('[data-pe-preset]').addEventListener('change',e=>{const p=(opts.presets||{})[e.target.value];if(!p)return;
@@ -403,11 +439,12 @@ function create(opts){
     generate.textContent=variantName?'Maak 3D-variant':'Naar 3D →';
     generate.title=variantName?'Sla de gewijzigde plattegrond op als nieuw 3D-project':'Maak een nieuw 3D-project';
     selection=variantName&&plan.zones.length===1&&!plan.lines.length?{type:'zone',id:plan.zones[0].id}:null;
-    undo=[];redo=[];open=true;el.classList.add('open');doc.body.classList.add('plan-editor-open');
+    undo=[];redo=[];saveFailure=false;showSaveFailure();open=true;el.classList.add('open');doc.body.classList.add('plan-editor-open');
     setTool('select');sizeCanvas();fit();canvas.focus();
   }
   function close(generated=false){
     cancelInteraction();activePointer=null;touches.clear();pinch=null;
+    if(!generated&&saveFailure&&!window.confirm('Deze schets is niet opgeslagen. Download eerst een schetsbestand als back-up. Toch sluiten?'))return;
     if(!generated&&variantName&&snapshot()!==initialSnapshot&&!window.confirm('Sluiten zonder de gewijzigde plattegrond als variant te bewaren?'))return;
     open=false;if(el){el.classList.remove('open');setDetails(false);}doc.body.classList.remove('plan-editor-open');opts.onClose&&opts.onClose();}
   return {open:openEditor,close,isOpen:()=>open,getPlan:()=>({zones:plan.zones,lines:plan.lines}),_state:()=>({plan,selection,tool,view,grid})};

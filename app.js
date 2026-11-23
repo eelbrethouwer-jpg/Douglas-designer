@@ -933,7 +933,7 @@ function openPlanEditor(){
  sourcePlanProject=project.plan?project:null;
  if(!planEditor)planEditor=PE.create({M,presets:PLAN_PRESETS,
   onChange:p=>{
-   if(!sourcePlanProject){try{localStorage.setItem(PLAN_DRAFT_KEY,JSON.stringify(p));}catch(e){}}
+   if(!sourcePlanProject)localStorage.setItem(PLAN_DRAFT_KEY,JSON.stringify(p));
   },
   onGenerate:p=>{
    const source=sourcePlanProject;
