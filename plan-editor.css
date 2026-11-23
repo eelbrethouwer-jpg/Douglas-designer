@@ -23,4 +23,12 @@ body.plan-editor-open{overflow:hidden}
 .pe-chk{display:inline-flex!important;align-items:center;gap:3px;margin:0!important}.pe-chk input{width:auto!important;margin:0!important}
 .pe-note{color:#51605a;line-height:1.5}.pe-sum{margin-top:14px;padding-top:10px;border-top:1px solid #e3e8e1;color:#3d4a44}
 .pe-del{margin-top:6px;width:100%;border:1px solid #c9604f;background:#fff;color:#c9604f;border-radius:8px;padding:8px;cursor:pointer}
-@media(max-width:800px){.pe-panel{display:none}}
+.pe-mobile-maten,.pe-panel-close{display:none}
+@media(max-width:800px){
+  .pe-main{position:relative}
+  .pe-bar .pe-mobile-maten{display:inline-flex;align-items:center;font-weight:700;border-color:#d9822b;color:#8b4b12}
+  .pe-bar .pe-mobile-maten[aria-expanded="true"]{background:#d9822b;color:#fff}
+  .pe-panel{display:none;position:absolute;left:0;right:0;bottom:0;width:auto;max-height:min(64svh,520px);overflow-y:auto;z-index:3;border:0;border-top:2px solid #d9822b;border-radius:14px 14px 0 0;box-shadow:0 -10px 28px rgba(0,0,0,.17);padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  .plan-editor.details-open .pe-panel{display:block}
+  .pe-panel-close{display:block;position:sticky;top:-14px;width:100%;padding:10px 12px;margin:-14px 0 14px;background:#f3f5ef;color:#23402e;border:1px solid #d0dcd0;border-radius:0 0 8px 8px;font:inherit;cursor:pointer;z-index:1;text-align:left}
+}
