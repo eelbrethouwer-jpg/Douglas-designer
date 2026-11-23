@@ -35,7 +35,12 @@ test('overkapping uit bestaand project bewerken bewaart bron en losse schets', {
     assert.equal(variant.depth, 3600);
     assert.equal(variant.plan.zones[0].d, 3600);
     assert.ok(variant.beams.length && variant.panels.length);
-    assert.notDeepEqual(variant.beams.map(b=>b.length), JSON.parse(original).beams.map(b=>b.length));
+    const rearPost = p => Math.max(...p.beams.filter(b=>b.axis==='y').map(b=>b.z));
+    const source = JSON.parse(original);
+    assert.equal(rearPost(variant)-rearPost(source),600);
+    const rafters=variant.panels.filter(p=>p.kind==='rafter');
+    assert.ok(rafters.length>0);
+    assert.ok(rafters.every(p=>p.d===3600));
     assert.equal(await saved(sourceId), original);
     assert.equal(await b.eval(`localStorage.getItem('${draftKey}')`), draft);
     assert.deepEqual(b.errors(), []);
