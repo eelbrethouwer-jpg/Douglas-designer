@@ -87,3 +87,35 @@ test('overkapping: daksparren staan exact één keer in zaagplan, materiaallijst
  for(const output of [X.toText(incomplete,p.name),X.toCSV(incomplete),D.documentHTML(p,M,X)])
    assert.match(output,/Zaagplan onvolledig/);
 });
+
+test('bewerkte dakspar houdt eigen profiel in zaagplan, boodschappenlijst en bouwdocument',()=>{
+ require('../startontwerpen');
+ const D=require('../documents');
+ const p=M.normalizeProject(globalThis.DouglasStartontwerpen.find(p=>p.panels?.some(q=>q.kind==='rafter')));
+ const i=p.panels.findIndex(q=>q.kind==='rafter');
+ const original=p.panels[i];
+ p.panels[i]=M.editPanel(M.editPanel(original,'h',200),'w',70);
+ p.materials.prices={daksparren:32,'daksparren-70x200':48};
+ const list=X.build(p,M),plan=M.boardPlan(p);
+ assert.equal(find(list,'daksparren').qty,7);
+ assert.equal(find(list,'daksparren-70x200').qty,1);
+ assert.equal(find(list,'daksparren-70x200').total,48);
+ assert.equal(plan.estimatedPrice,7*32+48);
+ assert.equal(D.partsList(p,M).find(r=>r.id===original.id).profile,'70x200');
+ assert.match(D.documentHTML(p,M,X),/70 × 200/);
+ const sideways={...p.panels[i],d:70,w:3000,slope:{...p.panels[i].slope,axis:'x'}};
+ assert.equal(M.rafterCuts({panels:[sideways]})[0].profile,'70x200');
+});
+
+test('hellend paneel verplaatsen behoudt helling, ook aan de modelgrens',()=>{
+ const [roof]=M.normalizePanels([{kind:'roof',y:2350,h:18,d:3000,w:4000,slope:{axis:'z',y2:2500,h2:18}}]);
+ const moved=M.editPanel(roof,'y',2450);
+ assert.equal(moved.slope.y2,2600);
+ const capped=M.editPanel(roof,'y',10000);
+ assert.equal(capped.slope.y2,10000);
+ assert.equal(capped.y,9850);
+ const thicker=M.editPanel(roof,'h',24);
+ assert.equal(thicker.slope.h2,24);
+ assert.equal(thicker.d,3000);
+ assert.equal(roof.slope.y2,2500);
+});
