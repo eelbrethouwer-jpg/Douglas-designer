@@ -34,11 +34,11 @@
 
     // 1. Douglas balken — uit het zaagplan, één regel per profiel. Standaardprofiel: prijs uit de
     //    zaaginstellingen; andere profielen: eigen prijsinvoer.
-    groups.push({title: 'Douglas balken', lines: plan.byProfile.map(x => {
+    groups.push({title: 'Douglas balken', lines: plan.byProfile.filter(x=>!x.rafters && x.count).map(x => {
       const isDefault = x.profile === M.DEFAULT_PROFILE;
       return line(isDefault ? 'balken-' + x.profile : 'balk-' + x.profile,
         `Douglas ${x.label.replace(' (standaard)', '').replace(' (rachel)', '')} × ${p.stockLength} mm`, x.count, 'st',
-        `${plan.boards.filter(b => b.profile === x.profile).reduce((n, b) => n + b.cuts.length, 0)} zaagstukken, zaagsnede ${p.kerf} mm`,
+        `${x.cutCount} zaagstukken, zaagsnede ${p.kerf} mm`,
         isDefault ? p.beamPrice : undefined);
     })});
 
@@ -85,12 +85,10 @@
     }
     if (panels.length) groups.push({title: 'Platen & werkblad', lines: panels});
     if (rafterPanels.length) {
-      // Daksparren 50 × 150: schuine lengte + 100 mm zaagverlies; zo veel mogelijk uit één stok gehaald.
-      const lens = rafterPanels.map(x => Math.round(slantLen(x)) + 50).sort((a, b) => b - a), stock = p.stockLength, boards = [];
-      for (const l of lens) { const b = boards.find(r => r + l + p.kerf <= stock); if (b === undefined) boards.push(l); else boards[boards.indexOf(b)] = b + l + p.kerf; }
-      const total = lens.reduce((s, l) => s + l, 0) / 1000;
-      groups.push({title: 'Dak', lines: [line('daksparren', `Daksparren 50 × 150 × ${stock} mm`, boards.length, 'st',
-        `${rafterPanels.length} sparren, samen ${nl(total, 1)} m schuin gemeten (elk +50 mm zaagmarge)`)]});
+      const timber=plan.byProfile.find(x=>x.rafters);
+      if(timber.count)groups.push({title:'Dak',lines:[line('daksparren', `Daksparren 50 × 150 × ${p.stockLength} mm`,timber.count,'st',
+        `${timber.cutCount} ingeplande sparren, schuine zaagmaat inclusief 50 mm afkortmarge`)]});
+
     }
 
     // 4. Beslag.
@@ -119,7 +117,7 @@
     ]});
 
     const total = groups.reduce((s, g) => s + g.lines.reduce((t, l) => t + l.total, 0), 0);
-    return {groups, total, joints, screws, settings: m};
+    return {groups, total, joints, screws, settings: m, stockWarning:M.stockWarning(plan,p.stockLength)};
   }
 
   // Past één instelling of prijs toe; geeft nieuwe, genormaliseerde materials terug.
@@ -140,6 +138,7 @@
   const nl = (n, d = 2) => n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d});
   function toText(list, name) {
     const out = [`Materiaallijst — ${name} (ontwerpraming)`];
+    if(list.stockWarning)out.push(list.stockWarning);
     for (const g of list.groups) {
       out.push('', g.title.toUpperCase());
       for (const l of g.lines) out.push(`- ${nl(l.qty, Number.isInteger(l.qty) ? 0 : 1)} ${l.unit}  ${l.label}${l.price ? `  (€ ${nl(l.price)} p/${l.unit} = € ${nl(l.total)})` : ''}`);
@@ -153,6 +152,7 @@
     const rows = [['Groep', 'Materiaal', 'Aantal', 'Eenheid', 'Prijs per eenheid', 'Totaal', 'Toelichting'].map(cell).join(';')];
     for (const g of list.groups) for (const l of g.lines)
       rows.push([cell(g.title), cell(l.label), nl(l.qty, Number.isInteger(l.qty) ? 0 : 1), cell(l.unit), nl(l.price), nl(l.total), cell(l.detail || '')].join(';'));
+    if(list.stockWarning)rows.push([cell('Controle'),cell(list.stockWarning),'','','','',''].join(';'));
     rows.push(['', cell('Totaal'), '', '', '', nl(list.total), ''].join(';'));
     return '﻿' + rows.join('\r\n');
   }

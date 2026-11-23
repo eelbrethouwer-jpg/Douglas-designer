@@ -276,6 +276,13 @@ function render(){
   renderInspector();draw();
   window.DouglasRoomStudio?.refresh?.();
 }
+function timberEstimate(plan){
+  const stock=plan.byProfile.filter(x=>x.count>0);
+  if(stock.some(x=>!x.priceKnown)){
+    return stock.some(x=>x.priceKnown)?euro(plan.estimatedPrice)+' · deels geprijsd':'Prijzen invullen';
+  }
+  return euro(plan.estimatedPrice);
+}
 function renderInspector(){
   const obj=getSelected();const body=$('#inspectorBody'),foot=$('#inspectorBottom');
   if(multi.length){
@@ -287,7 +294,7 @@ function renderInspector(){
   if(!obj){
     $('#inspectorTitle').textContent='Projectoverzicht';
     const plan=M.boardPlan(project),warn=M.warnings(project);
-    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>${plan.byProfile.length>1?plan.byProfile.map(x=>x.count+'× '+x.profile.replace('x',' × ')).join(' · '):'50 × 100 mm'} · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${euro(plan.estimatedPrice)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft de Douglas balken (standaardprofiel, tenzij je een eigen prijs invult). Platen, schroeven, beslag en afwerking staan in de materiaallijst. De 3D-modules zijn schematisch.</p>`;
+    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>${plan.byProfile.filter(x=>x.count).map(x=>x.count+'× '+x.profile.replace('x',' × ')+(x.rafters?' (sparren)':'')).join(' · ') || 'Geen handelsbalken ingepland'} · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${timberEstimate(plan)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft de Douglas balken (standaardprofiel, tenzij je een eigen prijs invult). Platen, schroeven, beslag en afwerking staan in de materiaallijst. De 3D-modules zijn schematisch.</p>`;
     foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="openCutlist">▤ Zaaglijst & materiaal bekijken →</button><button class="outline-btn full" id="imageBtn">↓ 3D-aanzicht opslaan (PNG)</button></div>';
     return;
   }
@@ -564,13 +571,13 @@ function materialsHTML(){
  return h;
 }
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
- let h=(DOCS?`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:16px"><button class="primary-btn" id="showDocument">▤ Bouwdocument (tekeningen + lijsten)</button><button class="outline-btn" id="csvParts">↓ Onderdelenlijst CSV</button></div>`:'')+`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
+ const stockWarning=M.stockWarning(p,project.stockLength);
+ let h=(stockWarning?`<div class="warning">${esc(stockWarning)}</div>`:'')+(DOCS?`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:16px"><button class="primary-btn" id="showDocument">▤ Bouwdocument (tekeningen + lijsten)</button><button class="outline-btn" id="csvParts">↓ Onderdelenlijst CSV</button></div>`:'')+`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${timberEstimate(p)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
  for(const g of p.groups)h+=`<tr><td>${esc(g.name)}${g.profile!==M.DEFAULT_PROFILE?` <small style="color:#8a968d">${esc(M.PROFILES[g.profile].label)}</small>`:''}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
  h+=`</tbody></table><h4 class="cut-section">GEOPTIMALISEERD ZAAGPLAN — HANDELSLENGTE ${fmt(project.stockLength)} MM</h4>`;
  p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}${b.profile!==M.DEFAULT_PROFILE?`<br><small>${esc(b.profile)}</small>`:''}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
- if(p.impossible.length)h+=`<div class="warning">${p.impossible.length} zaagstukken overschrijden de balklengte van ${fmt(project.stockLength)} mm en zijn NIET opgenomen in het zaagplan.</div>`;
  h+=materialsHTML();
- h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">De balkenraming hierboven omvat alleen Douglas balken; platen, schroeven, beslag en afwerking staan in de materiaallijst. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
+ h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.filter(w=>w!==stockWarning).map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">De balkenraming hierboven omvat alleen Douglas balken; platen, schroeven, beslag en afwerking staan in de materiaallijst. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
  return h;
 }
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
