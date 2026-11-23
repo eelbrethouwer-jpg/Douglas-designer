@@ -23,20 +23,20 @@ test('plattegrond gebruikt daadwerkelijke loslaatpositie ook zonder laatste poin
     const rect=canvas.getBoundingClientRect();
     const pixel=(x,z)=>{const p=PE.toScreen(editor._state().view,x,z);return {x:rect.left+p.x,y:rect.top+p.y};};
     const send=(name,id,point)=>canvas.dispatchEvent(new PointerEvent(name,{bubbles:true,pointerId:id,pointerType:'touch',isPrimary:true,button:0,clientX:point.x,clientY:point.y}));
-    const initial=editor._state().plan.zones[0];
+    const initial=editor._state().plan.zones[0],oldX=initial.x;
     const center=pixel(initial.x+initial.w/2,initial.z+initial.d/2);
     const end={x:center.x+55,y:center.y+30};
     const expectedX=Math.round((initial.x+55/editor._state().view.scale)/100)*100;
     send('pointerdown',11,center);
     send('pointerup',11,end); // bewust géén pointermove
     const moved=editor._state().plan.zones[0].x;
-    const movedRight=moved===expectedX&&moved!==initial.x;
+    const movedRight=moved===expectedX&&moved!==oldX;
     document.querySelector('.plan-editor.open [data-pe=undo]').click();
-    const restored=editor._state().plan.zones[0].x===initial.x;
-    const zone=editor._state().plan.zones[0],corner=pixel(zone.x+zone.w,zone.z+zone.d);
+    const restored=editor._state().plan.zones[0].x===oldX;
+    const zone=editor._state().plan.zones[0],oldW=zone.w,oldD=zone.d,corner=pixel(zone.x+zone.w,zone.z+zone.d);
     send('pointerdown',12,corner);
     send('pointerup',12,{x:corner.x+25,y:corner.y+30}); // resize zonder pointermove
-    const larger=editor._state().plan.zones[0].w>zone.w&&editor._state().plan.zones[0].d>zone.d;
+    const larger=editor._state().plan.zones[0].w>oldW&&editor._state().plan.zones[0].d>oldD;
     editor.close(true);
     return {movedRight,restored,larger,changes,canvasWidth:rect.width};
   })()`);
