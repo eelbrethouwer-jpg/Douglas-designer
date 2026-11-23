@@ -2,6 +2,9 @@
 
 > **Levend productplan | bijgewerkt 25 oktober 2026.** Dit is de beoogde volgorde, geen belofte over release-data of definitieve scope. Elke versie volgt pas op de vorige als de acceptatiecriteria zijn gecontroleerd.
 
+> **Actuele aanvulling — 23 november 2026:** de ontwikkeling is inmiddels gevorderd tot **v1.0.0 RC3** op `main`, inclusief startontwerpen, plattegrond-naar-3D, projectback-ups, bewerkbare planvarianten, herstel bij opslagfouten en geometrie/zaagplan-correcties tot en met PR #29. De onderstaande tabel en oktober-nulmeting zijn historische planning; gebruik die niet als actuele implementatie- of publicatiestatus. **Open acceptatie:** handmatige iPhone Safari/PWA-test, 3D-selectie en -rendering rondom controleren, export/import van grotere projecten en Pages-deploy verifiëren. Automatische tests bewijzen geen bouwkundige veiligheid.
+
+
 ## Productdoel
 
 Een intuïtieve, Nederlandstalige 2D/3D-ontwerper voor Douglas buitenkeukens en andere Douglas constructies. De gebruiker moet eenvoudig kunnen **tekenen → aanpassen → constructie controleren → materialen berekenen → zaaglijst/export maken**.
