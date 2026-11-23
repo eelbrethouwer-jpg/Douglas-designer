@@ -154,7 +154,11 @@
       // Eerst in de prullenbak, daarna pas weghalen: nooit data kwijt bij een mislukte schrijfactie.
       const w = write(TRASH_KEY, JSON.stringify(t.slice(0, TRASH_MAX)));
       if (!w.ok) return {ok: false, error: w.error + ': project niet verwijderd'};
-      remove(PROJECT_PREFIX + id);
+      // Een browser kan verwijderen weigeren (privacy-/opslagfout). Meld dit
+      // en laat de projectindex intact, zodat het project zichtbaar blijft.
+      try { storage.removeItem(PROJECT_PREFIX + id); }
+      catch (_) { return {ok: false, error: 'Verwijderen uit opslag mislukt: project blijft behouden'}; }
+      if (read(PROJECT_PREFIX + id) !== null) return {ok: false, error: 'Project kon niet worden verwijderd'};
       ix.items = ix.items.filter(i => i.id !== id);
       if (ix.activeId === id) ix.activeId = ix.items.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0]?.id || null;
       saveIndex(ix);
