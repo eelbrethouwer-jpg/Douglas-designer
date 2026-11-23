@@ -257,6 +257,9 @@ function create(opts){
     }
   }
   function onUp(e){
+    // Bij loslaten kan de laatste pointerpositie verder liggen dan het vorige move-event.
+    // Werk die eindpositie eerst bij, zodat maat/plaats exact bij de release hoort.
+    if(!pinch&&activePointer===e.pointerId&&(pan||drag?.mode==='move'||drag?.mode==='resize'))onMove(e);
     const p=rectOf(e);
     if(e.pointerType==='touch')touches.delete(e.pointerId);
     if(pinch){if(!touches.size)pinch=null;return;}
