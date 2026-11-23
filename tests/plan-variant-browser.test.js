@@ -17,9 +17,7 @@ test('overkapping uit bestaand project bewerken bewaart bron en losse schets', {
     const draftKey = 'douglas-designer-plan-draft-v1';
     const draft = JSON.stringify({zones:[{name:'Losse schets',kind:'open',w:2000,d:1800,h:2200}],lines:[]});
     await b.eval(`localStorage.setItem('${draftKey}',${JSON.stringify(draft)})`);
-    await b.click('#continueProject');
-    await b.click('#homeBtn');
-    await b.click('[data-proj="template:1"]');
+    await b.click('#welcomeTemplates [data-proj="template:1"]');
     const sourceId = await active();
     // Reopen from durable storage so this covers already saved projects.
     await b.goto(pathToFileURL(path.resolve(__dirname, '../index.html')).href);

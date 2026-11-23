@@ -3,7 +3,7 @@
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
 const DOCS=window.DouglasDocuments||null;
-const APP_VERSION='1.0.0-rc2';
+const APP_VERSION='1.0.0-rc3';
 const MAT=window.DouglasMaterials||null; // optioneel: zonder materials.js blijft de zaaglijst werken
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
 const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
@@ -39,7 +39,8 @@ function syncSketchControls(){
  if(step)step.value=String(sketchSettings.step);
  if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
 }
-let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
+let hasSavedProject=false;
+let project; try{const boot=store.init(()=>M.demoProject());hasSavedProject=!boot.created && !boot.storageError;project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
 let multi=[]; // meerdere geselecteerde balken [{type,id}] (kaderselectie); leeg = enkelvoudige selectie
 let marquee=null;
 let scanData=null,scanKey='',scanMissingKey='',scanLoading=false,scanPrepKey='',scanWorld=null,scanTriRgb=null,scanOrientB=null,scanRaf=0,scanCanvas=null;
@@ -281,6 +282,13 @@ function render(){
   renderInspector();draw();
   window.DouglasRoomStudio?.refresh?.();
 }
+function timberEstimate(plan){
+  const stock=plan.byProfile.filter(x=>x.count>0);
+  if(stock.some(x=>!x.priceKnown)){
+    return stock.some(x=>x.priceKnown)?euro(plan.estimatedPrice)+' · deels geprijsd':'Prijzen invullen';
+  }
+  return euro(plan.estimatedPrice);
+}
 function renderInspector(){
   const obj=getSelected();const body=$('#inspectorBody'),foot=$('#inspectorBottom');
   if(multi.length){
@@ -292,7 +300,7 @@ function renderInspector(){
   if(!obj){
     $('#inspectorTitle').textContent='Projectoverzicht';
     const plan=M.boardPlan(project),warn=M.warnings(project);
-    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>${plan.byProfile.length>1?plan.byProfile.map(x=>x.count+'× '+x.profile.replace('x',' × ')).join(' · '):'50 × 100 mm'} · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${euro(plan.estimatedPrice)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft de Douglas balken (standaardprofiel, tenzij je een eigen prijs invult). Platen, schroeven, beslag en afwerking staan in de materiaallijst. De 3D-modules zijn schematisch.</p>`;
+    body.innerHTML=`<div class="kpi-banner"><label>BENODIGDE DOUGLAS BALKEN</label><strong>${plan.boards.length} × ${fmt(project.stockLength)} mm</strong><small>${plan.byProfile.filter(x=>x.count).map(x=>x.count+'× '+x.profile.replace('x',' × ')+(x.rafters?' (sparren)':'')).join(' · ') || 'Geen handelsbalken ingepland'} · zaagoptimalisatie</small></div><div class="detail-label"><span>Ontwerp</span><strong>${project.modules.length} modules</strong></div><div class="detail-label"><span>Zaagstukken totaal</span><strong>${plan.pieces} delen</strong></div><div class="detail-label"><span>Totale zaaglengte</span><strong>${(plan.totalLength/1000).toFixed(2).replace('.',',')} m</strong></div><div class="detail-label"><span>Douglas prijsindicatie</span><strong>${timberEstimate(plan)}</strong></div><div class="divider"></div><p class="inspector-label">AANDACHTSPUNTEN</p>${warn.map(w=>`<div class="warning">${esc(w)}</div>`).join('')||'<p class="mini-note">Geen eenvoudige geometrische waarschuwingen gevonden.</p>'}<div class="divider"></div><p class="mini-note">Prijs betreft de Douglas balken (standaardprofiel, tenzij je een eigen prijs invult). Platen, schroeven, beslag en afwerking staan in de materiaallijst. De 3D-modules zijn schematisch.</p>`;
     foot.innerHTML='<div class="right-foot-actions"><button class="primary-btn full" id="openCutlist">▤ Zaaglijst & materiaal bekijken →</button><button class="outline-btn full" id="imageBtn">↓ 3D-aanzicht opslaan (PNG)</button></div>';
     return;
   }
@@ -569,28 +577,31 @@ function materialsHTML(){
  return h;
 }
 function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project);
- let h=(DOCS?`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:16px"><button class="primary-btn" id="showDocument">▤ Bouwdocument (tekeningen + lijsten)</button><button class="outline-btn" id="csvParts">↓ Onderdelenlijst CSV</button></div>`:'')+`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${euro(p.estimatedPrice)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
+ const stockWarning=M.stockWarning(p,project.stockLength);
+ let h=(stockWarning?`<div class="warning">${esc(stockWarning)}</div>`:'')+(DOCS?`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:16px"><button class="primary-btn" id="showDocument">▤ Bouwdocument (tekeningen + lijsten)</button><button class="outline-btn" id="csvParts">↓ Onderdelenlijst CSV</button></div>`:'')+`<div class="cut-kpis"><div class="cut-kpi"><small>Benodigde balken</small><strong>${p.boards.length} stuks</strong></div><div class="cut-kpi"><small>Zaagstukken</small><strong>${p.pieces}</strong></div><div class="cut-kpi"><small>Restlengte</small><strong>${(p.waste/1000).toFixed(2).replace('.',',')} m</strong></div><div class="cut-kpi"><small>Raming balken</small><strong>${timberEstimate(p)}</strong></div></div><h4 class="cut-section">ZAAGLIJST — DOUGLAS BALKEN PER PROFIEL</h4><table class="cuttable"><thead><tr><th>Onderdeel</th><th>Lengte (mm)</th><th>Aantal</th><th>Totaal</th></tr></thead><tbody>`;
  for(const g of p.groups)h+=`<tr><td>${esc(g.name)}${g.profile!==M.DEFAULT_PROFILE?` <small style="color:#8a968d">${esc(M.PROFILES[g.profile].label)}</small>`:''}</td><td>${fmt(g.length)}</td><td>${g.count}×</td><td>${fmt(g.length*g.count)} mm</td></tr>`;
  h+=`</tbody></table><h4 class="cut-section">GEOPTIMALISEERD ZAAGPLAN — HANDELSLENGTE ${fmt(project.stockLength)} MM</h4>`;
  p.boards.forEach((b,i)=>{h+=`<div class="bar-plan"><span class="bar-name">Balk ${i+1}${b.profile!==M.DEFAULT_PROFILE?`<br><small>${esc(b.profile)}</small>`:''}</span><div class="bar-track">`;b.cuts.forEach(c=>{const pct=c.length/project.stockLength*100;h+=`<div class="bar-segment" style="width:${pct}%" title="${esc(c.name)}: ${c.length} mm">${pct>11?fmt(c.length):''}</div>`;});h+=`<div class="bar-waste" style="flex:1"></div></div><span class="bar-remainder">${fmt(project.stockLength-b.used)} rest</span></div>`;});
- if(p.impossible.length)h+=`<div class="warning">${p.impossible.length} zaagstukken overschrijden de balklengte van ${fmt(project.stockLength)} mm en zijn NIET opgenomen in het zaagplan.</div>`;
  h+=materialsHTML();
- h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">De balkenraming hierboven omvat alleen Douglas balken; platen, schroeven, beslag en afwerking staan in de materiaallijst. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
+ h+=`<h4 class="cut-section">CONTROLE & BEPERKINGEN</h4>${warnings.filter(w=>w!==stockWarning).map(w=>`<div class="warning">${esc(w)}</div>`).join('')}<div class="notice-small">De balkenraming hierboven omvat alleen Douglas balken; platen, schroeven, beslag en afwerking staan in de materiaallijst. Zaagplan: first-fit decreasing (bruikbare benadering, niet mathematisch optimaal). Zaagverlies: ${project.kerf} mm per extra snede in dezelfde handelsbalk. Controleer alle maten, verbindingsdetails en veiligheid vóór aanschaf/bouw.</div>`;
  return h;
 }
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
 function showDocument(){if(!DOCS)return;modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='BOUWDOCUMENT / ONTWERPRAMING';$('#modalTitle').textContent='Bouwdocument';
   $('#modalContent').innerHTML=`<div class="right-foot-actions" style="flex-direction:row;margin-bottom:12px"><button class="outline-btn" id="openCutlist">← Terug naar zaaglijst</button></div>`+DOCS.documentHTML(project,M,MAT,{version:APP_VERSION});$('#modalContent').scrollTop=0;}
+function templateChoicesHTML(){
+ const templates=globalThis.DouglasStartontwerpen || [];
+ if(!templates.length)return '';
+ const buttons=templates.map((t,index)=>
+  `<button type="button" class="outline-btn" data-proj="template:${index}">${esc(t.name)} · ${fmt(t.width)} × ${fmt(t.depth)} mm</button>`
+ ).join('');
+ return `<section aria-label="Start vanuit template"><h3 class="cut-section">Start vanuit template</h3><div class="template-choices">${buttons}</div></section>`;
+}
 function projectsHTML(){
  const items=store.list(),trash=store.trashList(),when=(t)=>new Date(t).toLocaleString('nl-NL',{dateStyle:'short',timeStyle:'short'});
  const kb=(n)=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB';
  let h=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:14px"><button class="primary-btn" data-proj="new">＋ Nieuw (met vak)</button><button class="outline-btn" data-proj="free">✎ Vrij tekenen</button><button class="outline-btn" data-proj="demo">◈ Voorbeeld</button><button class="outline-btn" data-proj="import">↥ Project importeren</button></div>`;
- const templates=globalThis.DouglasStartontwerpen || [];
- if(templates.length){
-  h+='<h4 class="cut-section">Start vanuit template</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap">';
-  for(const [index,t] of templates.entries())h+=`<button class="outline-btn" data-proj="template:${index}">${esc(t.name)} · ${fmt(t.width)} × ${fmt(t.depth)} mm</button>`;
-  h+='</div>';
- }
+ h+=templateChoicesHTML();
  h+=`<table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
  for(const it of items)h+=`<tr${it.active?' style="background:#f2f7f1"':''}><td><input data-proj-name="${esc(it.id)}" value="${esc(it.name)}" maxlength="80" aria-label="Projectnaam" style="width:100%;min-width:140px;border:1px solid #dce1d9;border-radius:7px;padding:7px 9px;font:inherit">${it.active?'<small style="color:#2f7059;font-weight:700"> ● actief</small>':''}</td><td>${esc(when(it.updatedAt))}</td><td>${kb(it.bytes)}</td><td style="white-space:nowrap;text-align:right">${it.active?'':`<button class="outline-btn" data-proj="open:${esc(it.id)}">Openen</button> `}<button class="outline-btn" data-proj="dup:${esc(it.id)}" title="Dupliceren">⧉</button> <button class="outline-btn delete-btn" data-proj="del:${esc(it.id)}" title="Verwijderen (naar prullenbak)">✕</button></td></tr>`;
  h+=`</tbody></table>`;
@@ -1192,8 +1203,23 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>{if(e.key.toLowerCase()==='s'){magnetHeldOff=false;draw();}});
 window.addEventListener('blur',()=>{magnetHeldOff=false;});
+function cancelCanvasEdit(){
+  // Een onderbroken sleepactie mag geen modelwijziging buiten de undo-geschiedenis achterlaten.
+  if(dragging?.before)project=JSON.parse(dragging.before);
+  dragging=null;marquee=null;previewBeam=null;snapHint=null;
+  if(drawMode)$('#drawHelp').textContent='Sleep van startpunt naar eindpunt';
+  render();
+}
 canvas.addEventListener('pointerdown',e=>{
+  if(pointers.size>=2)return;
   canvas.setPointerCapture(e.pointerId);
+  if(pointers.size===1){
+    const first=pointers.values().next().value;
+    cancelCanvasEdit();
+    pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+    pinchDistance=Math.hypot(e.offsetX-first.x,e.offsetY-first.y);
+    return;
+  }
   // SketchUp-style navigation: Shift+drag or middle mouse pans instead of orbiting.
   if(e.shiftKey===true||e.button===1){
     pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
@@ -1267,10 +1293,9 @@ canvas.addEventListener('pointerdown',e=>{
       if(b){dragging.mode='move-beam';dragging.before=JSON.stringify(project);dragging.startBeam={x:b.x,y:b.y,z:b.z};}
     }
   }
-  if(pointers.size===2){dragging=null;const p=[...pointers.values()];pinchDistance=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
 });
 canvas.addEventListener('pointermove',e=>{if(measureMode&&measureData&&measureData.a&&!measureData.fixed){const pt=drawPoint(e.offsetX,e.offsetY);if(pt){measureData.b=pt;draw();}}});
-canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
+canvas.addEventListener('pointermove',e=>{if(armedBeamType && pointers.size<2 && (!dragging||dragging.mode==='place-beam'))updatePlacement(e.offsetX,e.offsetY);if(!pointers.has(e.pointerId))return;const before=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===2){const p=[...pointers.values()],dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);if(pinchDistance>0)camera.zoom=M.clamp(camera.zoom*dist/pinchDistance,.35,4);pinchDistance=dist;draw();return;}if(!dragging)return;
   const dx=e.offsetX-before.x,dy=e.offsetY-before.y;if(Math.hypot(e.offsetX-dragging.startX,e.offsetY-dragging.startY)>5)dragging.moved=true;
   if(dragging.mode==='pan-camera'){
     camera.panX+=dx;camera.panY+=dy;draw();return;
@@ -1336,6 +1361,7 @@ canvas.addEventListener('pointermove',e=>{if(armedBeamType && (!dragging||draggi
   }else{camera.yaw+=dx*.008;camera.pitch=M.clamp(camera.pitch+dy*.006,-1.557,1.557);currentView='custom';Array.from(document.querySelectorAll('.view-btn')).forEach(b=>b.classList.remove('selected'));draw();}}
 });
 function pointerEnd(e){
+  if(!pointers.has(e.pointerId))return;
   if(dragging?.mode==='move-backdrop'){
     const d=dragging;dragging=null;pointers.delete(e.pointerId);
     if(JSON.stringify(project)!==d.before){undoStack.push(d.before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();}
@@ -1388,15 +1414,23 @@ function pointerEnd(e){
     if(fit)toast(`Balk opnieuw passend gemaakt: ${fmt(fit.length)} mm`);
   }
   else if(dragging&&!dragging.moved&&pointers.size===1){const id=hit(e.offsetX,e.offsetY);if(id?.type==='module'||id?.type==='beam'||id?.type==='frame'||id?.type==='panel')setSelected(id.type,id.id);else setSelected(null,null);}pointers.delete(e.pointerId);if(!pointers.size){dragging=null;pinchDistance=0;}}
-canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragging=null;pinchDistance=0;});
+canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointercancel',e=>{
+  if(!pointers.delete(e.pointerId))return;
+  pinchDistance=0;cancelCanvasEdit();
+});
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
 window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
 persist();updateDraftControls();syncSketchControls();render();
 window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove,isSaved:()=>lastSaveOk});
-function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
+function showWelcome(){
+ $('#continueProject').classList.toggle('hidden',!hasSavedProject);
+ $('#resumeProjectInfo').textContent=project.name+' · '+fmt(project.width)+' × '+fmt(project.depth)+' mm';
+ $('#welcomeTemplates').innerHTML=templateChoicesHTML();
+ $('#welcomeLayer').classList.remove('hidden');
+}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc2-plan1',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3.plan',{updateViaCache:'none'}).catch(()=>{});
 })();

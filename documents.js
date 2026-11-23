@@ -30,6 +30,7 @@
       axis: b.axis, x: b.x, y: b.y, z: b.z, place: placeOf(b.id), status: p.frameEdits && p.frameEdits[b.id] ? 'handmatig aangepast' : 'automatisch'});
     for (const b of free) rows.push({id: b.id, name: b.name, group: 'Losse balken', profile: M.profileOf(b).id, length: b.length,
       axis: b.axis, x: b.x, y: b.y, z: b.z, place: '', status: 'vrij onderdeel'});
+    for(const cut of M.rafterCuts(p))rows.push({...cut,place:'Dak',status:'schuine zaagmaat incl. 50 mm afkortmarge'});
     rows.forEach((r, i) => { r.code = 'D-' + String(i + 1).padStart(3, '0'); });
     return rows;
   }

@@ -78,3 +78,5 @@
 .frame-library>summary small{font-size:10px;white-space:nowrap;color:#839185}
 .frame-library[open] .module-list{max-height:380px;overflow:auto;overscroll-behavior:contain}
 .frame-library>summary:focus-visible{outline:2px solid #418469;outline-offset:3px}
+
+.template-choices{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.template-choices button{min-height:44px;height:auto;white-space:normal;text-align:left}.welcome-templates .template-choices{display:grid;margin:0}.welcome-templates .cut-section{margin:4px 0 8px}.welcome-option{min-height:60px}
