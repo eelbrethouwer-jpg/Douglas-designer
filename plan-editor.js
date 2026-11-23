@@ -137,6 +137,7 @@ function create(opts){
       <label>Raster <select data-pe-grid><option value="0">uit</option><option value="50">50 mm</option><option value="100" selected>100 mm</option><option value="250">250 mm</option><option value="500">500 mm</option></select></label>
       <button type="button" data-pe="magnet" class="pe-toggle on" title="Magneet naar andere randen">◉ Magnetisch</button>
       <button type="button" data-pe="fit" title="Alles in beeld">⤢ Alles in beeld</button>
+       <button type="button" data-pe="details" class="pe-mobile-maten" aria-expanded="false" title="Bewerk geselecteerde maten op mobiel">▤ Maten</button>
       <label>Voorbeeld <select data-pe-preset></select></label>
       <span class="pe-grow"></span>
       <button type="button" class="pe-go" data-pe="generate" title="Maak er een 3D-project van (fase 2)">▦ Naar 3D →</button>
@@ -147,7 +148,13 @@ function create(opts){
     const ps=el.querySelector('[data-pe-preset]');ps.innerHTML='<option value="">— kies —</option>'+Object.entries(opts.presets||{}).map(([k,v])=>`<option value="${esc(k)}">${esc(v.label)}</option>`).join('');
     bind();
   }
-  function setTool(t){tool=t;drag=null;preview=null;el.querySelectorAll('[data-pe-tool]').forEach(b=>b.classList.toggle('on',b.dataset.peTool===t));canvas.style.cursor=t==='select'?'default':'crosshair';
+  function setDetails(show){
+    el.classList.toggle('details-open',!!show);
+    const button=el.querySelector('[data-pe="details"]');
+    if(button)button.setAttribute('aria-expanded',String(!!show));
+    if(show&&panel)panel.scrollTop=0;
+  }
+  function setTool(t){setDetails(false);tool=t;drag=null;preview=null;el.querySelectorAll('[data-pe-tool]').forEach(b=>b.classList.toggle('on',b.dataset.peTool===t));canvas.style.cursor=t==='select'?'default':'crosshair';
     setStatus(t==='block'?'Blok: sleep een rechthoek over het vlak.':t==='line'?'Lijn: sleep van begin- naar eindpunt (altijd haaks).':'Klik een blok of lijn om te selecteren, sleep om te verplaatsen, sleep een greep om te vergroten of verkleinen.');render();}
   function setStatus(t){if(status)status.dataset.hint=t;updateStatus();}
   function updateStatus(){if(!status)return;const c=cursorW?`x ${fmt(cursorW.x)} · z ${fmt(cursorW.z)} mm`:'';status.innerHTML=`<span>${esc(status.dataset.hint||'')}</span><b>${c}</b>`;}
@@ -174,6 +181,8 @@ function create(opts){
       if(act==='close')close();else if(act==='undo')doUndo();else if(act==='redo')doRedo();
       else if(act==='magnet'){magnet=!magnet;a.classList.toggle('on',magnet);}
       else if(act==='fit')fit();
+      else if(act==='details')setDetails(!el.classList.contains('details-open'));
+      else if(act==='details-close')setDetails(false);
       else if(act==='generate'){if(!plan.zones.length&&!plan.lines.length){setStatus('Teken eerst een blok of lijn.');return;}opts.onGenerate&&opts.onGenerate({zones:plan.zones,lines:plan.lines});}
       else if(act==='delete')removeSelected();
     });
@@ -298,7 +307,7 @@ function create(opts){
   }
   function panelHTML(){
     const tot=plan.zones.reduce((s,q)=>s+q.w*q.d,0)/1e6,b=planBounds(plan);
-    let h='';
+    let h='<button type="button" class="pe-panel-close" data-pe="details-close">← Terug naar het ontwerp</button>';
     if(selection?.type==='zone'){
       const z=plan.zones.find(q=>q.id===selection.id);
       if(z){
@@ -397,7 +406,7 @@ function create(opts){
   function close(generated=false){
     cancelInteraction();activePointer=null;touches.clear();pinch=null;
     if(!generated&&variantName&&snapshot()!==initialSnapshot&&!window.confirm('Sluiten zonder de gewijzigde plattegrond als variant te bewaren?'))return;
-    open=false;if(el)el.classList.remove('open');doc.body.classList.remove('plan-editor-open');opts.onClose&&opts.onClose();}
+    open=false;if(el){el.classList.remove('open');setDetails(false);}doc.body.classList.remove('plan-editor-open');opts.onClose&&opts.onClose();}
   return {open:openEditor,close,isOpen:()=>open,getPlan:()=>({zones:plan.zones,lines:plan.lines}),_state:()=>({plan,selection,tool,view,grid})};
 }
 
