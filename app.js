@@ -20,8 +20,9 @@ const MESH=window.DouglasMesh||null;
 const PE=window.DouglasPlanEditor||null;
 const SHARE=window.DouglasShare||null; // optioneel: zonder share.js verdwijnen delen/aanleveren
 const PRJ=window.DouglasProjects; if(!PRJ) throw new Error('projects.js ontbreekt');
-const store=PRJ.createStore(localStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
-let storageProblem=false;
+let projectStorage;
+try{projectStorage=localStorage;}catch(_){}
+const store=PRJ.createStore(projectStorage); // meerdere projecten; het oude enkelvoudige item blijft als back-up staan
 const WELCOME_KEY='douglas-designer-welcome-v2';
 const SKETCH_KEY='douglas-designer-sketch-grid-v1';
 let sketchSettings;
@@ -40,7 +41,7 @@ function syncSketchControls(){
  if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
 }
 let hasSavedProject=false;
-let project; try{const boot=store.init(()=>M.demoProject());hasSavedProject=!boot.created && !boot.storageError;project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
+let project; try{const boot=store.init(()=>M.demoProject());hasSavedProject=!boot.created && !boot.storageError;project=normalize(boot.project);}catch(e){project=normalize(M.demoProject());}
 let multi=[]; // meerdere geselecteerde balken [{type,id}] (kaderselectie); leeg = enkelvoudige selectie
 let marquee=null;
 let scanData=null,scanKey='',scanMissingKey='',scanLoading=false,scanPrepKey='',scanWorld=null,scanTriRgb=null,scanOrientB=null,scanRaf=0,scanCanvas=null;
@@ -121,22 +122,31 @@ function handleAt(px,py){
 }
 
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
-function persist(){
- const r=store.save(project.id,project);
- if(r.ok){lastSaveOk=true;storageProblem=false;const t=new Date(r.savedAt);$('#saveStatus').textContent='● Lokaal opgeslagen · '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');}
- else{lastSaveOk=false;$('#saveStatus').textContent='● Opslag niet beschikbaar';toast((r.error||'Opslag is vol of geblokkeerd')+'. Exporteer het project als JSON-back-up.');}
+function showSaveResult(result){
+ lastSaveOk=result.ok;
+ $('#saveRecovery').classList.toggle('hidden',result.ok);
+ if(result.ok){
+  const t=new Date(result.savedAt??Date.now());
+  $('#saveStatus').textContent='● Lokaal opgeslagen · '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+  $('#saveError').textContent='';
+ }else{
+  $('#saveStatus').textContent='● Opslaan mislukt';
+  $('#saveError').textContent=(result.error||'Opslag niet beschikbaar')+'. Je laatste wijzigingen staan alleen in dit venster.';
+ }
 }
+function persist(){showSaveResult(store.save(project.id,project));}
 function commit(fn){const before=JSON.stringify(project);fn(project);project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
 function resetSession(){multi=[];undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
 // Nieuw project aanmaken en openen; het huidige project blijft ongemoeid in de lijst staan.
 function openNewProject(raw,msg){
  const p=normalize(raw),r=store.create(p);
  if(!r.ok){toast('Niet gelukt: '+r.error+'. Het huidige project blijft actief.');return false;}
- project=p;resetSession();render();hideWelcome();switchMobile('design');closeModal();if(msg)toast(msg);return true;
+ showSaveResult(r);project=p;resetSession();render();hideWelcome();switchMobile('design');closeModal();if(msg)toast(msg);return true;
 }
 function switchProject(id){
  const raw=store.load(id);if(!raw){toast('Project niet gevonden');return;}
- project=normalize(raw);store.setActive(id);resetSession();render();closeModal();toast('Geopend: '+project.name);
+ if(!store.setActive(id)){toast('Project wisselen mislukt: opslag niet beschikbaar');return;}
+ showSaveResult({ok:true});project=normalize(raw);resetSession();render();closeModal();toast('Geopend: '+project.name);
 }
 function history(dir){multi=[];const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);if(selected.type==='panel')return (project.panels||[]).find(b=>b.id===selected.id);return null;}
@@ -1070,7 +1080,8 @@ document.addEventListener('click',e=>{
     case 'editSelectionBtn':if(selected||multi.length)$('#inspector').classList.add('mobile-visible');break;
     case 'closeInspector':if(window.innerWidth<=1250){$('#inspector').classList.remove('mobile-visible');}else{setSelected(null,null);}break;
     case 'duplicateBeam':{const obj=getSelected();if(!['beam','frame'].includes(selected?.type)||!obj)return;let id;commit(()=>{id=M.uid();project.beams.push({...obj,id,name:obj.name+' kopie',x:obj.x+50});});setSelected('beam',id);toast('Balk gedupliceerd');break;}
-    case 'exportBtn':case 'modalSecondary':exportProject();break;
+    case 'retrySave':persist();break;
+    case 'saveBackup':case 'exportBtn':case 'modalSecondary':exportProject();break;
     case 'importBtn':$('#fileInput').click();break;
     case 'addBeamBtn':switchPanel('beams');break;
     case 'cancelPlacement':disarmBeam();break;
@@ -1435,8 +1446,8 @@ function showWelcome(){
  $('#welcomeTemplates').innerHTML=templateChoicesHTML();
  $('#welcomeLayer').classList.remove('hidden');
 }
-function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
-if(!localStorage.getItem(WELCOME_KEY))showWelcome();
+function hideWelcome(){try{projectStorage.setItem(WELCOME_KEY,'seen');}catch(_){}$('#welcomeLayer').classList.add('hidden');}
+if(lastSaveOk){try{if(!projectStorage.getItem(WELCOME_KEY))showWelcome();}catch(_){showWelcome();}}
 checkShareHash();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3.plan',{updateViaCache:'none'}).catch(()=>{});
 })();
