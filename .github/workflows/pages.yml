@@ -13,12 +13,13 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && github.ref || 'douglas-pages-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     name: Validate
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,7 +39,7 @@ jobs:
           node --check model.js
           node --check sw.js
       - name: Run tests
-        run: node --test tests/*.test.js
+        run: node --test --test-concurrency=1 tests/*.test.js
 
   deploy:
     name: Deploy to GitHub Pages
