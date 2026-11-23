@@ -58,16 +58,16 @@ function distToSegment(p,a,b){
   const vx=b.x-a.x,vy=b.y-a.y,l2=vx*vx+vy*vy;let t=l2?((p.x-a.x)*vx+(p.y-a.y)*vy)/l2:0;t=clampN(t,0,1);
   return Math.hypot(p.x-(a.x+t*vx),p.y-(a.y+t*vy));
 }
-function hitTest(plan,view,px,py,selection){
+function hitTest(plan,view,px,py,selection,handleRadius=HANDLE_PX){
   const P={x:px,y:py};
   // grepen van de selectie eerst
   if(selection){
     if(selection.type==='zone'){
       const z=(plan.zones||[]).find(q=>q.id===selection.id);
-      if(z){const hp=handlePoints(z);for(const h of HANDLES){const s=toScreen(view,hp[h][0],hp[h][1]);if(Math.abs(s.x-px)<=HANDLE_PX&&Math.abs(s.y-py)<=HANDLE_PX)return {kind:'handle',type:'zone',id:z.id,handle:h};}}
+      if(z){const hp=handlePoints(z);for(const h of HANDLES){const s=toScreen(view,hp[h][0],hp[h][1]);if(Math.abs(s.x-px)<=handleRadius&&Math.abs(s.y-py)<=handleRadius)return {kind:'handle',type:'zone',id:z.id,handle:h};}}
     }else if(selection.type==='line'){
       const l=(plan.lines||[]).find(q=>q.id===selection.id);
-      if(l){for(const [h,x,z] of [['a',l.x1,l.z1],['b',l.x2,l.z2]]){const s=toScreen(view,x,z);if(Math.abs(s.x-px)<=HANDLE_PX&&Math.abs(s.y-py)<=HANDLE_PX)return {kind:'handle',type:'line',id:l.id,handle:h};}}
+      if(l){for(const [h,x,z] of [['a',l.x1,l.z1],['b',l.x2,l.z2]]){const s=toScreen(view,x,z);if(Math.abs(s.x-px)<=handleRadius&&Math.abs(s.y-py)<=handleRadius)return {kind:'handle',type:'line',id:l.id,handle:h};}}
     }
   }
   // lijnen vóór blokken (liggen er meestal bovenop)
@@ -99,6 +99,14 @@ function zoomAt(view,px,py,factor){
   const s=clampN(view.scale*factor,0.01,2),w=toWorld(view,px,py);
   return {scale:s,ox:px-w.x*s,oz:py-w.z*s};
 }
+function pinchView(startView,startPoints,currentPoints){
+  const center=([a,b])=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+  const distance=([a,b])=>Math.hypot(a.x-b.x,a.y-b.y);
+  const anchor=center(startPoints),mid=center(currentPoints);
+  const w=toWorld(startView,anchor.x,anchor.y);
+  const scale=clampN(startView.scale*distance(currentPoints)/Math.max(1,distance(startPoints)),0.01,2);
+  return {scale,ox:mid.x-w.x*scale,oz:mid.y-w.z*scale};
+}
 function uid(){return 'p'+Math.random().toString(36).slice(2,9);}
 const fmt=n=>Math.round(n).toLocaleString('nl-NL');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -109,7 +117,7 @@ const KIND_STYLE={open:{fill:'rgba(138,176,120,.30)',stroke:'#5d8a4a',dash:[8,5]
 function create(opts){
   const M=opts.M,doc=opts.document||document;
   let plan={zones:[],lines:[]},selection=null,tool='select',view={scale:.1,ox:40,oz:40},drag=null,hover=null,preview=null,cursorW=null;
-  let grid=100,magnet=true,undo=[],redo=[],el=null,canvas=null,ctx=null,panel=null,status=null,open=false,pan=null;
+  let grid=100,magnet=true,undo=[],redo=[],el=null,canvas=null,ctx=null,panel=null,status=null,open=false,pan=null,activePointer=null,touches=new Map(),pinch=null;
   const snapshot=()=>JSON.stringify(plan);
   const pushUndo=(before)=>{undo.push(before);if(undo.length>60)undo.shift();redo=[];};
   const norm=()=>{const n=M.normalizePlan({zones:plan.zones,lines:plan.lines});plan=n?{zones:n.zones,lines:n.lines||[]}:{zones:[],lines:[]};};
@@ -148,6 +156,17 @@ function create(opts){
   const worldSnap=(px,py,exclude)=>{const w=toWorld(view,px,py);const it={zones:plan.zones.filter(q=>q.id!==exclude),lines:plan.lines.filter(q=>q.id!==exclude)};
     return snapPoint(w,rectEdges(it),grid,Math.max(40,12/view.scale),magnet);};
 
+  function cancelInteraction(){
+    // Pointermove wijzigt tijdelijk het model; annuleren moet terug naar de beginsituatie.
+    if(drag?.before&&(drag.mode==='move'||drag.mode==='resize'))plan=JSON.parse(drag.before);
+    drag=null;preview=null;pan=null;render();
+  }
+  function onCancel(e){
+    if(e.pointerType==='touch')touches.delete(e.pointerId);
+    if(pinch){if(!touches.size)pinch=null;render();return;}
+    if(activePointer!==e.pointerId)return;
+    activePointer=null;cancelInteraction();
+  }
   function bind(){
     el.addEventListener('click',e=>{
       const t=e.target.closest('[data-pe-tool]');if(t){setTool(t.dataset.peTool);return;}
@@ -162,7 +181,7 @@ function create(opts){
     el.querySelector('[data-pe-preset]').addEventListener('change',e=>{const p=(opts.presets||{})[e.target.value];if(!p)return;
       commit(()=>{plan={zones:JSON.parse(JSON.stringify(p.zones)),lines:JSON.parse(JSON.stringify(p.lines||[]))};selection=null;});e.target.value='';fit();});
     panel.addEventListener('change',onPanel);panel.addEventListener('click',e=>{const d=e.target.closest('[data-pe="delete"]');if(d)removeSelected();});
-    canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',()=>{drag=null;preview=null;pan=null;render();});
+    canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onCancel);
     canvas.addEventListener('wheel',e=>{e.preventDefault();const p=rectOf(e);view=zoomAt(view,p.x,p.y,e.deltaY>0?.9:1.1);render();},{passive:false});
     doc.addEventListener('keydown',onKey);
     if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{if(open)sizeCanvas();}).observe(el.querySelector('.pe-stage'));
@@ -170,11 +189,22 @@ function create(opts){
   }
 
   function onDown(e){
-    canvas.focus();const p=rectOf(e);canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);
+    const p=rectOf(e);
+    if(e.pointerType==='touch'){
+      touches.set(e.pointerId,p);
+      if(touches.size>=2){
+        if(!pinch){cancelInteraction();activePointer=null;pinch={startView:{...view},startPoints:[...touches.values()].slice(0,2)};}
+        setStatus('Twee vingers: verschuiven en zoomen zonder het ontwerp te wijzigen.');return;
+      }
+      if(pinch)return; // na pinch pas tekenen zodra alle vingers los zijn
+    }
+    if(activePointer!==null)return;
+    if(![0,1,2,undefined].includes(e.button))return;
+    activePointer=e.pointerId;
+    canvas.focus();canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);
     if(e.shiftKey||e.button===1||e.button===2){pan={x:p.x,y:p.y,ox:view.ox,oz:view.oz};return;}
-    if(e.button!==0&&e.button!==undefined)return;
     if(tool==='block'||tool==='line'){const s=worldSnap(p.x,p.y);drag={mode:tool,a:{x:s.x,z:s.z}};preview=null;return;}
-    const h=hitTest(plan,view,p.x,p.y,selection);
+    const h=hitTest(plan,view,p.x,p.y,selection,e.pointerType==='touch'?18:HANDLE_PX);
     if(!h){selection=null;render();return;}
     selection={type:h.type,id:h.id};
     const item=(h.type==='zone'?plan.zones:plan.lines).find(q=>q.id===h.id);
@@ -182,7 +212,12 @@ function create(opts){
     render();
   }
   function onMove(e){
-    const p=rectOf(e);cursorW=toWorld(view,p.x,p.y);
+    const p=rectOf(e);
+    if(e.pointerType==='touch'&&touches.has(e.pointerId))touches.set(e.pointerId,p);
+    if(pinch){if(touches.size>=2){view=pinchView(pinch.startView,pinch.startPoints,[...touches.values()].slice(0,2));render();}return;}
+    if(activePointer!==null&&activePointer!==e.pointerId)return;
+    if(e.pointerType==='touch'&&activePointer===null)return;
+    cursorW=toWorld(view,p.x,p.y);
     if(pan){view={...view,ox:pan.ox+(p.x-pan.x),oz:pan.oz+(p.y-pan.y)};render();return;}
     if(!drag){hover=hitTest(plan,view,p.x,p.y,selection);canvas.style.cursor=tool==='select'?cursorFor(hover):'crosshair';updateStatus();if(tool!=='select')render();return;}
     if(drag.mode==='block'){const s=worldSnap(p.x,p.y);preview={type:'zone',...(blockFromDrag(drag.a,s,1)||{x:drag.a.x,z:drag.a.z,w:0,d:0}),magnet:s};render();return;}
@@ -213,7 +248,12 @@ function create(opts){
     }
   }
   function onUp(e){
-    const p=rectOf(e);canvas.releasePointerCapture&&canvas.releasePointerCapture(e.pointerId);
+    const p=rectOf(e);
+    if(e.pointerType==='touch')touches.delete(e.pointerId);
+    if(pinch){if(!touches.size)pinch=null;return;}
+    if(activePointer!==e.pointerId)return;
+    activePointer=null;
+    if(canvas.hasPointerCapture?.(e.pointerId))canvas.releasePointerCapture(e.pointerId);
     if(pan){pan=null;return;}
     if(!drag)return;const d=drag;drag=null;
     if(d.mode==='block'||d.mode==='line'){
@@ -230,7 +270,7 @@ function create(opts){
     const k=e.key.toLowerCase();
     if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?doRedo():doUndo();return;}
     if((e.ctrlKey||e.metaKey)&&k==='y'){e.preventDefault();doRedo();return;}
-    if(k==='escape'){if(drag||preview){drag=null;preview=null;render();}else if(tool!=='select')setTool('select');else if(selection){selection=null;render();}else close();e.stopPropagation();return;}
+    if(k==='escape'){if(drag||preview||pan){cancelInteraction();}else if(tool!=='select')setTool('select');else if(selection){selection=null;render();}else close();e.stopPropagation();return;}
     if(k==='v')setTool('select');else if(k==='b')setTool('block');else if(k==='l')setTool('line');
     else if((k==='delete'||k==='backspace')&&selection){e.preventDefault();removeSelected();}
     else if(selection&&k.startsWith('arrow')){e.preventDefault();const st=e.shiftKey?500:(grid||50),dx=k==='arrowright'?st:k==='arrowleft'?-st:0,dz=k==='arrowdown'?st:k==='arrowup'?-st:0;
@@ -340,7 +380,7 @@ function create(opts){
 
   let variantName=null,initialSnapshot=null;
   function openEditor(initial,sourceName){
-    if(!el)build();plan={zones:[],lines:[]};
+    if(!el)build();drag=null;preview=null;pan=null;activePointer=null;touches.clear();pinch=null;plan={zones:[],lines:[]};
     const n=M.normalizePlan({zones:initial?.zones||[],lines:initial?.lines||[]});if(n)plan={zones:n.zones,lines:n.lines||[]};
     variantName=sourceName||null;initialSnapshot=snapshot();
     el.querySelector('.pe-head strong').textContent=variantName?'Plattegrond van '+variantName:'Plattegrond schetsen';
@@ -355,10 +395,11 @@ function create(opts){
     setTool('select');sizeCanvas();fit();canvas.focus();
   }
   function close(generated=false){
+    cancelInteraction();activePointer=null;touches.clear();pinch=null;
     if(!generated&&variantName&&snapshot()!==initialSnapshot&&!window.confirm('Sluiten zonder de gewijzigde plattegrond als variant te bewaren?'))return;
     open=false;if(el)el.classList.remove('open');doc.body.classList.remove('plan-editor-open');opts.onClose&&opts.onClose();}
   return {open:openEditor,close,isOpen:()=>open,getPlan:()=>({zones:plan.zones,lines:plan.lines}),_state:()=>({plan,selection,tool,view,grid})};
 }
 
-return {create,snapValue,snapPoint,blockFromDrag,lineFromDrag,resizeRect,hitTest,handlePoints,rectEdges,planBounds,fitView,zoomAt,toScreen,toWorld,distToSegment,MIN_BLOCK,HANDLES};
+return {create,snapValue,snapPoint,blockFromDrag,lineFromDrag,resizeRect,hitTest,handlePoints,rectEdges,planBounds,fitView,zoomAt,pinchView,toScreen,toWorld,distToSegment,MIN_BLOCK,HANDLES};
 });
