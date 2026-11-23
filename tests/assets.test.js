@@ -22,10 +22,10 @@ test('PWA caches the same versioned files used by the page',()=>{
  const cached=[...service.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]);
  const names=[...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m=>m[1]).filter(ownUrl);
  for(const name of names)assert.ok(cached.includes(name),'PWA must cache exact versioned asset: '+name);
- assert.match(service,/douglas-designer-v1\.0\.0-rc2/);
+ assert.match(service,/douglas-designer-v1\.0\.0-rc3/);
 });
 test('user-facing version matches the release candidate and provides editor controls',()=>{
- assert.match(html,/v1\.0\.0 RC2/);
+ assert.match(html,/v1\.0\.0 RC3/);
  for(const id of ['gridSize','magnetToggle','drawTool','selectTool','shortcutHelp','geometryScene','scene','sketchGridVisible','sketchGridStep','sketchAxes','sketchWallGrid','sketchParallel'])
   assert.match(html,new RegExp('id="'+id+'"'));
 });

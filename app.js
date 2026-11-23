@@ -3,7 +3,7 @@
 'use strict';
 const M=window.DouglasModel; if(!M) throw new Error('model.js ontbreekt');
 const DOCS=window.DouglasDocuments||null;
-const APP_VERSION='1.0.0-rc2';
+const APP_VERSION='1.0.0-rc3';
 const MAT=window.DouglasMaterials||null; // optioneel: zonder materials.js blijft de zaaglijst werken
 const R=window.DouglasRoom; if(!R) throw new Error('room-space.js ontbreekt');
 const G=window.DouglasSketchGrid; if(!G) throw new Error('sketch-grid.js ontbreekt');
@@ -39,7 +39,8 @@ function syncSketchControls(){
  if(step)step.value=String(sketchSettings.step);
  if(parallel){parallel.textContent=sketchSettings.parallel?'▤ Parallel':'◈ Perspectief';parallel.setAttribute('aria-pressed',String(sketchSettings.parallel));}
 }
-let project; try{const boot=store.init(()=>M.demoProject());project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
+let hasSavedProject=false;
+let project; try{const boot=store.init(()=>M.demoProject());hasSavedProject=!boot.created && !boot.storageError;project=normalize(boot.project);if(boot.storageError)storageProblem=true;}catch(e){project=normalize(M.demoProject());storageProblem=true;}
 let multi=[]; // meerdere geselecteerde balken [{type,id}] (kaderselectie); leeg = enkelvoudige selectie
 let marquee=null;
 let scanData=null,scanKey='',scanMissingKey='',scanLoading=false,scanPrepKey='',scanWorld=null,scanTriRgb=null,scanOrientB=null,scanRaf=0,scanCanvas=null;
@@ -575,16 +576,19 @@ function cutlistHTML(){const p=M.boardPlan(project),warnings=M.warnings(project)
 function showCutlist(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='OVERZICHT / MATERIALEN';$('#modalTitle').textContent='Zaaglijst & materiaal';$('#modalContent').innerHTML=cutlistHTML();}
 function showDocument(){if(!DOCS)return;modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='BOUWDOCUMENT / ONTWERPRAMING';$('#modalTitle').textContent='Bouwdocument';
   $('#modalContent').innerHTML=`<div class="right-foot-actions" style="flex-direction:row;margin-bottom:12px"><button class="outline-btn" id="openCutlist">← Terug naar zaaglijst</button></div>`+DOCS.documentHTML(project,M,MAT,{version:APP_VERSION});$('#modalContent').scrollTop=0;}
+function templateChoicesHTML(){
+ const templates=globalThis.DouglasStartontwerpen || [];
+ if(!templates.length)return '';
+ const buttons=templates.map((t,index)=>
+  `<button type="button" class="outline-btn" data-proj="template:${index}">${esc(t.name)} · ${fmt(t.width)} × ${fmt(t.depth)} mm</button>`
+ ).join('');
+ return `<section aria-label="Start vanuit template"><h3 class="cut-section">Start vanuit template</h3><div class="template-choices">${buttons}</div></section>`;
+}
 function projectsHTML(){
  const items=store.list(),trash=store.trashList(),when=(t)=>new Date(t).toLocaleString('nl-NL',{dateStyle:'short',timeStyle:'short'});
  const kb=(n)=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB';
  let h=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:14px"><button class="primary-btn" data-proj="new">＋ Nieuw (met vak)</button><button class="outline-btn" data-proj="free">✎ Vrij tekenen</button><button class="outline-btn" data-proj="demo">◈ Voorbeeld</button><button class="outline-btn" data-proj="import">↥ Project importeren</button></div>`;
- const templates=globalThis.DouglasStartontwerpen || [];
- if(templates.length){
-  h+='<h4 class="cut-section">Start vanuit template</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap">';
-  for(const [index,t] of templates.entries())h+=`<button class="outline-btn" data-proj="template:${index}">${esc(t.name)} · ${fmt(t.width)} × ${fmt(t.depth)} mm</button>`;
-  h+='</div>';
- }
+ h+=templateChoicesHTML();
  h+=`<table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
  for(const it of items)h+=`<tr${it.active?' style="background:#f2f7f1"':''}><td><input data-proj-name="${esc(it.id)}" value="${esc(it.name)}" maxlength="80" aria-label="Projectnaam" style="width:100%;min-width:140px;border:1px solid #dce1d9;border-radius:7px;padding:7px 9px;font:inherit">${it.active?'<small style="color:#2f7059;font-weight:700"> ● actief</small>':''}</td><td>${esc(when(it.updatedAt))}</td><td>${kb(it.bytes)}</td><td style="white-space:nowrap;text-align:right">${it.active?'':`<button class="outline-btn" data-proj="open:${esc(it.id)}">Openen</button> `}<button class="outline-btn" data-proj="dup:${esc(it.id)}" title="Dupliceren">⧉</button> <button class="outline-btn delete-btn" data-proj="del:${esc(it.id)}" title="Verwijderen (naar prullenbak)">✕</button></td></tr>`;
  h+=`</tbody></table>`;
@@ -1390,9 +1394,14 @@ window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
 persist();updateDraftControls();syncSketchControls();render();
 window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove,isSaved:()=>lastSaveOk});
-function showWelcome(){$('#welcomeLayer').classList.remove('hidden');}
+function showWelcome(){
+ $('#continueProject').classList.toggle('hidden',!hasSavedProject);
+ $('#resumeProjectInfo').textContent=project.name+' · '+fmt(project.width)+' × '+fmt(project.depth)+' mm';
+ $('#welcomeTemplates').innerHTML=templateChoicesHTML();
+ $('#welcomeLayer').classList.remove('hidden');
+}
 function hideWelcome(){localStorage.setItem(WELCOME_KEY,'seen');$('#welcomeLayer').classList.add('hidden');}
 if(!localStorage.getItem(WELCOME_KEY))showWelcome();
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc2',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3',{updateViaCache:'none'}).catch(()=>{});
 })();
