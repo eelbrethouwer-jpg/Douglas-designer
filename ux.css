@@ -80,3 +80,7 @@
 .frame-library>summary:focus-visible{outline:2px solid #418469;outline-offset:3px}
 
 .template-choices{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.template-choices button{min-height:44px;height:auto;white-space:normal;text-align:left}.welcome-templates .template-choices{display:grid;margin:0}.welcome-templates .cut-section{margin:4px 0 8px}.welcome-option{min-height:60px}
+
+.save-recovery{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 16px;background:#fff2d8;color:#583610;border-bottom:1px solid #dbbb7d}
+.save-recovery strong{flex:1 1 260px;font-size:13px}
+.save-recovery .outline-btn{min-height:36px}
