@@ -2,7 +2,7 @@
 
 Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-werkwijze, interactieve 3D-controle en een gekoppelde zaaglijst. De interface is geïnspireerd op de eenvoudige ontwerpflow van Floorplanner, maar gespecialiseerd in maatwerk houten constructies.
 
-> **Actuele status op 25 oktober 2026:** `main` bevat v0.7.2; **PR #14 (v0.7.3 Room Capture iPhone-fix) is de leidende conceptrelease**. De automatische PR-checks zijn geslaagd (91/91 vóór documentintegratie). Echte iPhone-Safari/PWA- en desktopacceptatie staan nog open. Publicatie volgt pas na review en samenvoegen.
+> **Actuele ontwikkelstatus — 23 november 2026:** `main` bevat de bewerkbare startontwerpen van **v1.0.0 RC3** en de opvolgende verbeteringen tot en met [PR #29](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/29) (dakonderdelen en zaagplan). GitHub Actions was groen op de PR; controle van de Pages-deploy op `main` en handmatige Safari-acceptatie blijven afzonderlijke releasegates. De secties hieronder over v0.7.x en PR #14 beschrijven de **historische oktoberstatus**, niet de actuele release.
 
 
 ## v0.7.3 Room Capture iPhone-fix — leidende concept-PR
