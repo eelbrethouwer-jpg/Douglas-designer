@@ -140,13 +140,19 @@ function switchProject(id){
 }
 function history(dir){multi=[];const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);if(selected.type==='panel')return (project.panels||[]).find(b=>b.id===selected.id);return null;}
+function syncMobileSelection(){
+  if(window.innerWidth>800)return;
+  const item=selected?getSelected():null;
+  const active=mobileView==='design'&&(multi.length>0||!!item);
+  $('#selectionStrip').classList.toggle('hidden',!active);
+  if(active)$('#selectionText').textContent=multi.length?multi.length+' balken geselecteerd':item.name;
+  else $('#inspector').classList.remove('mobile-visible');
+}
 function setSelected(type,id){
   multi=[];selected=id?{type,id}:null;beamMoveMode=false;render();
   if(window.innerWidth<=800){
     if(id)switchMobile('design');
     $('#inspector').classList.remove('mobile-visible');
-    $('#selectionStrip').classList.toggle('hidden',!id);
-    if(id)$('#selectionText').textContent=getSelected()?.name||'Onderdeel geselecteerd';
   }else if(window.innerWidth<=1250){
     $('#inspector').classList.toggle('mobile-visible',!!id);
   }
@@ -183,8 +189,8 @@ function switchMobile(name){
   $('#sidebar').classList.toggle('mobile-visible',name==='modules'||name==='settings');
   if(name==='modules')switchPanel('modules');
   if(name==='settings')switchPanel('settings');
-  $('#inspector').classList.toggle('mobile-visible',name==='design'&&!!selected);
-  $('#selectionStrip').classList.toggle('hidden',name!=='design'||!selected);
+  $('#inspector').classList.remove('mobile-visible');
+  syncMobileSelection();
   if(name==='design'||name==='room')draw();
 }
 function addModule(kind){const type=M.TYPES[kind];if(!type||project.modules.length>=12){toast('Maximum 12 modules');return;}
@@ -279,7 +285,7 @@ function render(){
     :modules.length?'De buitenbreedte omvat de tussenstijlen van 50 mm. Bij wijzigen schalen de moduleopeningen mee.'
     :'Deze maten bepalen de ontwerpruimte. Losse balken kun je afzonderlijk aanpassen.';
   $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;
-  renderInspector();draw();
+  syncMobileSelection();renderInspector();draw();
   window.DouglasRoomStudio?.refresh?.();
 }
 function timberEstimate(plan){
@@ -1061,7 +1067,7 @@ document.addEventListener('click',e=>{
     case 'demoProject':openNewProject(M.demoProject(),'Voorbeeld geopend');break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
-    case 'editSelectionBtn':if(selected)$('#inspector').classList.add('mobile-visible');break;
+    case 'editSelectionBtn':if(selected||multi.length)$('#inspector').classList.add('mobile-visible');break;
     case 'closeInspector':if(window.innerWidth<=1250){$('#inspector').classList.remove('mobile-visible');}else{setSelected(null,null);}break;
     case 'duplicateBeam':{const obj=getSelected();if(!['beam','frame'].includes(selected?.type)||!obj)return;let id;commit(()=>{id=M.uid();project.beams.push({...obj,id,name:obj.name+' kopie',x:obj.x+50});});setSelected('beam',id);toast('Balk gedupliceerd');break;}
     case 'exportBtn':case 'modalSecondary':exportProject();break;
