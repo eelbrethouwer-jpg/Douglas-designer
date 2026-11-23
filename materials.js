@@ -65,7 +65,7 @@
         `${frontMods.length} kast(en) × opening × ${openingHeight} mm hoog, indicatief`));
     }
     const wallPanels = (p.panels || []).filter(x => x.kind === 'cladding'), doorPanels = (p.panels || []).filter(x => x.kind === 'door');
-    const roofPanels = (p.panels || []).filter(x => x.kind === 'roof'), rafterPanels = (p.panels || []).filter(x => x.kind === 'rafter');
+    const roofPanels = (p.panels || []).filter(x => x.kind === 'roof');
     // lengte langs de helling (schuine lengte) en gemiddelde hoogte van een paneel met schuine boven-/onderzijde
     const run = x => x.slope ? (x.slope.axis === 'x' ? x.w : x.d) : Math.max(x.w, x.d);
     const slantLen = x => x.slope ? Math.hypot(run(x), x.slope.y2 - x.y) : run(x);
@@ -84,12 +84,10 @@
         `${roofPanels.length} dakvlak(ken), schuin gemeten ${ceil1(area)} m² + ${m.wastePct}% verlies (overstek niet inbegrepen)`));
     }
     if (panels.length) groups.push({title: 'Platen & werkblad', lines: panels});
-    if (rafterPanels.length) {
-      const timber=plan.byProfile.find(x=>x.rafters);
-      if(timber.count)groups.push({title:'Dak',lines:[line('daksparren', `Daksparren 50 × 150 × ${p.stockLength} mm`,timber.count,'st',
-        `${timber.cutCount} ingeplande sparren, schuine zaagmaat inclusief 50 mm afkortmarge`)]});
-
-    }
+    const rafters=plan.byProfile.filter(x=>x.rafters&&x.count);
+    if(rafters.length)groups.push({title:'Dak',lines:rafters.map(x=>line(x.priceKey,
+      `Daksparren ${x.profile.replace('x',' × ')} × ${p.stockLength} mm`,x.count,'st',
+      `${x.cutCount} ingeplande sparren, schuine zaagmaat inclusief 50 mm afkortmarge`))});
 
     // 4. Beslag.
     const hardware = [];

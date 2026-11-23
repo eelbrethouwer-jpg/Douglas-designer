@@ -133,6 +133,18 @@
         color:/^#[0-9a-fA-F]{6}$/.test(q.color||'')?q.color:(q.kind==='door'?'#a8743a':q.kind==='rafter'?'#b8824f':q.kind==='roof'?'#7b858b':'#1d2124')};
     }).filter(Boolean);
   }
+  // Beide uiteinden even ver verplaatsen houdt de helling en het hoogteverschil intact.
+  function editPanel(panel,field,value){
+    const next={...panel,[field]:value};
+    if(panel.slope&&(field==='y'||field==='h')){
+      const end=field==='y'?'y2':'h2',low=field==='y'?-20000:1;
+      const a=panel[field],b=panel.slope[end];
+      const delta=clamp(Math.round(value)-a,low-Math.min(a,b),10000-Math.max(a,b));
+      next[field]=a+delta;
+      next.slope={...panel.slope,[end]:b+delta};
+    }
+    return normalizePanels([next])[0];
+  }
   const ZONE_KINDS={open:'Open overkapping',closed:'Gesloten ruimte',pergola:'Pergola'};
   function normalizeDoor(raw){
     if(!raw||typeof raw!=='object'||!'nesw'.includes(String(raw.edge||'x')[0])||!raw.edge)return null;
@@ -574,19 +586,23 @@
       const axis=q.slope?.axis || (q.w>=q.d?'x':'z');
       const run=axis==='x'?q.w:q.d;
       const rise=q.slope?q.slope.y2-q.y:0;
-      return {id:q.id,name:q.name,group:'Daksparren',profile:'50x150',axis,x:q.x,y:q.y,z:q.z,
+      const width=axis==='x'?q.d:q.w;
+      const height=Math.max(q.h,q.slope?.h2??q.h);
+      return {id:q.id,name:q.name,group:'Daksparren',profile:width+'x'+height,axis,x:q.x,y:q.y,z:q.z,
         length:Math.round(Math.hypot(run,rise))+50};
     });
   }
   function boardPlan(p){
     const cuts=allBeams(p).map(b=>({id:b.id,name:b.name,length:b.length,group:b.group,profile:profileOf(b).id}));
-    cuts.push(...rafterCuts(p));
+    const raftersInPlan=rafterCuts(p);
+    cuts.push(...raftersInPlan);
     const groups=new Map();
     for(const c of cuts) {const key=c.profile+'|'+c.length+'|'+c.name;const item=groups.get(key)||{profile:c.profile,length:c.length,name:c.name,count:0};item.count++;groups.set(key,item);}
     const boards=[], impossible=[], byProfile=[];
     // Hout van verschillende profielen kan nooit uit dezelfde handelsbalk komen: plan per profiel.
-    for(const key of [...Object.keys(PROFILES),'daksparren']){
-      const rafters=key==='daksparren', id=rafters?'50x150':key;
+    const batches=Object.keys(PROFILES).map(profile=>({profile,rafters:false}));
+    for(const profile of new Set(raftersInPlan.map(c=>c.profile)))batches.push({profile,rafters:true});
+    for(const {profile:id,rafters} of batches){
       const mine=cuts.filter(c=>c.profile===id && (c.group==='Daksparren')===rafters).sort((a,b)=>b.length-a.length);
       if(!mine.length)continue;
       const list=[];
@@ -598,8 +614,9 @@
       }
       boards.push(...list);
       // Standaardprofiel: prijs uit de zaaginstellingen; overige profielen: eigen invoer, anders onbekend.
-      const own=rafters?p.materials?.prices?.daksparren:id===DEFAULT_PROFILE?p.beamPrice:p.materials?.prices?.['balk-'+id];
-      byProfile.push({profile:id,rafters,label:PROFILES[id].label,cutCount:list.reduce((n,b)=>n+b.cuts.length,0),count:list.length,price:own??0,priceKnown:own!==undefined});
+      const priceKey=rafters?(id==='50x150'?'daksparren':'daksparren-'+id):'balk-'+id;
+      const own=!rafters&&id===DEFAULT_PROFILE?p.beamPrice:p.materials?.prices?.[priceKey];
+      byProfile.push({profile:id,rafters,priceKey,label:PROFILES[id]?.label??id.replace('x',' × ')+' mm',cutCount:list.reduce((n,b)=>n+b.cuts.length,0),count:list.length,price:own??0,priceKnown:own!==undefined});
     }
     return {groups:[...groups.values()].sort((a,b)=>b.length-a.length||a.profile.localeCompare(b.profile)),boards,impossible,byProfile,
       totalLength:cuts.reduce((s,c)=>s+c.length,0),pieces:cuts.length,
@@ -647,5 +664,5 @@
     if(cf.unsupported.length)result.push(`${cf.unsupported.length} losse balk(en) raken geen andere balk of de grond: ${cf.unsupported.slice(0,3).map(b=>b.name).join(', ')}${cf.unsupported.length>3?', …':''}.`);
     return result;
   }
-  return {TYPES,PROFILES,PANEL_KINDS,normalizePanels,ZONE_KINDS,normalizePlan,planFrame,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,rafterCuts,stockWarning,boardPlan,warnings};
+  return {TYPES,PROFILES,PANEL_KINDS,normalizePanels,editPanel,ZONE_KINDS,normalizePlan,planFrame,normalizeScan,scanScale,normalizeBackdrop,backdropScale,arrayBeams,moveBeams,normalizeReference,defaultCountertop,normalizeCountertop,countertopBox,normalizeAppliance,beamContacts,conflicts,DEFAULT_PROFILE,profileOf,uid,clamp,defaultMaterials,normalizeMaterials,demoProject,freeProject,normalizeProject,editFrameBeam,restoreFrameBeam,resizeBeamEndpoint,drawingBeam,expectedWidth,resizeProject,boundaries,beamBox,framePieces,allBeams,fitBeamBetween,rafterCuts,stockWarning,boardPlan,warnings};
 });

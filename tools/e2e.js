@@ -74,6 +74,26 @@ const scenarios=[
    t.ok('onderdelenlijst 28 stuks',await b.eval(`document.querySelector('#modalContent').innerHTML.includes('ONDERDELENLIJST (28 STUKS)')`));
    await b.shot(path.join(OUT,'bouwdocument.png'));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
+ {name:'overkapping van startontwerp tot zaagplan en bouwdocument',async run(b,t){
+   await fresh(b);
+   await b.click('#welcomeTemplates [data-proj="template:1"]');
+   await b.click('#openCutlist');
+   const counts=()=>b.eval("Array.from(document.querySelectorAll('#modalContent .cut-kpi strong'),e=>e.textContent).slice(0,2)");
+   const warning=()=>b.eval("document.querySelector('#modalContent').textContent.includes('Zaagplan onvolledig: 10 stuk(s)')");
+   t.ok('12 handelsbalken voor 14 zaagstukken',(await counts()).join('/')==='12 stuks/14');
+   await b.click('#closeModal');
+   await b.click('[data-panel="settings"]');
+   await set(b,'#stockLength',3000);
+   await b.click('#openCutlist');
+   t.ok('10 te lange stukken gemeld in zaaglijst',await warning());
+   await b.click('#showDocument');
+   t.ok('dezelfde waarschuwing in printbaar bouwdocument',await warning());
+   await b.click('#closeModal');
+   await set(b,'#stockLength',6000);
+   await b.goto(URL_);
+   await b.click('#openCutlist');
+   t.ok('herstelde handelslengte na heropenen',(await counts()).join('/')==='12 stuks/14' && !(await warning()));
+   t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
  {name:'profiel, werkblad en apparaatmaten bewerken',async run(b,t){
    await demo(b);
    await b.eval(`document.querySelector('.side-tab[data-panel="beams"]')?.click()`);await sleep(300);
