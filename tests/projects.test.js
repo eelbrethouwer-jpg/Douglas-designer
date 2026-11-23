@@ -112,3 +112,18 @@ test('mislukte back-upimport kan opnieuw zonder deelimport of dubbele projecten'
   assert.equal(st.list().length,3);
  }
 });
+
+test('verwijderfout bewaart het project en laat de index intact',()=>{
+ const s=fakeStorage(),st=mk(s),a=st.init(()=>proj('Bewaard')).id;
+ const original=s.removeItem;
+ s.removeItem=(key)=>{if(key===P.PROJECT_PREFIX+a)throw new Error('SecurityError');return original(key);};
+ const r=st.trash(a);
+ assert.equal(r.ok,false);
+ assert.match(r.error,/Verwijderen/);
+ assert.equal(st.load(a).name,'Bewaard');
+ assert.equal(st.list().length,1);
+ assert.equal(st.activeId(),a);
+ s.removeItem=original;
+ assert.equal(st.trash(a).ok,true,'opnieuw proberen moet lukken');
+ assert.equal(st.load(a),null);
+});
