@@ -46,3 +46,24 @@ test('view: fit, zoom rond de cursor en omrekening',()=>{
  assert.deepEqual(PE.planBounds({zones:[],lines:[]}),{x:0,z:0,w:6000,d:4000});
  assert.ok(PE.distToSegment({x:5,y:5},{x:0,y:0},{x:10,y:0})===5);
 });
+
+test('pinchView: zoomt om het middelpunt, kan pannen en begrenst zoom',()=>{
+ const v={scale:0.1,ox:50,oz:80};
+ const a=[{x:100,y:120},{x:200,y:120}];
+ const z=PE.pinchView(v,a,[{x:50,y:120},{x:250,y:120}]);
+ assert.equal(z.scale,0.2);
+ const anchor=PE.toWorld(v,150,120);
+ const pinned=PE.toScreen(z,anchor.x,anchor.z);
+ assert.ok(Math.abs(pinned.x-150)<1e-8&&Math.abs(pinned.y-120)<1e-8);
+ const pan=PE.pinchView(v,a,[{x:130,y:155},{x:230,y:155}]);
+ assert.equal(pan.scale,v.scale);
+ assert.equal(pan.ox,v.ox+30);assert.equal(pan.oz,v.oz+35);
+ assert.equal(PE.pinchView(v,a,[{x:0,y:0},{x:10000,y:0}]).scale,2);
+ assert.equal(PE.pinchView(v,a,[{x:100,y:100},{x:100,y:100}]).scale,.01);
+});
+
+test('touch-grepen zijn makkelijker te raken zonder desktopselectie te veranderen',()=>{
+ const p={zones:[{id:'zone',x:0,z:0,w:2000,d:1500}],lines:[]},v={scale:.1,ox:60,oz:60};
+ assert.equal(PE.hitTest(p,v,45,45,{type:'zone',id:'zone'}),null);
+ assert.deepEqual(PE.hitTest(p,v,45,45,{type:'zone',id:'zone'},18),{kind:'handle',type:'zone',id:'zone',handle:'nw'});
+});
