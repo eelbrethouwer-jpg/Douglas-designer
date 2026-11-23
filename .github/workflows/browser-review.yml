@@ -1,0 +1,27 @@
+name: Volledige gebruikerstest in Chrome
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/browser-review.yml'
+      - 'tools/e2e.js'
+      - 'tools/browser-check.js'
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test ontwerpen, bewerken, opslaan en exporteren
+        shell: bash
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          curl --retry 10 --retry-connrefused --retry-delay 1 --fail --silent http://127.0.0.1:8765/index.html > /dev/null
+          node tools/e2e.js --url http://127.0.0.1:8765/index.html --out "$RUNNER_TEMP/douglas-browser"
