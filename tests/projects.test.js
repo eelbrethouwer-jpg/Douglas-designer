@@ -127,3 +127,46 @@ test('verwijderfout bewaart het project en laat de index intact',()=>{
  assert.equal(st.trash(a).ok,true,'opnieuw proberen moet lukken');
  assert.equal(st.load(a),null);
 });
+
+test('herhaaldelijk mislukte verwijdering verdringt geen oude prullenbakprojecten',()=>{
+ const s=fakeStorage(),st=mk(s),a=st.init(()=>proj('Blijft')).id;
+ for(let i=1;i<=5;i++){
+  const id=st.create(proj('Oud '+i)).id;
+  assert.equal(st.trash(id).ok,true);
+ }
+ const previous=s.getItem(P.TRASH_KEY),trashIds=st.trashList().map(x=>x.trashId);
+ assert.equal(trashIds.length,5);
+ const original=s.removeItem;
+ s.removeItem=key=>{
+  if(key===P.PROJECT_PREFIX+a)throw new Error('SecurityError');
+  return original(key);
+ };
+ for(let i=0;i<10;i++){
+  const result=st.trash(a);
+  assert.equal(result.ok,false);
+  assert.equal(st.load(a).name,'Blijft');
+  assert.equal(st.list().length,1);
+  assert.equal(s.getItem(P.TRASH_KEY),previous,'mislukte poging mag prullenbak niet wijzigen');
+  assert.deepEqual(st.trashList().map(x=>x.trashId),trashIds);
+ }
+ s.removeItem=original;
+ assert.equal(st.trash(a).ok,true,'na herstel mag verwijderen lukken');
+ assert.equal(st.load(a),null);
+ assert.equal(st.list().length,0);
+ assert.equal(st.trashList().length,5);
+ assert.equal(st.trashList().filter(x=>x.id===a).length,1);
+ assert.deepEqual(st.trashList().slice(1).map(x=>x.trashId),trashIds.slice(0,4));
+});
+
+test('mislukte verwijdering zonder bestaande prullenbak laat geen spookkopie achter',()=>{
+ const s=fakeStorage(),st=mk(s),id=st.init(()=>proj('Huidig')).id;
+ const original=s.removeItem;
+ s.removeItem=key=>{if(key===P.PROJECT_PREFIX+id)return;return original(key);};
+ for(let n=0;n<3;n++){
+  const r=st.trash(id);
+  assert.equal(r.ok,false,'zelfs stilzwijgende removeItem zonder effect moet worden gedetecteerd');
+  assert.equal(s.getItem(P.TRASH_KEY),null);
+  assert.equal(st.load(id).name,'Huidig');
+  assert.equal(st.activeId(),id);
+ }
+});
