@@ -149,12 +149,33 @@
     function trash(id) {
       const raw = read(PROJECT_PREFIX + id), ix = loadIndex(), item = ix.items.find(i => i.id === id);
       if (raw === null || !item) return {ok: false, error: 'Project niet gevonden'};
-      const t = trashList();
+      // Bewaar de originele prullenbak, inclusief het oudste herstelpunt:
+      // een mislukte verwijdering mag geen plaats in de prullenbak kosten.
+      const previousTrash = read(TRASH_KEY);
+      const t = trashList().filter(entry => entry.id !== id);
       t.unshift({trashId: uid(), id, name: item.name, deletedAt: now(), data: raw});
-      // Eerst in de prullenbak, daarna pas weghalen: nooit data kwijt bij een mislukte schrijfactie.
+      // Eerst een herstelbare kopie opslaan, daarna het project verwijderen.
       const w = write(TRASH_KEY, JSON.stringify(t.slice(0, TRASH_MAX)));
       if (!w.ok) return {ok: false, error: w.error + ': project niet verwijderd'};
-      remove(PROJECT_PREFIX + id);
+      function rollbackTrash(error) {
+        let restored = false;
+        if (previousTrash === null) {
+          try { storage.removeItem(TRASH_KEY); restored = storage.getItem(TRASH_KEY) === null; }
+          catch (_) { /* behoud de extra kopie; origineel is nog aanwezig */ }
+        } else {
+          const r = write(TRASH_KEY, previousTrash);
+          restored = r.ok && read(TRASH_KEY) === previousTrash;
+        }
+        return {ok: false, error: error + (restored ? '' : '; prullenbak kon niet volledig worden hersteld')};
+      }
+      // Ook als verwijderen wordt geweigerd of geen effect heeft, blijft de
+      // projectindex intact en herstellen we de oorspronkelijke prullenbak.
+      try { storage.removeItem(PROJECT_PREFIX + id); }
+      catch (_) { return rollbackTrash('Verwijderen uit opslag mislukt: project blijft behouden'); }
+      let remains;
+      try { remains = storage.getItem(PROJECT_PREFIX + id) !== null; }
+      catch (_) { return {ok: false, error: 'Verwijdering niet te controleren; herstelkopie staat in prullenbak'}; }
+      if (remains) return rollbackTrash('Project kon niet worden verwijderd');
       ix.items = ix.items.filter(i => i.id !== id);
       if (ix.activeId === id) ix.activeId = ix.items.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0]?.id || null;
       saveIndex(ix);
