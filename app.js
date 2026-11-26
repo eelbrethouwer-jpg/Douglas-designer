@@ -184,7 +184,7 @@ function switchPanel(name){
 function switchBuildPhase(phase){
   if(!['start','room','design','check','build'].includes(phase))return;
   closeModal();
-  $('.phase-tab').forEach(b=>{const active=b.dataset.phase===phase;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+  document.querySelectorAll('.phase-tab').forEach(b=>{const active=b.dataset.phase===phase;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
   if(phase==='start'){showProjects();return;}
   if(phase==='room'){if(window.innerWidth<=800)switchMobile('room');else switchPanel('room');return;}
   if(phase==='design'){switchMobile('design');switchPanel('modules');return;}
