@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="room-studio.css?rev=0.7.4">
   <link rel="stylesheet" href="plan-editor.css?rev=1.0.0-rc3.storage">
   <link rel="stylesheet" href="sketch-studio.css?rev=0.7.2">
+<style>.phase-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:6px;background:#e5eae4}.phase-tab{border:0;border-radius:6px;background:transparent;color:#25302e;min-height:44px;font-size:clamp(11px,2.6vw,14px);font-weight:600;padding:3px}.phase-tab.active{background:#253d35;color:white}.phase-tab:focus-visible{outline:2px solid #356b55;outline-offset:2px}</style>
 </head>
 <body>
 <div class="shell">
@@ -23,6 +24,7 @@
     <div class="brand"><div class="brand-icon">D<span>.</span></div><div class="brand-copy"><strong>DOUGLAS<span>DESIGNER</span></strong><small>BUITENKEUKEN STUDIO <b>v1.0.0 RC3</b></small></div></div>
     <div class="top-actions"><button class="outline-btn projects-home" id="homeBtn" title="Startscherm openen">⌂ <span class="hide-mobile">Projecten</span></button><span class="save-state" id="saveStatus">● Lokaal opgeslagen</span><button id="undoBtn" class="icon-btn" title="Ongedaan maken" aria-label="Ongedaan maken">↶</button><button id="redoBtn" class="icon-btn" title="Opnieuw" aria-label="Opnieuw">↷</button><button id="shareBtn" class="outline-btn" title="Delen en aanleveren">⇪ <span class="hide-mobile">Delen</span></button><button id="exportBtn" class="outline-btn"><span>↓</span> <span class="hide-mobile">Project exporteren</span></button></div>
   </header>
+  <nav class="phase-nav" aria-label="Bouwfases"><button type="button" class="phase-tab" data-phase="start" aria-pressed="false">1. Start</button><button type="button" class="phase-tab" data-phase="room" aria-pressed="false">2. Ruimte</button><button type="button" class="phase-tab active" data-phase="design" aria-pressed="true">3. Ontwerp</button><button type="button" class="phase-tab" data-phase="check" aria-pressed="false">4. Controle</button><button type="button" class="phase-tab" data-phase="build" aria-pressed="false">5. Bouwen</button></nav>
   <div id="saveRecovery" class="save-recovery hidden">
     <strong role="alert" id="saveError"></strong>
     <button type="button" class="outline-btn" id="retrySave">Opnieuw opslaan</button>
@@ -84,6 +86,6 @@
 <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
 <div id="paletteDragGhost" class="palette-drag-ghost hidden" aria-hidden="true">▥ Douglas balk</div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="room-space.js?rev=0.7.0"></script><script src="sketch-grid.js?rev=0.7.2"></script><script src="model.js?rev=1.0.0-rc3.dak"></script><script src="materials.js?rev=1.0.0-rc3.dak"></script><script src="documents.js?rev=1.0.0-rc3.cut"></script><script src="projects.js?rev=1.0.0-rc3.trash"></script><script src="share.js?rev=0.7.5"></script><script src="mesh-import.js?rev=0.7.6"></script><script src="plan-editor.js?rev=1.0.0-rc3.storage"></script><script src="drafting.js?rev=0.6.0"></script><script src="render3d.js?rev=0.7.2"></script><script src="room-studio.js?rev=0.7.4"></script><script src="startontwerpen.js?rev=1.0.0-rc3"></script><script src="app.js?rev=1.0.0-rc3.storage"></script>
+<script src="room-space.js?rev=0.7.0"></script><script src="sketch-grid.js?rev=0.7.2"></script><script src="model.js?rev=1.0.0-rc3.dak"></script><script src="materials.js?rev=1.0.0-rc3.dak"></script><script src="documents.js?rev=1.0.0-rc3.cut"></script><script src="projects.js?rev=1.0.0-rc3.trash"></script><script src="share.js?rev=0.7.5"></script><script src="mesh-import.js?rev=0.7.6"></script><script src="plan-editor.js?rev=1.0.0-rc3.storage"></script><script src="drafting.js?rev=0.6.0"></script><script src="render3d.js?rev=0.7.2"></script><script src="room-studio.js?rev=0.7.4"></script><script src="startontwerpen.js?rev=1.0.0-rc3"></script><script src="app.js?rev=1.0.0-rc3.guided1"></script>
 </body>
 </html>
