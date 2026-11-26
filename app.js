@@ -181,6 +181,21 @@ function switchPanel(name){
    $('#selectionStrip').classList.add('hidden');
  }
  activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
+function switchBuildPhase(phase){
+  if(!['start','room','design','check','build'].includes(phase))return;
+  closeModal();
+  $('.phase-tab').forEach(b=>{const active=b.dataset.phase===phase;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+  if(phase==='start'){showProjects();return;}
+  if(phase==='room'){if(window.innerWidth<=800)switchMobile('room');else switchPanel('room');return;}
+  if(phase==='design'){switchMobile('design');switchPanel('modules');return;}
+  if(phase==='build'){showCutlist();return;}
+  modalOpen=true;
+  $('#modalBackdrop').classList.remove('hidden');
+  $('#modalEyebrow').textContent='CONTROLE / CONCEPT';
+  $('#modalTitle').textContent='Ontwerpcontrole';
+  const warnings=M.warnings(project);
+  $('#modalContent').innerHTML='<p>Controleer de maatvoering en verbindingen vóór de bouw.</p>'+warnings.map(w=>'<div class="warning">'+esc(w)+'</div>').join('')+(warnings.length?'':'<p>Geen eenvoudige geometrische waarschuwingen gevonden.</p>')+'<p class="notice-small">Dit is geen constructieberekening of veiligheidsgoedkeuring.</p>';
+}
 function switchMobile(name){
   if(name==='room'||name==='finishes'){
     mobileView=name;
@@ -1048,6 +1063,7 @@ document.addEventListener('click',e=>{
   if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
   if(frameCard && !b){setSelected('frame',frameCard.dataset.selectFrame);switchPanel('beams');return;}
   if(!b)return;
+  if(b.dataset.phase){switchBuildPhase(b.dataset.phase);return;}
   if(b.dataset.panel){switchPanel(b.dataset.panel);return;}
   if(b.dataset.mobile){switchMobile(b.dataset.mobile);return;}
   if(b.dataset.view){setView(b.dataset.view);return;}
