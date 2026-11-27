@@ -12,6 +12,7 @@ test('mobiel houdt een niet-opgeslagen wijziging bereikbaar voor herstel', {
   try{
     await b.goto(pathToFileURL(path.resolve(__dirname,'../index.html')).href);
     await b.click('#welcomeTemplates [data-proj="template:0"]');
+    await b.click('#roomContinue');
     await b.eval(`window.originalSetItem=Storage.prototype.setItem;
       Storage.prototype.setItem=function(){throw new DOMException('vol','QuotaExceededError')}`);
     await b.click('[data-mobile="modules"]');

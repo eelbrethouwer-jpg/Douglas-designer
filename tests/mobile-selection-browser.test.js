@@ -17,6 +17,7 @@ test('terug naar mobiel ontwerp houdt canvas vrij en wist oude bewerkacties', {
     };
     await browser.goto(pathToFileURL(path.resolve(__dirname,'../index.html')).href);
     await click('#welcomeTemplates [data-proj="template:0"]');
+    await click('#roomContinue');
     await click('[data-mobile="modules"]');
     await click('[data-select-module]');
     assert.equal(await visible('#selectionStrip'),true);

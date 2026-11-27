@@ -72,9 +72,6 @@
  body.room-editing .stage-area{
     display:flex!important;
     flex-direction:column;
-    position:sticky;
-    top:0;
-    z-index:12;
     background:#f1f4ee;
     padding:6px 9px 5px;
     box-shadow:0 6px 18px #193d2720
@@ -92,7 +89,8 @@
  body.room-editing .stage-area .quick-tools{top:6px}
  body.room-editing .stage-area .quick-button{min-height:33px;height:33px;padding:0 8px}
  body.room-editing .stage-area .stage-tools{top:51px}
- body.room-editing .sidebar{order:2}
+ body.room-editing .sidebar.room-panel-active{order:0}
+ body.room-editing .sidebar.room-panel-active .sidebar-foot{padding-bottom:12px}
  .room-first-actions{grid-template-columns:1fr 1fr}
  .room-first-actions .room-big-action{font-size:11px}
 }
@@ -125,3 +123,31 @@
 .room-corner-tools button:disabled{opacity:.4;cursor:default}
 .room-corner-tools button:focus-visible{outline:3px solid #dba24f;outline-offset:2px}
 @media(max-width:360px){.room-corner-tools{gap:4px}.room-corner-tools button{font-size:11px}}
+
+
+.room-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.room-heading h2 { margin: 0; font-size: 19px; }
+.room-section-heading { font-size: 13px; margin: 12px 0 4px; }
+.room-heading .room-section-heading { margin: 0; }
+.room-heading button, .room-form-actions button, .obstacle-list button { min-height: 44px; height: auto; }
+.room-obstacles { margin-top: 12px; padding-block: 8px; border-block: 1px solid #e0e7df; }
+.obstacle-list { padding: 0; margin: 0; list-style: none; }
+.obstacle-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid #e9eee8; padding-block: 6px; }
+.obstacle-list li div { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.obstacle-list small { display: block; color: #526658; }
+.obstacle-list .obstacle-warning { color: #894723; }
+#obstacleForm { background: #f4f7f2; padding: 10px; border-radius: 9px; }
+#obstacleForm h4 { margin: 0 0 6px; font-size: 13px; }
+.room-form-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mini-legend-obstacle { background: #a46139; }
+.room-mini-bottom { flex-wrap: wrap; }
+@media(max-width: 800px) {
+ #panel-room .room-field input { font-size: 16px; min-height: 44px; }
+ body.room-editing .stage-area { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
+}
+
+@media(max-width: 800px) {
+ .sidebar.room-panel-active .aside-head { padding: 12px 18px 8px; }
+ .sidebar.room-panel-active .aside-head h1 { margin: 0; font-size: 14px; }
+ .sidebar.room-panel-active .aside-head :is(.eyebrow,p) { display: none; }
+}

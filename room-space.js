@@ -3,6 +3,29 @@
 'use strict';
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const finite=(value,fallback)=>Number.isFinite(Number(value))?Number(value):fallback;
+const dimensionLimits={width:[1200,20000],depth:[1200,20000],height:[1200,6500]};
+const obstacleLimits={width:[1,20000],depth:[1,20000],height:[1,6500],x:[0,20000],z:[0,20000]};
+const maxObstacles=50;
+const obstacleColor='#a46139';
+function normalizeObstacles(raw){
+ if(!Array.isArray(raw))return [];
+ const ids=new Set(),obstacles=[];
+ for(const item of raw){
+  if(!item||typeof item.id!=='string'||!item.id||item.id.length>80||ids.has(item.id))continue;
+  const obstacle={id:item.id,name:(typeof item.name==='string'?item.name.trim().slice(0,60):'')||'Obstakel'};
+  for(const [key,[min,max]] of Object.entries(obstacleLimits)){
+   const value=Number.isFinite(item[key])?item[key]:min;
+   obstacle[key]=clamp(Math.round(value),min,max);
+  }
+  ids.add(item.id);
+  obstacles.push(obstacle);
+  if(obstacles.length===maxObstacles)break;
+ }
+ return obstacles;
+}
+function obstacleOutside(obstacle,room){
+ return obstacle.x+obstacle.width>room.width||obstacle.z+obstacle.depth>room.depth||obstacle.height>room.height;
+}
 const colors={
   wood:[['Douglas naturel','#b8824f'],['Douglas warm','#aa784f'],['Douglas licht','#dab588'],['Douglas donker','#765339'],['Douglas zwart','#353b38'],['Douglas vergrijsd','#92988b']],
   top:[['Beton licht','#b1b0a6'],['Beton donker','#696f70'],['Graniet zwart','#373b3d'],['Graniet grijs','#767c80'],['Keramiek zand','#d3c5ad'],['Keramiek antraciet','#44494d'],['Composiet wit','#e0ded3'],['Composiet zwart','#343a3b'],['RVS geborsteld','#a9b2b7'],['Terrazzo','#c8bfb0'],['Hout warm','#986e49'],['Leisteen','#535f64']],
@@ -18,9 +41,8 @@ const components={
 };
 function defaultRoom(project={width:1875,depth:870}){return {enabled:false,width:4500,depth:3200,height:2700,leftWall:true,backWall:true,floorColor:'#c5c5b9',wallColor:'#d7d0c5',placement:{x:Math.round((4500-project.width)/2),z:3200-project.depth-100,rotation:0},photo:null,corners:[]};}
 function normalizeRoom(raw,project){const defaults=defaultRoom(project),v=raw&&typeof raw==='object'?raw:{};
- const width=clamp(Math.round(finite(v.width,defaults.width)),1200,20000);
- const depth=clamp(Math.round(finite(v.depth,defaults.depth)),1200,20000);
- const height=clamp(Math.round(finite(v.height,defaults.height)),1200,6500);
+ const [width,depth,height]=Object.entries(dimensionLimits).map(([key,[min,max]])=>
+   clamp(Math.round(finite(v[key],defaults[key])),min,max));
  const place=v.placement&&typeof v.placement==='object'?v.placement:{};
  const rotation=[0,90,180,270].includes(Number(place.rotation))?Number(place.rotation):0;
  const oriented=rotation%180===0?{w:project.width,d:project.depth}:{w:project.depth,d:project.width};
@@ -29,9 +51,10 @@ function normalizeRoom(raw,project){const defaults=defaultRoom(project),v=raw&&t
  const photo=typeof v.photo==='string'&&v.photo.length<=1300000&&/^data:image\/jpeg;base64,[a-z0-9+/=]+$/i.test(v.photo)?v.photo:null;
  const corners=Array.isArray(v.corners)?v.corners.slice(0,4).filter(p=>Array.isArray(p)&&p.length===2&&p.every(n=>Number.isFinite(n)&&n>=0&&n<=1)).map(p=>p.slice()):[];
  const validColor=c=>/^#[a-f0-9]{6}$/i.test(c||'');
+ const obstacles=normalizeObstacles(v.obstacles);
  return {enabled:v.enabled===true,width,depth,height,leftWall:v.leftWall!==false,backWall:v.backWall!==false,
    floorColor:validColor(v.floorColor)?v.floorColor:defaults.floorColor,wallColor:validColor(v.wallColor)?v.wallColor:defaults.wallColor,
-   placement:{x,z,rotation},photo,corners};
+   placement:{x,z,rotation},photo,corners,...(obstacles.length?{obstacles}:{})};
 }
 function normalizeStyle(raw){const v=raw&&typeof raw==='object'?raw:{};const res={};
  for(const key of Object.keys(palettes)){const valid=palettes[key].some(o=>o.id===v[key]);res[key]=valid?v[key]:palettes[key][0].id;}
@@ -58,5 +81,5 @@ function floorMap(u,v,corners){if(!Array.isArray(corners)||corners.length!==4)re
  return [(1-u)*(1-v)*a[0]+u*(1-v)*b[0]+u*v*c[0]+(1-u)*v*d[0],
  (1-u)*(1-v)*a[1]+u*(1-v)*b[1]+u*v*c[1]+(1-u)*v*d[1]];
 }
-return {defaultRoom,normalizeRoom,normalizeStyle,palettes,components,colorOf,orientation,transformKitchen,warnings,footprint,floorMap};
+return {dimensionLimits,obstacleLimits,maxObstacles,obstacleColor,obstacleOutside,defaultRoom,normalizeRoom,normalizeStyle,palettes,components,colorOf,orientation,transformKitchen,warnings,footprint,floorMap};
 });

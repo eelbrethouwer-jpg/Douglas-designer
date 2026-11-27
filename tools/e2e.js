@@ -36,11 +36,11 @@ const scenarios=[
    await b.goto(URL_);await sleep(400);
    t.ok('oud project overgenomen als actief project',await b.eval(`${activeProject}.name==='Oude keuken'`));
    t.ok('oud opslagitem onaangeroerd',await b.eval(`localStorage.getItem('douglas-designer-v1')===${JSON.stringify(legacy)}`));
-   await b.click('#homeBtn');await sleep(300);
+   await b.click('#homeBtn');await b.click('#manageProjects');await sleep(300);
    t.ok('projectenoverzicht toont 1 project',await b.eval(`document.querySelectorAll('#modalContent [data-proj-name]').length===1`));
    await b.eval(`document.querySelector('#modalContent [data-proj="demo"]').click()`);await sleep(500);
    t.ok('voorbeeld is NIEUW project; oud project blijft bestaan',await b.eval(`${indexNames}.length===2&&${indexNames}.includes('Oude keuken')`));
-   await b.click('#homeBtn');await sleep(300);
+   await b.click('#homeBtn');await b.click('#manageProjects');await sleep(300);
    await set(b,'#modalContent [data-proj-name]:not([data-proj-name=""])','x');
    t.ok('hernoemen werkt',await b.eval(`${indexNames}.includes('x')`));
    await b.eval(`document.querySelector('#modalContent [data-proj^="dup:"]').click()`);await sleep(300);
@@ -49,18 +49,18 @@ const scenarios=[
    await b.shot(path.join(OUT,'projecten.png'));
    await b.eval(`document.querySelector('#modalContent [data-proj^="del:"]').click()`);await sleep(400);
    t.ok('verwijderen: 2 over, 1 in prullenbak',await b.eval(`${indexNames}.length===2&&JSON.parse(localStorage.getItem('douglas-designer-trash-v1')).length===1`));
-   await b.click('#homeBtn');await sleep(300);
+   await b.click('#homeBtn');await b.click('#manageProjects');await sleep(300);
    await b.eval(`document.querySelector('#modalContent [data-proj^="restore:"]').click()`);await sleep(400);
    t.ok('terugzetten: weer 3 projecten',await b.eval(`${indexNames}.length===3`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
  {name:'bewerken blijft bewaard na herladen; wisselen tussen projecten behoudt beide',async run(b,t){
    await demo(b);await set(b,'#projectName','Keuken A');await sleep(300);
-   await b.click('#newProject');await sleep(400);
+   await b.click('#homeBtn');await b.click('#newProject');await b.click('#roomContinue');await sleep(400);
    t.ok('nieuw project actief',await b.eval(`${activeProject}.name==='Nieuw basisontwerp'`));
    await b.goto(URL_);await sleep(400);
    t.ok('na herladen: zelfde actieve project',await b.eval(`${activeProject}.name==='Nieuw basisontwerp'`));
    t.ok('Keuken A bleef bestaan',await b.eval(`${indexNames}.includes('Keuken A')`));
-   await b.click('#homeBtn');await sleep(300);
+   await b.click('#homeBtn');await b.click('#manageProjects');await sleep(300);
    await b.eval(`[...document.querySelectorAll('#modalContent [data-proj^="open:"]')][0].click()`);await sleep(400);
    t.ok('wisselen naar Keuken A: 28 zaagstukken',await b.eval(`${activeProject}.name==='Keuken A'&&document.querySelector('#statBeams').textContent.includes('28')`));
    t.ok('geen JS-fouten',b.errors().length===0,b.errors().join(' | '));}},
@@ -77,6 +77,7 @@ const scenarios=[
  {name:'overkapping van startontwerp tot zaagplan en bouwdocument',async run(b,t){
    await fresh(b);
    await b.click('#welcomeTemplates [data-proj="template:1"]');
+   await b.click('#roomContinue');
    await b.click('#openCutlist');
    const counts=()=>b.eval("Array.from(document.querySelectorAll('#modalContent .cut-kpi strong'),e=>e.textContent).slice(0,2)");
    const warning=()=>b.eval("document.querySelector('#modalContent').textContent.includes('Zaagplan onvolledig: 10 stuk(s)')");

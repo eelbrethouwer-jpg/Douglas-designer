@@ -18,6 +18,7 @@ test('mobiele template: exacte modulemaat blijft behouden na bovenaanzicht, 3D e
   try{
     await b.goto(page);
     await click('#welcomeTemplates [data-proj="template:0"]');
+    await click('#roomContinue');
     const before=await saved(),id=before.modules[0].id;
     const width=before.modules[0].width===1237?1241:1237;
     await click('[data-mobile="modules"]');

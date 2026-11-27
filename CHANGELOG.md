@@ -1,3 +1,9 @@
+## v1.0.0 RC3 — Guided Build fase 2
+
+- Start bundelt lokale projecten, hervatten, een nieuw ontwerp en bestaande templates.
+- Ruimte biedt exacte afmetingen en bewerkbare obstakels in bovenaanzicht en 3D, met opslag per project.
+- De app-cache is vernieuwd. [Release notes fase 2](RELEASE_NOTES_GUIDED_BUILD_PHASE_2.md)
+
 ## Ongepubliceerd — Fase 2: lessenaarsdak in 3D
 
 - Elk blok (open of gesloten, niet pergola) kan een **lessenaarsdak** krijgen: kies in het zijpaneel *Dak → achter/voor/links/rechts hoog* en vul de hoogte van de lage rand in. In de schets wijst een pijl naar de lage kant; het zijpaneel toont de helling in graden.

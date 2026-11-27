@@ -22,21 +22,30 @@ for (const mobile of [false, true]) {
         assert.equal(await browser.eval("document.querySelector('#continueProject').getClientRects().length"), 0);
         const buttons = '#welcomeTemplates button';
         assert.equal(await browser.eval(`document.querySelectorAll('${buttons}').length`), 3);
-        const point = await browser.eval(`(() => {
+        const point = await browser.eval(`(async () => {
           const button = document.querySelectorAll('${buttons}')[${index}];
           button.scrollIntoView({block:'center'});
+          await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
           const {x,y,width,height} = button.getBoundingClientRect();
           const cx=x+width/2, cy=y+height/2;
           return {x:cx,y:cy,reachable:button.contains(document.elementFromPoint(cx,cy))};
         })()`);
         assert.ok(point.reachable);
         const before = await browser.eval(projectIndex);
-        await browser.mouse('mousePressed',point.x,point.y);
-        await browser.mouse('mouseReleased',point.x,point.y);
+        if(mobile){
+          await browser.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:point.x,y:point.y}]});
+          await browser.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+        }else{
+          await browser.mouse('mousePressed',point.x,point.y);
+          await browser.mouse('mouseReleased',point.x,point.y);
+        }
         const after = await browser.eval(projectIndex);
         assert.equal(after.items.length, before.items.length + 1);
         assert.notEqual(after.activeId, before.activeId);
         assert.equal(await browser.eval("document.querySelector('#welcomeLayer').getClientRects().length"), 0);
+        assert.equal(await browser.eval("document.querySelector('.phase-tab.active').dataset.phase"), 'room');
+        assert.ok(await browser.click('#roomContinue'));
+        assert.equal(await browser.eval("document.querySelector('.phase-tab.active').dataset.phase"), 'design');
         const saved = after.items.find(item => item.id === after.activeId);
         assert.match(saved.name,[/kamado/i,/overkapping/i,/pergola/i][index]);
         await browser.eval("localStorage.removeItem('douglas-designer-welcome-v2')");
