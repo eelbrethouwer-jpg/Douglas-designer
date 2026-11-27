@@ -64,6 +64,7 @@ function drawBackdrop(){
 const isSel=o=>!!o&&((selected&&o.id===selected.id)||multi.some(m=>m.type===o.type&&m.id===o.id));
 let selected=null, activePanel='modules', mobileView='design', currentView='3d', modalOpen=false, beamMoveMode=false, roomMoveMode=false;
 let undoStack=[],redoStack=[],toastTimer=null,lastSaveOk=true;
+let surfacePhase='design',modalPhase=null,compactLayout=window.innerWidth<=800;
 const camera={yaw:-0.62,pitch:0.32,zoom:1,panX:0,panY:0};
 const canvas=$('#scene'),ctx=canvas.getContext('2d');
 const gpuCanvas=$('#geometryScene');
@@ -136,17 +137,20 @@ function showSaveResult(result){
 }
 function persist(){showSaveResult(store.save(project.id,project));}
 function commit(fn){const before=JSON.stringify(project);fn(project);project.width=M.expectedWidth(project);if(JSON.stringify(project)===before)return;undoStack.push(before);if(undoStack.length>40)undoStack.shift();redoStack=[];persist();render();}
-function resetSession(){multi=[];undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
+function resetSession(){roomMoveMode=false;multi=[];undoStack=[];redoStack=[];selected=null;setSelected(null,null);toggleDrawMode(false);}
 // Nieuw project aanmaken en openen; het huidige project blijft ongemoeid in de lijst staan.
-function openNewProject(raw,msg){
+function openNewProject(raw,msg,phase='design'){
+ if(!canLeaveProject())return false;
  const p=normalize(raw),r=store.create(p);
  if(!r.ok){toast('Niet gelukt: '+r.error+'. Het huidige project blijft actief.');return false;}
- showSaveResult(r);project=p;resetSession();render();hideWelcome();switchMobile('design');closeModal();if(msg)toast(msg);return true;
+ showSaveResult(r);hasSavedProject=true;project=p;resetSession();render();switchBuildPhase(phase);if(msg)toast(msg);return true;
 }
 function switchProject(id){
- const raw=store.load(id);if(!raw){toast('Project niet gevonden');return;}
- if(!store.setActive(id)){toast('Project wisselen mislukt: opslag niet beschikbaar');return;}
- showSaveResult({ok:true});project=normalize(raw);resetSession();render();closeModal();toast('Geopend: '+project.name);
+ if(id===project.id){switchBuildPhase('design');return true;}
+ if(!canLeaveProject())return false;
+ const raw=store.load(id);if(!raw){toast('Project niet gevonden');return false;}
+ if(!store.setActive(id)){toast('Project wisselen mislukt: opslag niet beschikbaar');return false;}
+ showSaveResult({ok:true});hasSavedProject=true;project=normalize(raw);resetSession();render();switchBuildPhase('design');toast('Geopend: '+project.name);return true;
 }
 function history(dir){multi=[];const from=dir==='undo'?undoStack:redoStack,to=dir==='undo'?redoStack:undoStack;if(!from.length)return;to.push(JSON.stringify(project));project=normalize(JSON.parse(from.pop()));selected=null;persist();render();}
 function getSelected(){if(!selected)return null;if(selected.type==='module')return project.modules.find(m=>m.id===selected.id);if(selected.type==='beam')return project.beams.find(b=>b.id===selected.id);if(selected.type==='frame')return M.framePieces(project).find(b=>b.id===selected.id);if(selected.type==='panel')return (project.panels||[]).find(b=>b.id===selected.id);return null;}
@@ -169,11 +173,16 @@ function setSelected(type,id){
   if($('#interactionTip'))$('#interactionTip').textContent=id?'Onderdeel geselecteerd · sleep direct of tik op Bewerken':'Tik op een onderdeel om direct te bewerken';
 }
 function setRoomMove(enabled){roomMoveMode=!!enabled&&!!project.room?.enabled;
- if(roomMoveMode){toggleDrawMode(false);setView('top');if(window.innerWidth<=800)switchMobile('design');toast('Sleep de keuken in het bovenaanzicht. Tik op Gereed om te stoppen.');}
+ if(roomMoveMode){toggleDrawMode(false);setView('top');if(window.innerWidth<=800){switchMobile('design');window.scrollTo?.(0,0);}toast('Sleep de keuken in het bovenaanzicht. Tik op Gereed om te stoppen.');}
  return roomMoveMode;
 }
 function switchPanel(name){
- document.body?.classList?.toggle?.('room-editing',window.innerWidth<=800&&(name==='room'||name==='finishes'));
+ if(surfacePhase!=='start'){
+   surfacePhase=name==='room'?'room':'design';
+   if(!modalPhase)markPhase(surfacePhase);
+ }
+ document.body?.classList?.toggle?.('room-editing',name==='room'||name==='finishes');
+ $('#sidebar').classList.toggle('room-panel-active',name==='room');
  if(window.innerWidth<=800&&(name==='room'||name==='finishes')){
    $('#stageArea').classList.remove('hidden');
    $('#sidebar').classList.add('mobile-visible');
@@ -181,14 +190,46 @@ function switchPanel(name){
    $('#selectionStrip').classList.add('hidden');
  }
  activePanel=name;$$('.side-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));$$('.sidebar-panel').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
+function markPhase(phase){
+  $$('.phase-tab').forEach(button=>{
+    const active=button.dataset.phase===phase;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+}
 function switchBuildPhase(phase){
-  if(!['start','room','design','check','build'].includes(phase))return;
   closeModal();
-  document.querySelectorAll('.phase-tab').forEach(b=>{const active=b.dataset.phase===phase;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
-  if(phase==='start'){showProjects();return;}
-  if(phase==='room'){if(window.innerWidth<=800)switchMobile('room');else switchPanel('room');return;}
-  if(phase==='design'){switchMobile('design');switchPanel('modules');return;}
-  if(phase==='build'){showCutlist();return;}
+  if(phase==='check'||phase==='build'){
+    modalPhase=phase;
+    markPhase(phase);
+    if(phase==='build'){showCutlist();return;}
+    showDesignCheck();return;
+  }
+  if(roomMoveMode){roomMoveMode=false;window.DouglasRoomStudio?.refresh?.();}
+  surfacePhase=phase;
+  markPhase(phase);
+  const start=phase==='start';
+  $('#welcomeLayer').classList.toggle('hidden',!start);
+  $('#designWorkspace').classList.toggle('hidden',start);
+  $('.mobile-bottom').classList.toggle('hidden',start);
+  if(start){
+    $('#selectionStrip').classList.add('hidden');
+    showWelcome();
+    $('#welcomeHeading').focus?.();
+  }else{
+    try{projectStorage.setItem(WELCOME_KEY,'seen');}catch(_){}
+    if(phase==='room'){
+      switchMobile('room');
+      $('#roomHeading')?.focus?.();
+    }else{
+      switchMobile('design');
+      switchPanel('modules');
+      $('#projectTitle').focus?.();
+    }
+  }
+  window.scrollTo?.(0,0);
+}
+function showDesignCheck(){
   modalOpen=true;
   $('#modalBackdrop').classList.remove('hidden');
   $('#modalEyebrow').textContent='CONTROLE / CONCEPT';
@@ -214,6 +255,7 @@ function switchMobile(name){
   $('#sidebar').classList.toggle('mobile-visible',name==='modules'||name==='settings');
   if(name==='modules')switchPanel('modules');
   if(name==='settings')switchPanel('settings');
+  if(name==='design'&&surfacePhase!=='start'&&(activePanel==='room'||activePanel==='finishes'))switchPanel('modules');
   $('#inspector').classList.remove('mobile-visible');
   syncMobileSelection();
   if(name==='design'||name==='room')draw();
@@ -478,6 +520,7 @@ function drawRoomGeometry(){
    box(0,-85,0,r.width,65,r.depth,r.floorColor,null);
    if(r.backWall)box(0,-20,r.depth-32,r.width,r.height+20,32,r.wallColor,null);
    if(r.leftWall)box(0,-20,0,30,r.height+20,r.depth,r.wallColor,null);
+   for(const o of r.obstacles||[])box(o.x,0,o.z,o.width,o.height,o.depth,R.obstacleColor,null);
  }finally{roomGeometryMode=false;}
 }
 function path(verts){ctx.beginPath();ctx.moveTo(verts[0].x,verts[0].y);for(let i=1;i<verts.length;i++)ctx.lineTo(verts[i].x,verts[i].y);ctx.closePath();}
@@ -633,33 +676,42 @@ function projectsHTML(){
  const kb=(n)=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(n/1024))+' KB';
  let h=`<div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap;margin-bottom:14px"><button class="primary-btn" data-proj="new">＋ Nieuw (met vak)</button><button class="outline-btn" data-proj="free">✎ Vrij tekenen</button><button class="outline-btn" data-proj="demo">◈ Voorbeeld</button><button class="outline-btn" data-proj="import">↥ Project importeren</button></div>`;
  h+=templateChoicesHTML();
- h+=`<table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
+ h+=`<div class="project-table-scroll"><table class="cuttable proj-table"><thead><tr><th>Project</th><th>Laatst gewijzigd</th><th>Grootte</th><th></th></tr></thead><tbody>`;
  for(const it of items)h+=`<tr${it.active?' style="background:#f2f7f1"':''}><td><input data-proj-name="${esc(it.id)}" value="${esc(it.name)}" maxlength="80" aria-label="Projectnaam" style="width:100%;min-width:140px;border:1px solid #dce1d9;border-radius:7px;padding:7px 9px;font:inherit">${it.active?'<small style="color:#2f7059;font-weight:700"> ● actief</small>':''}</td><td>${esc(when(it.updatedAt))}</td><td>${kb(it.bytes)}</td><td style="white-space:nowrap;text-align:right">${it.active?'':`<button class="outline-btn" data-proj="open:${esc(it.id)}">Openen</button> `}<button class="outline-btn" data-proj="dup:${esc(it.id)}" title="Dupliceren">⧉</button> <button class="outline-btn delete-btn" data-proj="del:${esc(it.id)}" title="Verwijderen (naar prullenbak)">✕</button></td></tr>`;
- h+=`</tbody></table>`;
+ h+=`</tbody></table></div>`;
  if(trash.length){h+=`<h4 class="cut-section">PRULLENBAK (LAATSTE ${trash.length})</h4><table class="cuttable"><tbody>`;for(const t of trash)h+=`<tr><td>${esc(t.name)}</td><td>${esc(when(t.deletedAt))}</td><td style="text-align:right"><button class="outline-btn" data-proj="restore:${esc(t.trashId)}">↺ Terugzetten</button></td></tr>`;h+=`</tbody></table>`;}
  h+=`<h4 class="cut-section">BACK-UP</h4><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="outline-btn" data-proj="exportAll">↓ Alle projecten exporteren</button></div><div class="notice-small">Je projecten staan alleen in deze browser. Opslag in gebruik: ca. ${kb(store.usage()*2)} (browsers staan meestal ca. 5 MB toe; foto's nemen de meeste ruimte in). Maak regelmatig een back-up. Importeren voegt altijd <strong>nieuwe</strong> projecten toe en overschrijft nooit iets.</div>`;
  return h;
 }
 function showProjects(){modalOpen=true;$('#modalBackdrop').classList.remove('hidden');$('#modalEyebrow').textContent='PROJECTEN';$('#modalTitle').textContent='Mijn projecten';$('#modalContent').innerHTML=projectsHTML();}
+function canLeaveProject(){
+ if(lastSaveOk)return true;
+ toast('Sla het huidige ontwerp opnieuw op voordat je van project wisselt.');
+ return false;
+}
 function projectAction(spec){
  const [act,...rest]=spec.split(':'),id=rest.join(':');
- if(act==='new')openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');
- else if(act==='free'){if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);}}
+ const phase=surfacePhase==='start'?'room':'design';
+ if(act==='new')return openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart',phase);
+ else if(act==='free'){if(!openNewProject(M.freeProject(),null,phase))return false;setView('front');toggleDrawMode(true);return true;}
  else if(act==='template'){
   const template=globalThis.DouglasStartontwerpen?.[id];
-  if(template && openNewProject({...template,id:M.uid()},'Startontwerp geopend als nieuw project'))setView('3d');
+  if(!template||!openNewProject({...template,id:M.uid()},'Startontwerp geopend als nieuw project',phase))return false;
+  setView('3d');return true;
  }
  else if(act==='demo')openNewProject(M.demoProject(),'Voorbeeld geopend');
  else if(act==='import')$('#fileInput').click();
  else if(act==='open')switchProject(id);
  else if(act==='dup'){const r=store.duplicate(id);if(r.ok){toast('Gedupliceerd');showProjects();}else toast('Dupliceren mislukt: '+r.error);}
  else if(act==='del'){
-  const was=id===project.id,r=store.trash(id);
+  const was=id===project.id;
+  if(was&&!canLeaveProject())return;
+  const r=store.trash(id);
   if(!r.ok){toast('Verwijderen mislukt: '+r.error);return;}
   if(was){if(r.activeId)switchProject(r.activeId);else openNewProject(M.demoProject());}
   toast('Naar prullenbak verplaatst; terug te zetten in dit overzicht');showProjects();
  }
- else if(act==='restore'){const r=store.restore(id);if(r.ok){toast('Teruggezet');switchProject(r.id);showProjects();}else toast('Terugzetten mislukt: '+r.error);}
+ else if(act==='restore'){if(!canLeaveProject())return;const r=store.restore(id);if(r.ok){toast('Teruggezet');switchProject(r.id);showProjects();}else toast('Terugzetten mislukt: '+r.error);}
  else if(act==='exportAll'){download('douglas-designer-alle-projecten.json',store.exportAll());toast('Back-up van alle projecten opgeslagen');}
 }
 
@@ -756,7 +808,7 @@ async function deliverAction(spec){
 function receivePayload(parsed){
  const v=SHARE?SHARE.validate(parsed):{ok:false,error:'Delen is niet beschikbaar'};
  if(!v.ok){toast('Niet gelukt: '+v.error);return false;}
- pendingReceive=v;hideWelcome();
+ pendingReceive=v;switchBuildPhase('design');
  let h='';
  if(v.type==='project')h=`<div class="notice-small" style="margin-top:0">Ontvangen project: <strong>${esc(v.summary.name)}</strong> (${v.summary.modules} modules, ${v.summary.beams} losse balken). Het wordt als <strong>nieuw project</strong> toegevoegd; je huidige project blijft ongewijzigd.</div><div class="right-foot-actions" style="flex-direction:row;margin-top:14px"><button class="primary-btn" data-recv="project">＋ Toevoegen als nieuw project</button><button class="outline-btn" data-recv="cancel">Annuleren</button></div>`;
  else{const s=v.summary;h=`<div class="notice-small" style="margin-top:0">Ontvangen aanlevering${s.name&&s.name!=='Aanlevering'?': <strong>'+esc(s.name)+'</strong>':''}: ${esc(SHARE.deliverySummaryText(s))}.${s.droppedPhotos?` ${s.droppedPhotos} bijlage(n) overgeslagen (geen geldige of te grote JPEG).`:''}${s.notes?`<br><br><em style="white-space:pre-wrap">${esc(s.notes)}</em>`:''}</div>${s.photos?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">${v.payload.photos.map((p,i)=>`<img src="${p}" alt="Foto ${i+1}" style="width:120px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #dce1d9">`).join('')}</div>`:''}<p class="mini-note">Maten gelden als ruimte (3D-ruimte wordt ingeschakeld); de eerste foto wordt ruimtefoto, waarna je de vier vloerhoeken markeert. Foto's en opmerkingen blijven als referentie bij het project.</p><div class="right-foot-actions" style="flex-direction:row;flex-wrap:wrap"><button class="primary-btn" data-recv="applyCurrent">Toepassen op huidig project</button><button class="outline-btn" data-recv="newProject">Nieuw project maken</button><button class="outline-btn" data-recv="cancel">Annuleren</button></div>`;}
@@ -1005,7 +1057,10 @@ function backdropAction(act){
  else if(act==='move'){closeModal();backdropMove=true;calibrate=null;$('#drawHelp').classList.remove('hidden');$('#drawHelp').textContent='Sleep de foto naar de juiste plek · Esc of klik op Selecteer om te stoppen';canvas.classList.add('draw-active');}
 }
 function stopBackdropTools(){if(calibrate||backdropMove){calibrate=null;backdropMove=null;canvas.classList.remove('draw-active');if(!drawMode&&!measureMode)$('#drawHelp').classList.add('hidden');}}
-function closeModal(){modalOpen=false;$('#modalBackdrop').classList.add('hidden');}
+function closeModal(){
+ modalOpen=false;$('#modalBackdrop').classList.add('hidden');
+ if(modalPhase){modalPhase=null;markPhase(surfacePhase);}
+}
 function safeName(){return (project.name||'douglas').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'douglas';}
 function download(name,text,type='application/json'){const b=new Blob([text],{type}),url=URL.createObjectURL(b),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 function exportProject(){download('douglas-designer-project.json',JSON.stringify(project,null,2));toast('Projectbestand aangemaakt');}
@@ -1063,7 +1118,14 @@ document.addEventListener('click',e=>{
   if(beamCard && !b){setSelected('beam',beamCard.dataset.selectBeam);switchPanel('beams');return;}
   if(frameCard && !b){setSelected('frame',frameCard.dataset.selectFrame);switchPanel('beams');return;}
   if(!b)return;
-  if(b.dataset.phase){switchBuildPhase(b.dataset.phase);return;}
+  if(b.dataset.phase){
+    if(b.id==='roomContinue'&&!$('#obstacleForm').classList.contains('hidden')){
+      toast('Sla het obstakel op of annuleer de wijziging.');
+      $('#obstacleForm').querySelector('input').focus();
+      return;
+    }
+    switchBuildPhase(b.dataset.phase);return;
+  }
   if(b.dataset.panel){switchPanel(b.dataset.panel);return;}
   if(b.dataset.mobile){switchMobile(b.dataset.mobile);return;}
   if(b.dataset.view){setView(b.dataset.view);return;}
@@ -1073,11 +1135,12 @@ document.addEventListener('click',e=>{
   if(b.dataset.nudge){const [axis,delta]=b.dataset.nudge.split(':');const obj=getSelected();if((selected?.type==='beam'||selected?.type==='frame')&&obj&&['x','y','z'].includes(axis))commit(()=>{if(selected.type==='frame')M.editFrameBeam(project,selected.id,{[axis]:obj[axis]+Number(delta)});else obj[axis]+=Number(delta);});return;}
   switch(b.id){
     case 'undoBtn':history('undo');break;case 'redoBtn':history('redo');break;
-    case 'homeBtn':showProjects();break;
+    case 'homeBtn':switchBuildPhase('start');break;
+    case 'manageProjects':showProjects();break;
     case 'shareBtn':showShare();break;
-    case 'continueProject':hideWelcome();break;
-    case 'newProject':openNewProject({name:'Nieuw basisontwerp',modules:[{kind:'open',width:800,name:'Open vak'}],beams:[]},'Nieuw basisontwerp gestart');break;
-    case 'newFreeProject':if(openNewProject(M.freeProject())){setView('front');toggleDrawMode(true);toast('Leeg tekenvlak · sleep van beginpunt naar eindpunt om een balk te maken');}break;
+    case 'continueProject':switchBuildPhase('design');break;
+    case 'newProject':projectAction('new');break;
+    case 'newFreeProject':projectAction('free');break;
     case 'drawTool':toggleDrawMode(true);break;
     case 'measureTool':toggleMeasureMode(!measureMode);break;
     case 'selectTool':toggleDrawMode(false);toggleMeasureMode(false);break;
@@ -1090,7 +1153,7 @@ document.addEventListener('click',e=>{
     case 'groupDeleteBtn':{const keep=multi.slice();commit(()=>{for(const m of keep){if(m.type==='frame')M.editFrameBeam(project,m.id,{disabled:true});else project.beams=project.beams.filter(b=>b.id!==m.id);}});multi=[];selected=null;render();toast(`${keep.length} balken verwijderd`);break;}
     case 'arrayBeamBtn':{const src=getSelected();if(!src||selected?.type==='module')break;const r=M.arrayBeams(project,src,$('#arrAxis').value,$('#arrCount').value,$('#arrSpacing').value);
       if(!r.ok){toast(r.error);break;}commit(()=>{project.beams.push(...r.beams);});toast(`${r.beams.length} kopie${r.beams.length===1?'':'ën'} geplaatst${r.skipped?` (${r.skipped} niet: maximum 100 losse balken)`:''}`);break;}
-    case 'demoProject':openNewProject(M.demoProject(),'Voorbeeld geopend');break;
+    case 'demoProject':projectAction('demo');break;
     case 'quickModuleBtn':{const opened=$('#quickModuleMenu').classList.toggle('hidden');b.setAttribute('aria-expanded',String(!opened));break;}
     case 'quickBeamBtn':$('#quickModuleMenu').classList.add('hidden');if(window.innerWidth<=800)switchMobile('modules');switchPanel('beams');toast('Kies een balktype en sleep of tik om te plaatsen');break;
     case 'editSelectionBtn':if(selected||multi.length)$('#inspector').classList.add('mobile-visible');break;
@@ -1208,6 +1271,10 @@ window.addEventListener('hashchange',checkShareHash);
 $('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal();});
 window.addEventListener('keydown',e=>{
   if(document.body?.classList?.contains?.('plan-editor-open'))return; // het plattegrond-schetsvenster regelt zijn eigen toetsen
+  if(surfacePhase==='start'){
+    if(e.key==='Escape'&&modalOpen)closeModal();
+    return;
+  }
   const editing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
   const key=e.key.toLowerCase();
   if((e.metaKey||e.ctrlKey)&&key==='z'&&!editing){e.preventDefault();history(e.shiftKey?'redo':'undo');return;}
@@ -1452,18 +1519,36 @@ canvas.addEventListener('pointerup',pointerEnd);canvas.addEventListener('pointer
   pinchDistance=0;cancelCanvasEdit();
 });
 canvas.addEventListener('wheel',e=>{e.preventDefault();camera.zoom=M.clamp(camera.zoom*(e.deltaY>0?.91:1.1),.35,4);draw();},{passive:false});
-window.addEventListener('resize',()=>{if(window.innerWidth>800){$('#stageArea').classList.remove('hidden');$('#sidebar').classList.remove('mobile-visible');$('#inspector').classList.remove('mobile-visible');}draw();});
+window.addEventListener('resize',()=>{
+ const compact=window.innerWidth<=800;
+ if(compact!==compactLayout){
+  compactLayout=compact;
+  if(compact&&surfacePhase!=='start')switchMobile(['room','finishes'].includes(activePanel)?activePanel:'design');
+  if(!compact){
+   $('#stageArea').classList.remove('hidden');
+   $('#sidebar').classList.remove('mobile-visible');
+   $('#inspector').classList.remove('mobile-visible');
+  }
+ }
+ draw();
+});
 if('ResizeObserver' in window)new ResizeObserver(()=>draw()).observe(canvas);
 persist();updateDraftControls();syncSketchControls();render();
-window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove,isSaved:()=>lastSaveOk});
+window.DouglasRoomStudio?.mount?.({getProject:()=>project,commit,render,setView,toast,setRoomMove,isMoving:()=>roomMoveMode,isSaved:()=>lastSaveOk});
 function showWelcome(){
+ const items=store.list().filter(item=>item.id!==project.id);
  $('#continueProject').classList.toggle('hidden',!hasSavedProject);
  $('#resumeProjectInfo').textContent=project.name+' · '+fmt(project.width)+' × '+fmt(project.depth)+' mm';
+ $('#startProjects').innerHTML=items.map(item=>`<button type="button" class="outline-btn start-project" data-proj="open:${esc(item.id)}"><strong>${esc(item.name)}</strong><small>Project openen</small></button>`).join('')
+   || (hasSavedProject?'':'<p>Je hebt nog geen eigen projecten.</p>');
  $('#welcomeTemplates').innerHTML=templateChoicesHTML();
- $('#welcomeLayer').classList.remove('hidden');
 }
-function hideWelcome(){try{projectStorage.setItem(WELCOME_KEY,'seen');}catch(_){}$('#welcomeLayer').classList.add('hidden');}
-if(lastSaveOk){try{if(!projectStorage.getItem(WELCOME_KEY))showWelcome();}catch(_){showWelcome();}}
+if(lastSaveOk){
+ let firstVisit=true;
+ try{firstVisit=!projectStorage.getItem(WELCOME_KEY);}catch(_){}
+ if(firstVisit)switchBuildPhase('start');
+ else hasSavedProject=true;
+}
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3.plan',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3.guided2',{updateViaCache:'none'}).catch(()=>{});
 })();

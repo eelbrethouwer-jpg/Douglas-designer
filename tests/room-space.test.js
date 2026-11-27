@@ -50,3 +50,17 @@ test('catalogue contains exactly 66 variants and malicious ids cannot change a m
  assert.equal(R.normalizeStyle({wood:'unknown'}).wood,'wood-0');
  assert.equal(R.colorOf('wood','invalid'),R.palettes.wood[0].color);
 });
+
+test('obstacles are optional for old rooms and preserve valid millimetres across normalization',()=>{
+ const p=M.demoProject(),legacy=R.defaultRoom(p);
+ assert.deepEqual(R.normalizeRoom(legacy,p),legacy);
+ const item={id:'pilaar',name:' Pilaar ',width:213,depth:277,height:1803,x:117,z:203};
+ const raw={...legacy,obstacles:[null,{...item,id:''},item,{...item,name:'Duplicaat'}]};
+ const room=R.normalizeRoom(raw,p);
+ assert.deepEqual(room.obstacles,[{...item,name:'Pilaar'}]);
+ assert.deepEqual(R.normalizeRoom(room,p),room);
+ assert.equal(R.obstacleOutside(room.obstacles[0],room),false);
+ assert.equal(R.obstacleOutside({...item,x:room.width-10},room),true);
+ assert.equal(R.obstacleOutside({...item,height:room.height+1},room),true);
+ assert.equal(raw.obstacles[2].name,' Pilaar ');
+});

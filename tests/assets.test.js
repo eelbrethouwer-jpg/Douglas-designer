@@ -52,7 +52,7 @@ test('iPhone safe-area layout and Room Capture version agree with deployed PWA',
  assert.match(css,/env\(safe-area-inset-top/);
  assert.match(css,/env\(safe-area-inset-bottom/);
  assert.match(photo,/room-capture-version">v0\.7\.4/);
- assert.match(html,/room-studio\.js\?rev=0\.7\.4/);
+ assert.match(html,/room-studio\.js\?rev=1\.0\.0-rc3\.guided2/);
  assert.match(html,/app\.js\?rev=\d+\.\d+\.\d+/);
 });
 

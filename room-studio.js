@@ -4,13 +4,22 @@
 const R=root.DouglasRoom;
 const $=(q,el=document)=>el.querySelector(q);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let get,mutate,redraw,view,toast,moveKitchen,isSaved=()=>true,modal,photoImage,photoSource='',previewMode=false,moveActive=false;
+let get,mutate,redraw,view,toast,moveKitchen,isSaved=()=>true,modal,photoImage,photoSource='',previewMode=false,isMoving=()=>false;
 let selectedCorner=-1,cornerGesture=null,cornerDraft=null;
+let obstacleProjectId,obstacleId=null,obstacleListHTML;
 const dims=[['width','Breedte ruimte'],['depth','Diepte ruimte'],['height','Hoogte ruimte']];
 function room(){return get().room;}
 function style(){return get().style;}
 function f(v){return new Intl.NumberFormat('nl-NL').format(v);}
-function field(k,label){return '<label class="room-field">'+label+'<input data-room="'+k+'" type="number" min="0" step="10" inputmode="numeric"></label>';}
+function field(k,label){
+ const [min,max]=R.dimensionLimits[k]||[-20000,20000];
+ return `<label class="room-field">${label}<input data-room="${k}" type="number" min="${min}" max="${max}" step="1" inputmode="${min<0?'decimal':'numeric'}"></label>`;
+}
+const obstacleFields=[['width','Breedte'],['depth','Diepte'],['height','Hoogte'],['x','Vanaf links (X)'],['z','Vanaf voor (Z)']];
+function obstacleField([key,label]){
+ const [min,max]=R.obstacleLimits[key];
+ return `<label class="room-field">${label}<input name="${key}" type="number" min="${min}" max="${max}" step="1" inputmode="numeric" required></label>`;
+}
 function select(k,options){return '<select data-room="'+k+'">'+options.map(x=>'<option value="'+escape(String(x))+'">'+escape(String(x))+'</option>').join('')+'</select>';}
 function initUI(){
  const tabs=$('.sidebar-tabs');
@@ -19,13 +28,23 @@ function initUI(){
  const body=$('.sidebar-scroll');
  body.insertAdjacentHTML('beforeend',`
  <section class="sidebar-panel hidden" id="panel-room">
- <div class="section-title"><span>ONTWERP IN JE EIGEN RUIMTE</span></div>
- <p class="hint">Wijzig een maat en bekijk direct het resultaat op het 3D-werkvlak. Dit is de ruimte rondom je buitenkeuken.</p>
- <div class="room-mini-wrap"><div class="room-mini-top"><strong>Bovenaanzicht ruimte</strong><small id="roomMiniSize">—</small></div><canvas id="roomMiniPlan" width="360" height="226" aria-label="Bovenaanzicht van ruimte en buitenkeuken"></canvas><div class="room-mini-bottom"><span><i class="mini-legend-wall"></i> Ruimte</span><span><i class="mini-legend-kitchen"></i> Buitenkeuken</span></div></div>
- <div class="room-first-actions"><button id="roomCaptureOpen" class="room-big-action" type="button">📷 Foto toevoegen / openen</button><button id="roomShow3d" class="room-big-action secondary" type="button">◈ Bekijk 3D</button></div>
- <label class="check-row"><input id="roomEnabled" type="checkbox"> 3D-ruimte tonen</label>
- <div class="section-title space-top"><span>RUIMTEAFMETINGEN (MM)</span></div>
+ <div class="room-heading"><h2 id="roomHeading" tabindex="-1">Ruimte</h2><button type="button" class="primary-btn" id="roomContinue" data-phase="design">Naar ontwerp →</button></div>
+ <h3 class="room-section-heading">Ruimteafmetingen (mm)</h3>
  <div class="room-fields">${dims.map(([k,v])=>field(k,v)).join('')}</div>
+ <label class="check-row"><input id="roomEnabled" type="checkbox"> 3D-ruimte tonen</label>
+ <section class="room-obstacles" aria-labelledby="obstacleHeading">
+  <div class="room-heading"><h3 id="obstacleHeading" class="room-section-heading">Obstakels</h3><button type="button" class="outline-btn" id="addObstacle" aria-expanded="false" aria-controls="obstacleForm">＋ Toevoegen</button></div>
+  <ul id="obstacleList" class="obstacle-list"></ul>
+  <form id="obstacleForm" class="hidden">
+   <h4 id="obstacleFormTitle">Obstakel toevoegen</h4>
+   <label class="room-field">Naam <input name="name" type="text" maxlength="60" placeholder="Bijv. pilaar"></label>
+   <p class="hint">Maten en positie vanaf de linker voorhoek, in mm.</p>
+   <div class="room-fields">${obstacleFields.map(obstacleField).join('')}</div>
+   <div class="room-form-actions"><button class="primary-btn" type="submit">Opslaan</button><button class="outline-btn" id="cancelObstacle" type="button">Annuleren</button><button class="outline-btn delete-btn hidden" id="removeObstacle" type="button">Verwijderen</button></div>
+  </form>
+ </section>
+ <div class="room-mini-wrap"><div class="room-mini-top"><strong>Bovenaanzicht ruimte</strong><small id="roomMiniSize">—</small></div><canvas id="roomMiniPlan" width="360" height="226" aria-label="Bovenaanzicht van ruimte, obstakels en buitenkeuken"></canvas><div class="room-mini-bottom"><span><i class="mini-legend-wall"></i> Ruimte</span><span><i class="mini-legend-kitchen"></i> Buitenkeuken</span><span><i class="mini-legend-obstacle"></i> Obstakel</span></div></div>
+ <div class="room-first-actions"><button id="roomCaptureOpen" class="room-big-action" type="button">📷 Ruimtefoto</button><button id="roomShow3d" class="room-big-action secondary" type="button" data-phase="design">◈ Bekijk 3D</button></div>
  <label class="check-row"><input data-room-bool="backWall" type="checkbox"> Achterwand tonen</label>
  <label class="check-row"><input data-room-bool="leftWall" type="checkbox"> Linkerwand tonen</label>
  <div class="section-title space-top"><span>KEUKEN PLAATSEN</span></div>
@@ -95,13 +114,61 @@ function captureStatus(message,warning=false){
  const output=$('#roomCaptureStatus');
  if(output){output.textContent=message;output.classList.toggle('warning',warning);}
 }
-function changeRoom(key,value){
- patchRoom((r,p)=>{
-  if(['width','depth','height','x','z'].includes(key)){
-    const n=Math.round(Number(value));if(!Number.isFinite(n))return;
-    if(key==='x'||key==='z')r.placement[key]=n;else r[key]=n;
-  }else if(key==='rotation')r.placement.rotation=Number(value);
- });
+function changeRoom(input){
+ const key=input.dataset.room,value=input.value;
+ if(key==='rotation'){patchRoom(r=>{r.placement.rotation=Number(value);});return;}
+ const placement=key==='x'||key==='z';
+ if(value!==''&&Number.isFinite(Number(value))){
+  const n=Math.round(Number(value));
+  patchRoom(r=>{if(placement)r.placement[key]=n;else r[key]=n;});
+ }
+ input.value=placement?room().placement[key]:room()[key];
+}
+function refreshObstacles(r){
+ if(obstacleProjectId!==get().id){
+  obstacleProjectId=get().id;
+  closeObstacleForm();
+ }
+ const list=$('#obstacleList');
+ const obstacles=r.obstacles||[];
+ const html=obstacles.map(o=>`<li><div><strong>${escape(o.name)}</strong>
+   <small>${f(o.width)} × ${f(o.depth)} × ${f(o.height)} mm</small>
+   ${R.obstacleOutside(o,r)?'<small class="obstacle-warning">Valt buiten de ruimte</small>':''}</div>
+   <button type="button" class="outline-btn" data-obstacle-edit="${escape(o.id)}" aria-label="Bewerk ${escape(o.name)}">Bewerk</button></li>`).join('');
+ if(html!==obstacleListHTML){list.innerHTML=html;obstacleListHTML=html;}
+ $('#addObstacle').disabled=obstacles.length>=R.maxObstacles;
+}
+function openObstacleForm(obstacle){
+ const form=$('#obstacleForm');
+ if(!form.elements)return;
+ obstacleId=obstacle?.id??null;
+ const values=obstacle||{name:'',width:300,depth:300,height:900,x:0,z:0};
+ for(const key of ['name',...Object.keys(R.obstacleLimits)])form.elements[key].value=values[key];
+ $('#obstacleFormTitle').textContent=obstacle?'Obstakel bewerken':'Obstakel toevoegen';
+ $('#removeObstacle').classList.toggle('hidden',!obstacle);
+ form.classList.remove('hidden');
+ $('#addObstacle').setAttribute('aria-expanded','true');
+ form.elements.name.focus();
+}
+function closeObstacleForm({restoreFocus=false,editedId=null}={}){
+ obstacleId=null;
+ $('#obstacleForm').classList.add('hidden');
+ $('#addObstacle').setAttribute('aria-expanded','false');
+ if(restoreFocus){
+  const edit=Array.from(document.querySelectorAll('[data-obstacle-edit]')).find(b=>b.dataset.obstacleEdit===editedId);
+  (edit||$('#addObstacle')).focus();
+ }
+}
+function saveObstacle(e){
+ e.preventDefault();
+ const form=e.currentTarget;
+ const items=room().obstacles||[];
+ if(!obstacleId&&items.length>=R.maxObstacles)return;
+ const id=obstacleId??root.DouglasModel.uid();
+ const obstacle={id,name:form.elements.name.value};
+ for(const key of Object.keys(R.obstacleLimits))obstacle[key]=form.elements[key].valueAsNumber;
+ patchRoom(r=>{r.obstacles=obstacleId?items.map(o=>o.id===obstacleId?obstacle:o):[...items,obstacle];});
+ closeObstacleForm({restoreFocus:true,editedId:id});
 }
 function setColor(k,id){patchStyle({[k]:id});}
 function updateCollections(){
@@ -122,6 +189,11 @@ function drawMiniPlan(){
  ctx.strokeStyle='#4c6b5b';ctx.lineWidth=3;ctx.strokeRect(ox,oy,realWidth,realDepth);
  if(r.leftWall){ctx.strokeStyle='#6e7f73';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(ox,oy+realDepth);ctx.stroke();}
  if(r.backWall){ctx.strokeStyle='#6e7f73';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(ox,oy+realDepth);ctx.lineTo(ox+realWidth,oy+realDepth);ctx.stroke();}
+ ctx.save();
+ ctx.globalAlpha=.85;
+ ctx.fillStyle=R.obstacleColor;
+ for(const o of r.obstacles||[])ctx.fillRect(ox+o.x*scale,oy+o.z*scale,o.width*scale,o.depth*scale);
+ ctx.restore();
  const corners=R.footprint(p,{...r,enabled:true});
  ctx.beginPath();
  corners.forEach((c,i)=>{const x=ox+c[0]*scale,y=oy+c[2]*scale;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
@@ -132,14 +204,13 @@ function drawMiniPlan(){
  ctx.fillStyle='#2c5040';ctx.font='bold 11px system-ui';
  ctx.fillText(f(r.width)+' mm',w/2,Math.max(13,oy-9));
  ctx.save();ctx.translate(Math.max(10,ox-9),h/2);ctx.rotate(-Math.PI/2);ctx.fillText(f(r.depth)+' mm',0,0);ctx.restore();
- if(!r.enabled){ctx.fillStyle='rgba(241,246,241,.72)';ctx.fillRect(0,0,w,h);
-  ctx.fillStyle='#3d5949';ctx.font='bold 13px system-ui';ctx.fillText('3D-ruimte staat uit',w/2,h/2);}
  const caption=$('#roomMiniSize');if(caption)caption.textContent=f(r.width)+' × '+f(r.depth)+' mm';
 }
 function refresh(){
  if(!get||!$('#panel-room'))return;
  const r=room(),st=style();
  $('#roomEnabled').checked=r.enabled;
+ $('#roomDragKitchen').textContent=isMoving()?'✓ Gereed met verplaatsen':'↔ Keuken slepen in bovenaanzicht';
  document.querySelectorAll('#panel-room [data-room],#roomCaptureDialog [data-room]').forEach(el=>{
   const k=el.dataset.room; const value=['x','z','rotation'].includes(k)?r.placement[k]:r[k];
   if(document.activeElement!==el)el.value=value;
@@ -149,6 +220,7 @@ function refresh(){
  const issues=R.warnings(get(),r);
  const warnings=$('#roomWarnings');warnings.textContent=issues.length?'⚠ '+issues.join(' · '):r.enabled?'✓ Keuken past binnen de opgegeven ruimte (geometrische controle).':'De ruimte staat uit.';
  warnings.classList.toggle('room-has-warning',issues.length>0);
+ refreshObstacles(r);
  updateCollections();
  drawMiniPlan();
  drawPhoto();
@@ -402,18 +474,30 @@ function addEvents(){
     if(!Number.isFinite(r.placement.z))r.placement.z=Math.max(0,r.depth-dims.depth-100);
   });view('3d');closeCapture();toast('3D-ruimte ingesteld. Controleer de maten.');
  });
+ $('#addObstacle').addEventListener('click',()=>openObstacleForm());
+ $('#obstacleList').addEventListener('click',e=>{
+  const button=e.target.closest('[data-obstacle-edit]');
+  if(button)openObstacleForm(room().obstacles?.find(o=>o.id===button.dataset.obstacleEdit));
+ });
+ $('#obstacleForm').addEventListener('submit',saveObstacle);
+ $('#cancelObstacle').addEventListener('click',()=>closeObstacleForm({restoreFocus:true,editedId:obstacleId}));
+ $('#removeObstacle').addEventListener('click',()=>{
+  if(!obstacleId)return;
+  patchRoom(r=>{r.obstacles=r.obstacles.filter(o=>o.id!==obstacleId);});
+  closeObstacleForm({restoreFocus:true});
+ });
  $('#roomEnabled').addEventListener('change',e=>patchRoom(r=>{r.enabled=e.target.checked;}));
  document.addEventListener('change',e=>{
-   if(e.target.closest('#panel-room,#roomCaptureDialog') && e.target.matches('[data-room]'))changeRoom(e.target.dataset.room,e.target.value);
+   if(e.target.closest('#panel-room,#roomCaptureDialog') && e.target.matches('[data-room]'))changeRoom(e.target);
    if(e.target.closest('#panel-room')&&e.target.matches('[data-room-bool]'))patchRoom(r=>{r[e.target.dataset.roomBool]=e.target.checked;});
    if(e.target.closest('#panel-finishes')&&e.target.matches('select[data-room]'))
      patchStyle({[e.target.dataset.room]:e.target.value});
  });
- $('#roomDragKitchen').addEventListener('click',()=>{moveActive=moveKitchen(!moveActive);$('#roomDragKitchen').textContent=moveActive?'✓ Gereed met verplaatsen':'↔ Keuken slepen in bovenaanzicht';});
+ $('#roomDragKitchen').addEventListener('click',()=>{moveKitchen(!isMoving());refresh();});
  $('#roomCenterKitchen').addEventListener('click',()=>patchRoom((r,p)=>{const o=R.orientation(p,r);r.placement.x=Math.round((r.width-o.width)/2);r.placement.z=Math.max(0,Math.round((r.depth-o.depth)/2));}));
  $('#roomAgainstBack').addEventListener('click',()=>patchRoom((r,p)=>{const o=R.orientation(p,r);r.placement.z=r.depth-o.depth-100;}));
  document.addEventListener('click',e=>{const b=e.target.closest('[data-finish]');if(b)setColor(b.dataset.finish,b.dataset.finishId);});
 }
-function mount(api){get=api.getProject;mutate=api.commit;redraw=api.render;view=api.setView;toast=api.toast;moveKitchen=api.setRoomMove;isSaved=api.isSaved||(()=>true);initUI();refresh();}
+function mount(api){get=api.getProject;mutate=api.commit;redraw=api.render;view=api.setView;toast=api.toast;moveKitchen=api.setRoomMove;isMoving=api.isMoving||(()=>false);isSaved=api.isSaved||(()=>true);initUI();refresh();}
 root.DouglasRoomStudio={mount,refresh};
 })(typeof globalThis!=='undefined'?globalThis:this);

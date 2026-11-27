@@ -5,6 +5,10 @@ Een Nederlandstalige **Douglas buitenkeuken-ontwerper** met een nauwkeurige 2D-w
 > **Actuele ontwikkelstatus — 23 november 2026:** `main` bevat de bewerkbare startontwerpen van **v1.0.0 RC3** en de opvolgende verbeteringen tot en met [PR #29](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/29) (dakonderdelen en zaagplan). GitHub Actions was groen op de PR; controle van de Pages-deploy op `main` en handmatige Safari-acceptatie blijven afzonderlijke releasegates. De secties hieronder over v0.7.x en PR #14 beschrijven de **historische oktoberstatus**, niet de actuele release.
 
 
+## Guided Build — Start & Ruimte
+
+Open **Start** om een lokaal project te hervatten of een nieuw ontwerp te maken. In **Ruimte** stel je de afmetingen in millimeters in en leg je obstakels vast. Ga verder via **Naar ontwerp**. De bestaande ontwerp- en projectbeheertools blijven beschikbaar. [Release notes fase 2](RELEASE_NOTES_GUIDED_BUILD_PHASE_2.md)
+
 ## v0.7.3 Room Capture iPhone-fix — leidende concept-PR
 
 [PR #14](https://github.com/eelbrethouwer-jpg/Douglas-designer/pull/14) bevat de compatibiliteitsoplossing voor foto-upload en ruimte-/materiaalacties bij oudere PWA-scripts, verbeterde iPhone-safe-areas en consistente assetcacheversies. De regressietest reproduceert specifiek de fout `undefined is not an object (evaluating 'p.room')`.

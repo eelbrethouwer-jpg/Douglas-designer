@@ -26,7 +26,7 @@ test('studio initializes drafting precision and direct controls',()=>{
  h.click('magnetToggle');assert.equal(h.api.magnet,true);
 });
 test('hotkeys activate 2D drawing, select and orthographic views',()=>{
- const h=start();
+ const h=start();h.click('demoProject');
  const down=h.events.get('window:keydown');
  down({key:'b',ctrlKey:false,metaKey:false,altKey:false});
  assert.equal(h.api.mode,true);

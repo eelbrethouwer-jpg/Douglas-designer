@@ -15,6 +15,7 @@ test('schetsopslagfout toont herstel, back-up werkt en gebruiker kan opnieuw ops
  try{
   await b.goto(pathToFileURL(path.resolve(__dirname,'../index.html')).href);
   await b.click('#welcomeTemplates [data-proj="template:0"]');
+  await b.click('#roomContinue');
   await b.eval(`(()=>{
    window.__originalSetItem=Storage.prototype.setItem;
    Storage.prototype.setItem=function(key,value){
