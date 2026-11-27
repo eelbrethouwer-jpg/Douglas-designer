@@ -1550,5 +1550,5 @@ if(lastSaveOk){
  else hasSavedProject=true;
 }
 checkShareHash();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3.guided2',{updateViaCache:'none'}).catch(()=>{});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js?rev=1.0.0-rc3.guided2.1',{updateViaCache:'none'}).catch(()=>{});
 })();

@@ -4,7 +4,7 @@
 - **Ruimte** laat breedte, diepte en hoogte per millimeter instellen. Voeg rechthoekige obstakels toe met een eigen naam, afmetingen en positie vanaf de linker voorhoek. Bewerk of verwijder ze in hetzelfde paneel. Het bovenaanzicht toont de obstakels altijd. Schakel **3D-ruimte tonen** in om ze ook in 3D te zien.
 - **Naar ontwerp** opent de bestaande editor. Foto en vloerhoeken, keukenplaatsing, stijlen, plattegrond, scan, tekenfuncties, controle en zaaglijst blijven bereikbaar.
 - Ruimtematen en obstakels horen bij het bestaande lokale project en gaan mee in project-JSON en volledige back-ups. Opslagsleutels blijven gelijk. Obstakels zijn referentieblokken buiten de zaag- en materiaallijst. Een blok dat na het meten buiten de ruimte valt, krijgt een melding.
-- De PWA vernieuwt de app-cache naar `douglas-designer-v1.0.0-rc3.guided2`.
+- De PWA vernieuwt de app-cache naar `douglas-designer-v1.0.0-rc3.guided2.1` en vraagt bij navigatie of er nieuwe HTML beschikbaar is.
 
 ## Validatie
 
